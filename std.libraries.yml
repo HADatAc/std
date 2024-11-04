@@ -3,7 +3,9 @@ std_js_css:
   css:
     theme:
       css/std.css: {}
+  js:
+    js/std.js: {}
   dependencies:
     - core/jquery
-    - core/drupal
     - core/jquery.once
+    - core/drupalSettings

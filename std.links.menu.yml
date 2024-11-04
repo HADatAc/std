@@ -6,7 +6,7 @@ std.top_level:
   weight: 30
   #requirements:
     #_permission: 'access content'
-    
+
 std.search_option:
   title: Search Study Elements
   description: Search Study Elements
@@ -17,7 +17,7 @@ std.search_option:
   weight: 1
   #requirements:
    #_permission: 'access content'
-   
+
 std.divider1:
   title: '_________________________________'
   parent: std.top_level
@@ -31,6 +31,7 @@ std.divider1:
   route_name: '<none>'
   requirements:
    _permission: 'access content'
+   _role: 'authenticated'
 
 #std.manage_da_files:
 #  title: Manage DA Files
@@ -113,6 +114,7 @@ std.divider2:
   route_name: '<none>'
   requirements:
    _permission: 'access content'
+   _role: 'authenticated'
 
 std.manage_studies:
   title: Manage Studies
@@ -121,7 +123,7 @@ std.manage_studies:
   route_parameters:
     elementtype: 'study'
     page: '1'
-    pagesize: '10'
+    pagesize: '9'
   parent: std.top_level
   menu_name: main
   weight: 21
