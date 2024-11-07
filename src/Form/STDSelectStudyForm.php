@@ -319,11 +319,15 @@ class STDSelectStudyForm extends FormBase
     // Process each entry to build cards
     foreach ($items as $index => $element) {
       // Ensure uri is a string; if it's an object, access the desired property or default to an empty string
-      $uri = isset($element->uri) ? (is_string($element->uri) ? $element->uri : ($element->uri->some_property ?? '')) : '';
+      $uri = is_string($element->uri) ? $element->uri : '';
       $label = $element->label ?? '';
       $title = $element->title ?? '';
-      $pi = $element->pi ?? '';
-      $ins = $element->institution ?? '';
+
+      // Acessa o nome do PI se for um objeto
+      $pi = is_object($element->pi) ? $element->pi->name : $element->pi ?? '';
+
+      // Acessa o nome da instituição se for um objeto
+      $ins = is_object($element->institution) ? $element->institution->name : $element->institution ?? '';
       $desc = $element->comment ?? '';
 
       // Build Card Array
