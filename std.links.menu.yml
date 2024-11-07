@@ -58,7 +58,7 @@ std.manage_dsg_template:
     elementtype: 'dsg'
     mode: 'table'
     page: '1'
-    pagesize: '10'
+    pagesize: '9'
     studyuri: 'none'
   parent: std.top_level
   menu_name: main
@@ -75,7 +75,7 @@ std.manage_dd_template:
     elementtype: 'dd'
     mode: 'table'
     page: '1'
-    pagesize: '10'
+    pagesize: '9'
     studyuri: 'none'
   parent: std.top_level
   menu_name: main
@@ -92,7 +92,7 @@ std.manage_sdd_template:
     elementtype: 'sdd'
     mode: 'table'
     page: '1'
-    pagesize: '10'
+    pagesize: '9'
     studyuri: 'none'
   parent: std.top_level
   menu_name: main
