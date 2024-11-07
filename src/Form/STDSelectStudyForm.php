@@ -347,7 +347,7 @@ class STDSelectStudyForm extends FormBase
         '#type' => 'container',
         '#attributes' => [
           'style' => 'margin-bottom:0!important;',
-          'class' => ['card-header']
+          'class' => ['card-header', 'mb-0']
         ],
         '#markup' => '<h5>' . $shortName . '</h5>',
       ];
@@ -405,6 +405,98 @@ class STDSelectStudyForm extends FormBase
                 . '<br><strong>PI: </strong>' . $pi
                 . '<br><strong>Institution: </strong>' . $ins
                 . '<br><strong>Description: </strong>' . $desc . '</p>',
+            ],
+          ],
+        ],
+      ];
+
+      // Build action links
+      $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
+
+      if ($element->uri != NULL && $element->uri != "") {
+        // Change URI
+        $studyUriEncoded = base64_encode($element->uri);
+
+        // Management link
+        $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
+          'studyuri' => $studyUriEncoded,
+        ])->toString());
+
+        $manage_elements = Url::fromRoute('rep.back_url', [
+          'previousurl' => $previousUrl,
+          'currenturl' => $manage_elements_str,
+          'currentroute' => 'std.manage_study_elements',
+        ]);
+
+        // View Link
+        $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
+          'elementuri' => $studyUriEncoded,
+        ])->toString());
+
+        $view_study = Url::fromRoute('rep.back_url', [
+          'previousurl' => $previousUrl,
+          'currenturl' => $view_study_str,
+          'currentroute' => 'rep.describe_element',
+        ]);
+
+        // Edit link
+        $edit_study_str = base64_encode(Url::fromRoute('std.edit_study', [
+          'studyuri' => $studyUriEncoded,
+        ])->toString());
+
+        $edit_study = Url::fromRoute('rep.back_url', [
+          'previousurl' => $previousUrl,
+          'currenturl' => $edit_study_str,
+          'currentroute' => 'std.edit_study',
+        ]);
+
+        // Delete link
+        $delete_study = Url::fromRoute('rep.delete_element', [
+          'elementtype' => 'study',
+          'elementuri' => $studyUriEncoded,
+          'currenturl' => $previousUrl,
+        ]);
+      }
+
+      // Card footer
+      $card['card']['footer'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'style' => 'margin-bottom:0!important;',
+          'class' => ['card-footer', 'text-right', 'd-flex', 'justify-content-end'],
+        ],
+        'actions' => [
+          'link1' => [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
+            '#url' => $manage_elements,
+            '#attributes' => [
+              'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+            ],
+          ],
+          'link2' => [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-eye"></i> View'),
+            '#url' => $view_study,
+            '#attributes' => [
+              'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+            ],
+          ],
+          'link3' => [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-pen-to-square"></i> Edit'),
+            '#url' => $edit_study,
+            '#attributes' => [
+              'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+            ],
+          ],
+          'link4' => [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
+            '#url' => $delete_study,
+            '#attributes' => [
+              'class' => ['btn', 'btn-sm', 'btn-danger', 'mx-1'],
+              'onclick' => 'if(!confirm("Really Delete?")){return false;}',
             ],
           ],
         ],
