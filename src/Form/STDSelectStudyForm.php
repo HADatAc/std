@@ -13,12 +13,14 @@ use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\Core\Ajax\AjaxResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
-class STDSelectStudyForm extends FormBase {
+class STDSelectStudyForm extends FormBase
+{
 
   /**
    * {@inheritdoc}
    */
-  public function getFormId() {
+  public function getFormId()
+  {
     return 'std_select_study_form';
   }
 
@@ -30,26 +32,31 @@ class STDSelectStudyForm extends FormBase {
   protected $list;
   protected $list_size;
 
-  public function getList() {
+  public function getList()
+  {
     return $this->list;
   }
 
-  public function setList($list) {
+  public function setList($list)
+  {
     $this->list = $list;
   }
 
-  public function getListSize() {
+  public function getListSize()
+  {
     return $this->list_size;
   }
 
-  public function setListSize($list_size) {
+  public function setListSize($list_size)
+  {
     $this->list_size = $list_size;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $elementtype = NULL, $page = NULL, $pagesize = NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $elementtype = NULL, $page = NULL, $pagesize = NULL)
+  {
 
     $form['#attached']['library'][] = 'std/std_js_css';
 
@@ -230,7 +237,6 @@ class STDSelectStudyForm extends FormBase {
         //   '#name' => 'load_more',
         // ];
       }
-
     } else {
       // Initialize page 1
       if ($page === NULL) {
@@ -303,7 +309,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Constroi visualização de Cards
    */
-  protected function buildCardView(array &$form, FormStateInterface $form_state) {
+  protected function buildCardView(array &$form, FormStateInterface $form_state)
+  {
     // Get items list
     $items = $this->getList();
 
@@ -311,206 +318,116 @@ class STDSelectStudyForm extends FormBase {
 
     // Process each entry to build cards
     foreach ($items as $index => $element) {
-        $uri = $element->uri ?? '';
-        $label = $element->label ?? '';
-        $title = $element->title ?? '';
-        $pi = $element->pi ?? '';
-        $ins = $element->institution ?? '';
-        $desc = $element->comment ?? '';
+      // Ensure uri is a string; if it's an object, access the desired property or default to an empty string
+      $uri = isset($element->uri) ? (is_string($element->uri) ? $element->uri : ($element->uri->some_property ?? '')) : '';
+      $label = $element->label ?? '';
+      $title = $element->title ?? '';
+      $pi = $element->pi ?? '';
+      $ins = $element->institution ?? '';
+      $desc = $element->comment ?? '';
 
-        // Build Card Array
-        $card = [
-            '#type' => 'container',
-            '#attributes' => ['class' => ['col-md-4'], 'id' => 'card-item-' . md5($uri)], // Adiciona um identificador único
-        ];
+      // Build Card Array
+      $card = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['col-md-4'], 'id' => 'card-item-' . md5($uri)],
+      ];
 
-        $card['card'] = [
-            '#type' => 'container',
-            '#attributes' => ['class' => ['card', 'mb-3']],
-        ];
+      $card['card'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['card', 'mb-3']],
+      ];
 
-        // Card Header
-        $shortName = $label;
-        $card['card']['header'] = [
-            '#type' => 'container',
-            '#attributes' => [
-                'style' => 'margin-bottom:0!important;',
-                'class' => ['card-header']
-            ],
-            '#markup' => '<h5>' . $shortName . '</h5>',
-        ];
+      // Card Header
+      $shortName = $label;
+      $card['card']['header'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'style' => 'margin-bottom:0!important;',
+          'class' => ['card-header']
+        ],
+        '#markup' => '<h5>' . $shortName . '</h5>',
+      ];
 
-        // determine is the element has an image or should be presented a placeholder
-        if (!empty($element->image)) {
-            $image_uri = $element->image;
-        } else {
-            // module placeholder
-            $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
-        }
+      // Check if the element has an image or should use a placeholder
+      if (!empty($element->image)) {
+        $image_uri = $element->image;
+      } else {
+        $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
+      }
 
-        // Created URI
+      // Safely create URI with Utils::namespaceUri if it's not empty
+      if (!empty($uri)) {
         $uri = Utils::namespaceUri($uri);
+      }
 
-        // Card Body
-        $card['card']['body'] = [
+      // Card Body
+      $card['card']['body'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'style' => 'margin-bottom:0!important;',
+          'class' => ['card-body', 'mb-0']
+        ],
+        'row' => [
+          '#type' => 'container',
+          '#attributes' => [
+            'style' => 'margin-bottom:0!important;',
+            'class' => ['row']
+          ],
+          'image_column' => [
             '#type' => 'container',
             '#attributes' => [
-                'style' => 'margin-bottom:0!important;',
-                'class' => ['card-body', 'mb-0']
+              'style' => 'margin-bottom:0!important;',
+              'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle']
             ],
-            'row' => [
-                '#type' => 'container',
-                '#attributes' => [
-                    'style' => 'margin-bottom:0!important;',
-                    'class' => ['row']
-                ],
-                'image_column' => [
-                    '#type' => 'container',
-                    '#attributes' => [
-                        'style' => 'margin-bottom:0!important;',
-                        'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle']
-                    ],
-                    'image' => [
-                        '#theme' => 'image',
-                        '#uri' => $image_uri,
-                        '#alt' => $this->t('Image for @name', ['@name' => $title]),
-                        '#attributes' => [
-                            'style' => 'width: 70%',
-                            'class' => ['img-fluid', 'mb-0'],
-                        ],
-                    ],
-                ],
-                'text_column' => [
-                    '#type' => 'container',
-                    '#attributes' => [
-                        'style' => 'margin-bottom:0!important;',
-                        'class' => ['col-md-7']
-                    ],
-                    'text' => [
-                        '#markup' => '<p class="card-text"><strong>Name:</strong> ' . $title
-                            . '<br><strong>URI:</strong> ' . Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString()
-                            . '<br><strong>PI: </strong>' . $pi
-                            . '<br><strong>Institution: </strong>' . $ins
-                            . '<br><strong>Description: </strong>' . $desc . '</p>',
-                    ],
-                ],
+            'image' => [
+              '#theme' => 'image',
+              '#uri' => $image_uri,
+              '#alt' => $this->t('Image for @name', ['@name' => $title]),
+              '#attributes' => [
+                'style' => 'width: 70%',
+                'class' => ['img-fluid', 'mb-0'],
+              ],
             ],
-        ];
-
-        // Build action links
-        $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
-
-        if ($element->uri != NULL && $element->uri != "") {
-            // Change URI
-            $studyUriEncoded = base64_encode($element->uri);
-
-            // Management link
-            $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
-                'studyuri' => $studyUriEncoded,
-            ])->toString());
-
-            $manage_elements = Url::fromRoute('rep.back_url', [
-                'previousurl' => $previousUrl,
-                'currenturl' => $manage_elements_str,
-                'currentroute' => 'std.manage_study_elements',
-            ]);
-
-            // View Link
-            $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
-                'elementuri' => $studyUriEncoded,
-            ])->toString());
-
-            $view_study = Url::fromRoute('rep.back_url', [
-                'previousurl' => $previousUrl,
-                'currenturl' => $view_study_str,
-                'currentroute' => 'rep.describe_element',
-            ]);
-
-            // Edit link
-            $edit_study_str = base64_encode(Url::fromRoute('std.edit_study', [
-                'studyuri' => $studyUriEncoded,
-            ])->toString());
-
-            $edit_study = Url::fromRoute('rep.back_url', [
-                'previousurl' => $previousUrl,
-                'currenturl' => $edit_study_str,
-                'currentroute' => 'std.edit_study',
-            ]);
-
-            // Delete link
-            $delete_study = Url::fromRoute('rep.delete_element', [
-                'elementtype' => 'study',
-                'elementuri' => $studyUriEncoded,
-                'currenturl' => $previousUrl,
-            ]);
-        }
-
-        // Card footer
-        $card['card']['footer'] = [
+          ],
+          'text_column' => [
             '#type' => 'container',
             '#attributes' => [
-                'style' => 'margin-bottom:0!important;',
-                'class' => ['card-footer', 'text-right', 'd-flex', 'justify-content-end'],
+              'style' => 'margin-bottom:0!important;',
+              'class' => ['col-md-7']
             ],
-            'actions' => [
-                'link1' => [
-                    '#type' => 'link',
-                    '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
-                    '#url' => $manage_elements,
-                    '#attributes' => [
-                        'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
-                    ],
-                ],
-                'link2' => [
-                    '#type' => 'link',
-                    '#title' => Markup::create('<i class="fa-solid fa-eye"></i> View'),
-                    '#url' => $view_study,
-                    '#attributes' => [
-                        'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
-                    ],
-                ],
-                'link3' => [
-                    '#type' => 'link',
-                    '#title' => Markup::create('<i class="fa-solid fa-pen-to-square"></i> Edit'),
-                    '#url' => $edit_study,
-                    '#attributes' => [
-                        'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
-                    ],
-                ],
-                'link4' => [
-                    '#type' => 'link',
-                    '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
-                    '#url' => $delete_study,
-                    '#attributes' => [
-                        'class' => ['btn', 'btn-sm', 'btn-danger', 'mx-1'],
-                        'onclick' => 'if(!confirm("Really Delete?")){return false;}',
-                    ],
-                ],
+            'text' => [
+              '#markup' => '<p class="card-text"><strong>Name:</strong> ' . $title
+                . '<br><strong>URI:</strong> ' . (is_string($uri) && !empty($uri) ? Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString() : '')
+                . '<br><strong>PI: </strong>' . $pi
+                . '<br><strong>Institution: </strong>' . $ins
+                . '<br><strong>Description: </strong>' . $desc . '</p>',
             ],
-        ];
+          ],
+        ],
+      ];
 
-        $cards[] = $card;
+      $cards[] = $card;
     }
 
     // Form cards
     $index = 0;
     // 3 on each row
     foreach (array_chunk($cards, 3) as $row) {
-        $index++;
-        if (!isset($form['row_' . $index])) {
-            $form['row_' . $index] = [
-                '#type' => 'container',
-                '#attributes' => [
-                    'style' => 'margin-bottom:0!important;',
-                    'class' => ['row', 'mb-0'],
-                ],
-            ];
-        }
-        $indexCard = 0;
-        foreach ($row as $card) {
-            $indexCard++;
-            $form['row_' . $index]['element_' . $indexCard] = $card;
-        }
+      $index++;
+      if (!isset($form['row_' . $index])) {
+        $form['row_' . $index] = [
+          '#type' => 'container',
+          '#attributes' => [
+            'style' => 'margin-bottom:0!important;',
+            'class' => ['row', 'mb-0'],
+          ],
+        ];
+      }
+      $indexCard = 0;
+      foreach ($row as $card) {
+        $indexCard++;
+        $form['row_' . $index]['element_' . $indexCard] = $card;
+      }
     }
   }
 
@@ -518,7 +435,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Build Table View
    */
-  protected function buildTableView(array &$form, FormStateInterface $form_state) {
+  protected function buildTableView(array &$form, FormStateInterface $form_state)
+  {
     // Define o cabeçalho da tabela
     $header = [
       'uri' => ['data' => $this->t('URI')],
@@ -531,7 +449,6 @@ class STDSelectStudyForm extends FormBase {
     $rows = [];
     foreach ($this->getList() as $element) {
       $uri = $element->uri ?? '';
-      $uri = Utils::namespaceUri($uri);
       $label = $element->label ?? '';
       $title = $element->title ?? '';
 
@@ -660,14 +577,15 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Load more function for Cards
    */
-  public function loadMoreCallback(array &$form = NULL, FormStateInterface $form_state = NULL) {
+  public function loadMoreCallback(array &$form = NULL, FormStateInterface $form_state = NULL)
+  {
     if ($form_state === NULL) {
-        $form_state = new \Drupal\Core\Form\FormState();
+      $form_state = new \Drupal\Core\Form\FormState();
     }
 
     // Is if loading has started to prevent double request
     if ($form_state->get('loading')) {
-        return new JsonResponse(['cards' => []]);
+      return new JsonResponse(['cards' => []]);
     }
 
     $form_state->set('loading', true);
@@ -698,13 +616,14 @@ class STDSelectStudyForm extends FormBase {
     $form_state->set('loading', false);
 
     return new JsonResponse(['cards' => $rendered_cards, 'page' => $page]);
-}
+  }
 
 
   /**
    * Manipulador de envio para alternar para a visualização em tabela.
    */
-  public function viewTableSubmit(array &$form, FormStateInterface $form_state) {
+  public function viewTableSubmit(array &$form, FormStateInterface $form_state)
+  {
     $form_state->set('view_type', 'table');
     $form_state->set('page', 1); // Reseta o número da página
     $session = \Drupal::request()->getSession();
@@ -715,7 +634,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Manipulador de envio para alternar para a visualização em cartões.
    */
-  public function viewCardSubmit(array &$form, FormStateInterface $form_state) {
+  public function viewCardSubmit(array &$form, FormStateInterface $form_state)
+  {
     $form_state->set('view_type', 'card');
     $form_state->set('page', 1); // Reseta o número da página
     $session = \Drupal::request()->getSession();
@@ -726,7 +646,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state) {
+  public function submitForm(array &$form, FormStateInterface $form_state)
+  {
 
     // RECUPERA O BOTÃO QUE DISPAROU O ENVIO
     $triggering_element = $form_state->getTriggeringElement();
@@ -756,7 +677,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Executa a ação de edição.
    */
-  protected function performEdit($uri, FormStateInterface $form_state) {
+  protected function performEdit($uri, FormStateInterface $form_state)
+  {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
     $items_loaded = $form_state->get('items_loaded') ?? 0;
@@ -782,7 +704,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Executa a ação de exclusão.
    */
-  protected function performDelete(array $uris, FormStateInterface $form_state) {
+  protected function performDelete(array $uris, FormStateInterface $form_state)
+  {
     $api = \Drupal::service('rep.api_connector');
     foreach ($uris as $uri) {
       $study = $api->parseObjectResponse($api->getUri($uri), 'getUri');
@@ -811,7 +734,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Lida com a edição de elementos selecionados na visualização em tabela.
    */
-  protected function handleEditSelected(FormStateInterface $form_state) {
+  protected function handleEditSelected(FormStateInterface $form_state)
+  {
     $selected_rows = $form_state->getUserInput()['select'] ?? [];
     $selected_uris = array_keys(array_filter($selected_rows));
     if (count($selected_uris) < 1) {
@@ -827,7 +751,8 @@ class STDSelectStudyForm extends FormBase {
   /**
    * Lida com a exclusão de elementos selecionados na visualização em tabela.
    */
-  protected function handleDeleteSelected(FormStateInterface $form_state) {
+  protected function handleDeleteSelected(FormStateInterface $form_state)
+  {
     $selected_rows = $form_state->getUserInput()['select'] ?? [];
     $selected_uris = array_keys(array_filter($selected_rows));
     if (count($selected_uris) <= 0) {
@@ -840,9 +765,9 @@ class STDSelectStudyForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public static function backSelect($elementType) {
+  public static function backSelect($elementType)
+  {
     $url = Url::fromRoute('rep.home');
     return $url;
   }
-
 }
