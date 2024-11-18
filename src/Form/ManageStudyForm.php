@@ -62,6 +62,7 @@ class ManageStudyForm extends FormBase {
 
     // get totals for current study
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri),'getTotalStudyDAs'));
+    $totalSTRs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri),'getTotalStudySTRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri),'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri),'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri),'getTotalStudySOCs'));
@@ -69,18 +70,22 @@ class ManageStudyForm extends FormBase {
 
     // Example data for cards
     $cards = array(
-      1 => array('value' => '<h1>'.$totalDAs.'</h1><h3>Data Files<br>&nbsp;</h3>',
+      1 => array('value' => '<h3>Study Content (0)</h3>',
                  'link' => self::urlSelectByStudy($this->getStudy()->uri,'da')),
-      2 => array('value' => '<h1>0</h1><h3>Publications<br>&nbsp;</h3>',
-                 'link' => 'http://example.com/card2'),
-      3 => array('value' => '<h1>'.$totalRoles.'</h1><h3>Roles<br>&nbsp;</h3>',
+      2 => array('value' => '<h1>'.'</h1><h3>Data Files ('.$totalDAs.')</h3>'),
+      3 => array('value' => '<h3>Publications (0)</h3>'),
+      4 => array('value' => '<h3>Media (0)</h3>'),
+      5 => array('value' => '<h3>Other Content (0)</h3>'),
+      6 => array('value' => '<h1>0</h1><h3>Streams<br>&nbsp;</h3>',
+                 'link' => 'http://example.com/card6'),
+      7 => array('value' => '<h1>'.$totalRoles.'</h1><h3>Roles<br>&nbsp;</h3>',
                  'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyrole')),
-      4 => array('value' => '<h1>'.$totalVCs.'</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
+      8 => array('value' => '<h1>'.$totalVCs.'</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
                  'link' => self::urlSelectByStudy($this->getStudy()->uri,'virtualcolumn')),
-      5 => array('value' => '<h1>'.$totalSOCs.'</h1><h3>Object<br>Collections</h3>',
+      9 => array('value' => '<h1>'.$totalSOCs.'</h1><h3>Object Collections</h3><h4>('. $totalSOs.' Objects)</h4>',
                  'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobjectcollection')),
-      6 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
+      //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
+      //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
     );
 
     // First row with 1 filler and 1 card
@@ -136,116 +141,151 @@ class ManageStudyForm extends FormBase {
         //),
     );
 
-    // Second row with 5 cards
+    // Second row with 1 outter card (card 1)
     $form['row2'] = array(
         '#type' => 'container',
         '#attributes' => array('class' => array('row')),
     );
 
-    //$form['row2']['filler'] = array(
-      //'#type' => 'container',
-      //'#attributes' => array('class' => array('col-md-1')),
-      //'card' => array(
-      //    '#type' => 'markup',
-      //    '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[2]['value'] . '</div>' .
-      //      '<div class="card-footer text-center"><a href="' . $cards[2]['link'] . '" class="btn btn-secondary">Manage</a></div></div>',
-      //),
+    // Inner row of second row with 4 cards (cards 2 to 5)
+    $form['row2']['card1']['inner_row2'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('row', 'm-3')),
+    );
+
+    // Row 2, Card 2, DA content
+    $form['row2']['card1']['inner_row2']['card2'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6')),
+      'card' => array(
+          '#type' => 'markup',
+          '#markup' => '<div class="card">' . 
+            '<div class="card-header text-center">' . $cards[2]['value'] . '</div>' .
+            '<div class="card-body">' . 
+            \Drupal::service('renderer')->render(\Drupal::formBuilder()->getForm('Drupal\std\Form\STDSelectByStudyCompactForm', $studyuri, 'da', 'table', 0, 5)) . 
+            '</div>' .
+            '</div>',
+      ),
+    );
+
+    // Row 2, Card 3, Publication content
+    $form['row2']['card1']['inner_row2']['card3'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-3')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">' . 
+          '<div class="card-header text-center">' . $cards[3]['value'] . '</div>' .
+          '<div class="card-body">' . 'Foo' . '</div>' .
+          '</div>',
+      ),
+    );
+
+    // Row 2, Card 4, Media content
+    $form['row2']['card1']['inner_row2']['card4'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-3')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">' . 
+          '<div class="card-header text-center">' . $cards[4]['value'] . '</div>' .
+          '<div class="card-body">' . 'Foo' . '</div>' .
+          '</div>',
+      ),
+    );
+
+    // Row 2, Card 5, Other contents
+    //$form['row2']['card1']['inner_row2']['card5'] = array(
+    //  '#type' => 'container',
+    //  '#attributes' => array('class' => array('col-md-3')),
+    //  'card' => array(
+    //    '#type' => 'markup',
+    //    '#markup' => '<div class="card">' . 
+    //      '<div class="card-header text-center">' . $cards[5]['value'] . '</div>' .
+    //      '<div class="card-body">' . 'Foo' . '</div>' .
+    //      '</div>',
+    //  ),
     //);
 
-  // Define each card individually
+    // Row 2, Outter card 1
     $form['row2']['card1'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-2')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[1]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[1]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
-        ),
-    );
-
-    $form['row2']['card2'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-2')),
+      '#attributes' => array('class' => array('col-md-12')),
       'card' => array(
           '#type' => 'markup',
-          '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[2]['value'] . '</div>' .
-            '<div class="card-footer text-center"><a href="' . $cards[2]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+          '#markup' => '<div class="card">' . 
+            '<div class="card-header text-center">' . $cards[1]['value'] . '</div>' .
+            \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
+            '<div class="card-footer text-center"><a href="' . $cards[1]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
+            '</div>',
       ),
-  );
-
-  $form['row2']['card3'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-2')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[3]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[3]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
-        ),
     );
 
-    $form['row2']['card4'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-2')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[4]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[4]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
-        ),
-    );
-
-    $form['row2']['card5'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-2')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[5]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[5]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
-        ),
-    );
-
-    $form['row2']['card6'] = array(
+    // Third row with 5 cards (card 6 to card 10)
+    $form['row3'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-2')),
+      '#attributes' => array('class' => array('row')),
+    );
+
+    // Row 3, Card 6
+    $form['row3']['card6'] = array(
+        '#type' => 'container',
+        '#attributes' => array('class' => array('col-md-3')),
+        'card' => array(
+            '#type' => 'markup',
+            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
+              '<div class="card-footer text-center"><a href="' . $cards[6]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+        ),
+    );
+
+    // Row 3, Card 7
+    $form['row3']['card7'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-3')),
       'card' => array(
           '#type' => 'markup',
-          '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
-            '<div class="card-footer text-center">' . 'Use object collections to manage subjects' .
-            //<a href="' . $cards[5]['link'] . '" class="btn btn-secondary">Manage</a>
-            '</div></div>',
+          '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
+            '<div class="card-footer text-center"><a href="' . $cards[7]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+      ),
+    );
+
+    // Row 3, Card 8
+    $form['row3']['card8'] = array(
+        '#type' => 'container',
+        '#attributes' => array('class' => array('col-md-3')),
+        'card' => array(
+            '#type' => 'markup',
+            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
+              '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
         ),
     );
 
-    // First row with 1 filler and 1 card
-    $form['row3'] = array(
+    // Row 3, Card 9
+    $form['row3']['card9'] = array(
+        '#type' => 'container',
+        '#attributes' => array('class' => array('col-md-3')),
+        'card' => array(
+            '#type' => 'markup',
+            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
+              '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+        ),
+    );
+
+    // Bottom part of the form
+    $form['row4'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('row')),
       '#type' => 'markup',
       '#markup' => '<p><b>Note</b>: Data Dictionaires (DD) and Semantic Data Dictionaires (SDD) are added' .
         ' to studies through their corresponding data files.</p><br>',
-);
+    );
 
-    $form['row4']['notes'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Back to Manage Studies'),
-      '#name' => 'back',
-      '#attributes' => [
-        'class' => ['col-md-2', 'btn', 'btn-primary', 'back-button'],
-      ],
-    ];
-
-    // Define each card individually
-    //$form['row3']['filler'] = array(
-    //  '#type' => 'container',
-    //  '#attributes' => array('class' => array('col-md-1')),
-    //);
-
-    // First row with 1 filler and 1 card
-    $form['row4'] = array(
+    $form['row5'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('row')),
     );
 
-    $form['row4']['back_submit'] = [
+    $form['row6']['back_submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Back to Manage Studies'),
       '#name' => 'back',
@@ -254,11 +294,10 @@ class ManageStudyForm extends FormBase {
       ],
     ];
 
-    $form['row4']['space'] = [
+    $form['row7']['space'] = [
       '#type' => 'item',
       '#value' => $this->t('<br><br><br><br>'),
     ];
-
 
     return $form;
   }

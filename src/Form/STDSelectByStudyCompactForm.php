@@ -18,13 +18,13 @@ use Drupal\std\Entity\StudyRole;
 use Drupal\std\Entity\VirtualColumn;
 use Drupal\std\Entity\StudyObjectCollection;
 
-class STDSelectByStudyForm extends FormBase {
+class STDSelectByStudyCompactForm extends FormBase {
 
   /**
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'std_select_bystudy_form';
+    return 'std_select_bystudy_compact_form';
   }
 
   public $study;
@@ -146,130 +146,22 @@ class STDSelectByStudyForm extends FormBase {
       case "da":
         $this->single_class_name = "DA";
         $this->plural_class_name = "DAs";
-        $header = MetadataTemplate::generateHeader();
-        if ($this->getMode() == 'table') {
-          $output = MetadataTemplate::generateOutput('da',$this->getList());
-          dpm($output);
-        } else {
-          $output = MetadataTemplate::generateOutputAsCards('da',$this->getList());
-        }
-        break;
-      case "studyrole":
-        $this->single_class_name = "Study Role";
-        $this->plural_class_name = "Study Roles";
-        $header = StudyRole::generateHeader();
-        $output = StudyRole::generateOutput($this->getList());
-        break;
-      case "virtualcolumn":
-        $this->single_class_name = "Virtual Column";
-        $this->plural_class_name = "Virtual Columns";
-        $header = VirtualColumn::generateHeader();
-        $output = VirtualColumn::generateOutput($this->getList());
-        break;
-      case "studyobjectcollection":
-        $this->single_class_name = "Study Object Collection";
-        $this->plural_class_name = "Study Object Collections";
-        $header = StudyObjectCollection::generateHeader();
-        $output = StudyObjectCollection::generateOutput($this->getList());
-        break;
-      case "studyobject":
-        $this->single_class_name = "Study Object";
-        $this->plural_class_name = "Study Objects";
-        $header = StudyObject::generateHeader();
-        $output = StudyObject::generateOutput($this->getList());
+        $header = MetadataTemplate::generateHeaderCompact();
+        $output = MetadataTemplate::generateOutputCompact('da',$this->getList());
         break;
       default:
         $this->single_class_name = "Object of Unknown Type";
         $this->plural_class_name = "Objects of Unknown Types";
     }
 
-    // PUT FORM TOGETHER
-    $form['page_title'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h3 class="mt-5">Manage ' . $this->plural_class_name . '</h3>'),
+    // ADD TABLE
+    $form['element_table'] = [
+      '#type' => 'tableselect',
+      '#header' => $header,
+      '#options' => $output,
+      '#js_select' => FALSE,
+      '#empty' => t('No ' . $this->plural_class_name . ' found'),
     ];
-    $form['page_study_context'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h4>' . $this->plural_class_name . ' belonging to study <font color="DarkGreen">' . $this->getStudy()->label . ' (' . $this->getStudy()->title . ')</font></h4>'),
-    ];
-    $form['page_subtitle'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h4>' . $this->plural_class_name . ' maintained by <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
-    ];
-    $form['add_element'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add new ' . $this->single_class_name),
-      '#name' => 'add_element',
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'add-element-button'],
-      ],
-    ];
-    if ($this->getMode() == 'table') {
-      $form['edit_selected_element'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Edit selected ' . $this->single_class_name),
-        '#name' => 'edit_element',
-        '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'edit-element-button'],
-        ],
-      ];
-      $form['delete_selected_element'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Delete selected ' . $this->plural_class_name),
-        '#name' => 'delete_element',
-        '#attributes' => [
-          'onclick' => 'if(!confirm("Really Delete?")){return false;}',
-          'class' => ['btn', 'btn-primary', 'delete-element-button'],
-        ],
-      ];
-      if ($this->element_type == 'studyobjectcollection') {
-        $form['manage_study_objects'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Manage objects of selected Study Object Collection'),
-          '#name' => 'manage_studyobject',
-          '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'manage_codebookslots-button'],
-          ],
-        ];
-      }
-    } else {
-      $form['space_top'] = [
-        '#type' => 'item',
-        '#value' => $this->t('<br><br>'),
-      ];
-    }
-
-    if ($this->element_type == 'da' && $this->getMode() == 'card') {
-
-      // Loop through $output and creates two cards per row
-      $index = 0;
-      foreach (array_chunk($output, 2, true) as $row) {
-          $index++;
-          $form['row_' . $index] = [
-              '#type' => 'container',
-              '#attributes' => [
-                  'class' => ['row', 'mb-3'],
-              ],
-          ];
-          $indexCard = 0;
-          foreach ($row as $uri => $card) {
-              $indexCard++;
-              $form['row_' . $index]['element_' . $indexCard] = $card;
-          }
-      }
-
-    } else {
-
-      // ADD TABLE
-      $form['element_table'] = [
-        '#type' => 'tableselect',
-        '#header' => $header,
-        '#options' => $output,
-        '#js_select' => FALSE,
-        '#empty' => t('No ' . $this->plural_class_name . ' found'),
-      ];
-
-    }
 
     $form['pager'] = [
       '#theme' => 'list-page',
@@ -283,29 +175,6 @@ class STDSelectByStudyForm extends FormBase {
         'links' => null,
         'title' => ' ',
       ],
-    ];
-
-    if ($this->element_type == 'da') {
-      $form['ingestion_note'] = [
-        '#type' => 'markup',
-        '#markup' =>
-          $this->t('<b>Note 1</b>: "Ingestion" is the process of moving the content of a file inside the repository\'s knowlegde graph. <br>' .
-                  '<b>Note 2</b>: A DA can only be ingested if it is associated with an SDD, and the SDD itself needs ingested. <br><br>'),
-      ];
-    }
-
-    $form['submit'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Back to Manage Study'),
-      '#name' => 'back',
-      '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'back-button'],
-        ],
-    ];
-
-    $form['space_bottom'] = [
-      '#type' => 'item',
-      '#value' => $this->t('<br><br><br>'),
     ];
 
     return $form;
