@@ -13,6 +13,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Entity\MetadataTemplate;
 use Drupal\rep\Entity\StudyObject;
 use Drupal\std\Entity\DSG;
+use Drupal\std\Entity\Stream;
 use Drupal\std\Entity\Study;
 use Drupal\std\Entity\StudyRole;
 use Drupal\std\Entity\VirtualColumn;
@@ -177,6 +178,12 @@ class STDSelectByStudyForm extends FormBase {
         $this->plural_class_name = "Study Objects";
         $header = StudyObject::generateHeader();
         $output = StudyObject::generateOutput($this->getList());
+        break;
+      case "stream":
+        $this->single_class_name = "Stream";
+        $this->plural_class_name = "Streams";
+        $header = Stream::generateHeader();
+        $output = Stream::generateOutput($this->getList());
         break;
       default:
         $this->single_class_name = "Object of Unknown Type";
@@ -512,7 +519,6 @@ class STDSelectByStudyForm extends FormBase {
         $form_state->setRedirectUrl($url);
       }
     }
-
   }
 
   function backUrl() {
@@ -524,6 +530,5 @@ class STDSelectByStudyForm extends FormBase {
       return;
     }
   }
-
 
 }
