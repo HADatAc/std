@@ -76,22 +76,22 @@ class JsonDataController
     public function getTableData($studyuri = NULL, $elementtype = NULL, $mode = 'compact', $page = 1, $pagesize = 5)
     {
 
-        // Obtenha o valor da sessão para fallback
+        // GET SESSION
         $session = \Drupal::service('session');
         $page_from_session = $session->get('da_current_page', 1);
 
-        // Use o valor da URL, ou o valor na sessão como fallback
+        // USE URL OU SESSION VALUE AS FALLBACK
         $page = $page ?: $page_from_session;
 
-        // Salve a página na sessão
+        // SAVE DA_PAGE ON SESSION
         $session->set('da_current_page', $page);
 
-        // Certifique-se de que `$page` é válido
+        // CHECK VALID `$page`
         if (!is_numeric($page) || $page < 1) {
             $page = 1;
         }
 
-        // Validar os parâmetros recebidos
+        // VALIDATION
         if (empty($studyuri) || empty($elementtype) || !is_numeric($page) || !is_numeric($pagesize)) {
             return new JsonResponse(['error' => 'Invalid parameters'], 400);
         }
@@ -122,6 +122,7 @@ class JsonDataController
         if ($this->element_type != NULL) {
             $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
         }
+
         if (gettype($this->list_size) == 'string') {
             $total_pages = "0";
         } else {
@@ -130,6 +131,13 @@ class JsonDataController
             } else {
                 $total_pages = floor($this->list_size / $pagesize) + 1;
             }
+        }
+        
+        //AVOID NON EXISTING PAGES
+        if ($this->list_size <= (($page-1) * 5)) 
+        {
+            $page--;
+            $total_pages--;
         }
 
         // CREATE LINK FOR NEXT PAGE AND PREVIOUS PAGE
@@ -165,9 +173,9 @@ class JsonDataController
                 $this->plural_class_name = "Objects of Unknown Types";
         }
 
-        // Criar o JSON no formato desejado
+        // BUILD JSON OUTPUT
         $data = [
-            'headers' => array_values($header), // Valores dos headers (não as chaves)
+            'headers' => array_values($header),
             'output' => [],
             'pagination' => [
                 'first' => $page > 1 ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, 1, $pagesize) : null,
@@ -176,10 +184,11 @@ class JsonDataController
                 'next' => $next_page_link,
                 'last_page' => strval($total_pages),
                 'page' => strval($page),
+                'items' => strval($this->getListSize()),
             ],
         ];
 
-        // Processar o output e organizar os dados no formato desejado
+        // PROCESS OUTPUT ON NEEDED FORMAT
         foreach ($output as $key => $values) {
             $row = [];
             foreach (array_keys($header) as $header_key) {
@@ -189,27 +198,23 @@ class JsonDataController
         }
 
 
-        // Retorna os dados em JSON
+        // RETURN JSON
         return new JsonResponse($data);
     }
     
     #UPDATE SESSION TABLE DA POSITION
     public function updateSessionPage(Request $request) {
-        // Obter o valor da página enviado na requisição POST
         $page = $request->get('page');
         if (is_numeric($page)) {
-            // Atualizar a sessão com o número da página
+
             $session = \Drupal::service('session');
-            $session->set('current_page', $page);
+            $session->set('da_current_page', $page);
     
             return new JsonResponse(['status' => 'success', 'page' => $page]);
         }
     
-        // Retornar erro se o valor não for válido
         return new JsonResponse(['status' => 'error', 'message' => 'Invalid page'], 400);
     }
-    
-
     
     public function backUrl()
     {
