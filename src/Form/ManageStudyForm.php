@@ -153,20 +153,42 @@ class ManageStudyForm extends FormBase {
       '#attributes' => array('class' => array('row', 'm-3')),
     );
 
-    // Row 2, Card 2, DA content
+    //DA TABLE JQUERY
+    // Obtenha o valor da sessão para fallback
+    $session = \Drupal::service('session');
+    $da_page_from_session = $session->get('da_current_page', 1);
     $form['row2']['card1']['inner_row2']['card2'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-6')),
       'card' => array(
-          '#type' => 'markup',
-          '#markup' => '<div class="card">' . 
-            '<div class="card-header text-center">' . $cards[2]['value'] . '</div>' .
-            '<div class="card-body">' . 
-            \Drupal::service('renderer')->render(\Drupal::formBuilder()->getForm('Drupal\std\Form\STDSelectByStudyCompactForm', $studyuri, 'da', 'table', 0, 5)) . 
-            '</div>' .
-            '</div>',
+        '#type' => 'markup',
+        '#markup' => '<div class="card">' .
+          '<div class="card-header text-center">' . $cards[2]['value'] . '</div>' .
+          '<div class="card-body">' .
+            '<div id="json-table-container">Loading...</div>' .
+          '</div>' .
+          '</div>',
       ),
+      '#attached' => [
+        'library' => ['std/json_table'],
+        'drupalSettings' => [
+          'std' => [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+            'elementtype' => 'da',
+            'mode' => 'compact',
+            'page' => $da_page_from_session,
+            'pagesize' => 5,
+          ],
+        ],
+      ],
     );
+
+    $form['row2']['card1']['inner_row2']['card2']['pager'] = [
+      '#markup' => '<div id="json-table-pager" class="pagination"></div>',
+      '#attached' => [
+        'library' => ['std/json_table'],
+      ],
+    ];
 
     // Row 2, Card 3, Publication content
     $form['row2']['card1']['inner_row2']['card3'] = array(

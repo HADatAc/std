@@ -11,13 +11,6 @@ use Drupal\file\Entity\File;
 use Drupal\rep\ListManagerEmailPageByStudy;
 use Drupal\rep\Utils;
 use Drupal\rep\Entity\MetadataTemplate;
-use Drupal\rep\Entity\Publication;
-use Drupal\rep\Entity\StudyObject;
-use Drupal\std\Entity\DSG;
-use Drupal\std\Entity\Study;
-use Drupal\std\Entity\StudyRole;
-use Drupal\std\Entity\VirtualColumn;
-use Drupal\std\Entity\StudyObjectCollection;
 
 class STDSelectByStudyCompactForm extends FormBase {
 

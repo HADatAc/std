@@ -276,6 +276,35 @@ std.load_more_data:
   options:
     _format: 'json'
 
+std.json_data:
+  path: '/std/json-data/{studyuri}/{elementtype}/{mode}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getTableData'
+    _title: 'Table Data'
+  requirements:
+    _permission: 'access content'
+  options:
+    parameters:
+      studyuri:
+        type: string
+      elementtype:
+        type: string
+      mode:
+        type: string
+      page:
+        type: integer
+      pagesize:
+        type: integer
+
+std.update_session_page:
+  path: '/std/update-session-page'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::updateSessionPage'
+    _title: 'Update Session Page'
+  requirements:
+    _permission: 'access content'
+  methods: [POST]
+
 
 
 
