@@ -181,9 +181,6 @@ class STDSelectStudyForm extends FormBase
       // Armazena o número da página no estado do formulário
       $form_state->set('page', $page);
 
-      // Adiciona a biblioteca JavaScript para infinite scroll (certifique-se de ter essa biblioteca no seu módulo)
-      // $form['#attached']['library'][] = 'std/infinite_scroll'; // Se você tiver uma biblioteca JS
-
       $items_loaded = $form_state->get('items_loaded') ?? 0;
       $total_pages_to_load = ceil($items_loaded / $pagesize);
 
@@ -221,22 +218,6 @@ class STDSelectStudyForm extends FormBase
             'class' => ['text-center', 'my-3'],
           ],
         ];
-
-        // // Adiciona o botão "Load More" dentro do container
-        // $form['load_more_wrapper']['load_more'] = [
-        //   '#type' => 'submit',
-        //   '#value' => $this->t('Load More'),
-        //   '#ajax' => [
-        //     'callback' => '::loadMoreCallback',
-        //     'wrapper' => 'cards-wrapper',
-        //     'method' => 'append',
-        //   ],
-        //   '#attributes' => [
-        //     'class' => ['btn', 'btn-primary', 'load-more-button'],
-        //     'style' => 'height: auto;', // Ajusta a altura ao conteúdo
-        //   ],
-        //   '#name' => 'load_more',
-        // ];
       }
     } else {
       // Initialize page 1
@@ -424,7 +405,7 @@ class STDSelectStudyForm extends FormBase
       $card['card']['body']['modal'] = [
         '#markup' => '
           <div class="modal fade" id="' . $modal_id . '" tabindex="-1" aria-labelledby="' . $modal_id . '-label" aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
               <div class="modal-content">
                 <div class="modal-header">
                   <h5 class="modal-title" id="' . $modal_id . '-label">Full Description</h5>

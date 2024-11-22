@@ -11,8 +11,9 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 use Symfony\Component\HttpFoundation\RequestStack;
+use Drupal\Core\Controller\ControllerBase;
 
-class JsonDataController
+class JsonDataController extends ControllerBase
 {
 
     public $study;
@@ -132,10 +133,9 @@ class JsonDataController
                 $total_pages = floor($this->list_size / $pagesize) + 1;
             }
         }
-        
+
         //AVOID NON EXISTING PAGES
-        if ($this->list_size <= (($page-1) * 5)) 
-        {
+        if ($this->list_size <= (($page - 1) * 5)) {
             $page--;
             $total_pages--;
         }
@@ -201,21 +201,42 @@ class JsonDataController
         // RETURN JSON
         return new JsonResponse($data);
     }
-    
+
     #UPDATE SESSION TABLE DA POSITION
-    public function updateSessionPage(Request $request) {
+    public function updateSessionPage(Request $request)
+    {
         $page = $request->get('page');
         if (is_numeric($page)) {
 
             $session = \Drupal::service('session');
             $session->set('da_current_page', $page);
-    
+
             return new JsonResponse(['status' => 'success', 'page' => $page]);
         }
-    
+
         return new JsonResponse(['status' => 'error', 'message' => 'Invalid page'], 400);
     }
+
+    // ADD STUDY FORM
+    public function renderAddDAForm($elementtype = 'da', $studyuri = NULL) {
+        if ($studyuri === NULL) {
+            // Retorne uma mensagem de erro em JSON.
+            return new JsonResponse(['status' => 'error', 'message' => t('The study URI is missing.')], 400);
+        }
     
+        // Renderizar o formulário usando o formBuilder.
+        $form = \Drupal::formBuilder()->getForm('Drupal\rep\Form\AddMTForm', $elementtype, $studyuri);
+    
+        // Use o serviço de renderização para gerar o HTML do formulário.
+        $rendered_form = \Drupal::service('renderer')->renderPlain($form);
+    
+        // Retorne o formulário renderizado como uma resposta HTML.
+        return new JsonResponse([
+            'status' => 'success',
+            'form' => $rendered_form,
+        ]);
+    }    
+
     public function backUrl()
     {
         $uid = \Drupal::currentUser()->id();

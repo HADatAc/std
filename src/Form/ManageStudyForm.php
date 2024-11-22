@@ -8,6 +8,7 @@ use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\HASCO;
+use Drupal\std\Controller\JsonDataController;
 
 class ManageStudyForm extends FormBase {
 
@@ -157,12 +158,13 @@ class ManageStudyForm extends FormBase {
     // Obtenha o valor da sessão para fallback
     $session = \Drupal::service('session');
     $da_page_from_session = $session->get('da_current_page', 1);
+
     $form['row2']['card1']['inner_row2']['card2'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-6')),
       'card' => array(
         '#type' => 'markup',
-        '#markup' => '<div class="card">' .
+        '#markup' => '<div class="card drop-area" id="drop-card">' .
           '<div class="card-header text-center">' . $cards[2]['value'] . '</div>' .
           '<div class="card-body">' .
             '<div id="json-table-container">Loading...</div>' .
@@ -178,6 +180,12 @@ class ManageStudyForm extends FormBase {
             'mode' => 'compact',
             'page' => $da_page_from_session,
             'pagesize' => 5,
+          ],
+          'addNewDA' => [
+            'url' => Url::fromRoute('std.render_add_da_form', [
+              'elementtype' => 'da',
+              'studyuri' => base64_encode($this->getStudy()->uri),
+            ])->toString(),
           ],
         ],
       ],

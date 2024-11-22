@@ -304,4 +304,11 @@ std.update_session_page:
   requirements:
     _permission: 'access content'
   methods: [POST]
-  
+
+std.render_add_da_form:
+  path: '/std/add-da-form/{elementtype}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::renderAddDAForm'
+    _title: 'Add DA Form'
+  requirements:
+    _permission: 'access content'
