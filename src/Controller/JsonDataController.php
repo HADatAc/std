@@ -230,6 +230,11 @@ class JsonDataController extends ControllerBase
         // Use o serviço de renderização para gerar o HTML do formulário.
         $rendered_form = \Drupal::service('renderer')->renderPlain($form);
     
+        // SET USER ID AND PREVIOUS URL FOR TRACKING STORE URLS
+        $uid = \Drupal::currentUser()->id();
+        $previousUrl = \Drupal::request()->getRequestUri();
+        Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
+
         // Retorne o formulário renderizado como uma resposta HTML.
         return new JsonResponse([
             'status' => 'success',

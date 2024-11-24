@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\std\Controller\JsonDataController;
+use Drupal\Core\Render\Markup;
 
 class ManageStudyForm extends FormBase {
 
@@ -166,9 +167,10 @@ class ManageStudyForm extends FormBase {
         '#type' => 'markup',
         '#markup' => '<div class="card drop-area" id="drop-card">' .
           '<div class="card-header text-center">' . $cards[2]['value'] . '</div>' .
-          '<div class="card-body">' .
-            '<div id="json-table-container">Loading...</div>' .
-          '</div>' .
+            '<div class="card-body">' .
+              '<div id="json-table-container">Loading...</div>' .
+            '</div>' .
+            '<div class="info-card">You can drag&drop files directly into this card</div>' .
           '</div>',
       ),
       '#attached' => [
@@ -237,7 +239,21 @@ class ManageStudyForm extends FormBase {
     //  ),
     //);
 
-    // Row 2, Outter card 1
+    $uid = \Drupal::currentUser()->id();
+    
+    $previousUrl = Url::fromRoute('std.manage_study_elements', [
+      'studyuri' => base64_encode($this->getStudy()->uri),
+    ])->toString();
+    Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
+    dpm($previousUrl);
+
+    $url = Url::fromRoute('rep.add_mt', [
+      'elementtype' => 'da',
+      'studyuri' => base64_encode($this->getStudy()->uri),
+      'fixstd' => 'T',
+    ])->toString();
+
+    //Row 2, Outter card 1
     $form['row2']['card1'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-12')),
@@ -246,7 +262,7 @@ class ManageStudyForm extends FormBase {
           '#markup' => '<div class="card">' . 
             '<div class="card-header text-center">' . $cards[1]['value'] . '</div>' .
             \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-            '<div class="card-footer text-center"><a href="' . $cards[1]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
+            '<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
             '</div>',
       ),
     );
