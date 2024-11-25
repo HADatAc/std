@@ -245,7 +245,6 @@ class ManageStudyForm extends FormBase {
       'studyuri' => base64_encode($this->getStudy()->uri),
     ])->toString();
     Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
-    dpm($previousUrl);
 
     $url = Url::fromRoute('rep.add_mt', [
       'elementtype' => 'da',
