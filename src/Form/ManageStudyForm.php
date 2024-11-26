@@ -79,7 +79,9 @@ class ManageStudyForm extends FormBase {
       4 => array('value' => '<h3>Media (0)</h3>'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array('value' => '<h1>'.$totalSTRs.'</h1><h3>Streams<br>&nbsp;</h3>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'stream')),
+                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'stream',),
+                 'link2' => self::urlSelectByStudy($this->getStudy()->uri,'str',),
+                ),
       7 => array('value' => '<h1>'.$totalRoles.'</h1><h3>Roles<br>&nbsp;</h3>',
                  'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyrole')),
       8 => array('value' => '<h1>'.$totalVCs.'</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
@@ -298,7 +300,10 @@ class ManageStudyForm extends FormBase {
         'card' => array(
             '#type' => 'markup',
             '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[6]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+              '<div class="card-footer text-center">'.
+              '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> Manage Streams</a>'.
+              '<a href="' . $cards[6]['link2'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage STRs</a>'.
+              '</div></div>',
         ),
     );
 
@@ -309,7 +314,7 @@ class ManageStudyForm extends FormBase {
       'card' => array(
           '#type' => 'markup',
           '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
-            '<div class="card-footer text-center"><a href="' . $cards[7]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+            '<div class="card-footer text-center"><a href="' . $cards[7]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage Roles</a></div></div>',
       ),
     );
 
@@ -320,7 +325,7 @@ class ManageStudyForm extends FormBase {
         'card' => array(
             '#type' => 'markup',
             '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+              '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Virtual Columns</a></div></div>',
         ),
     );
 
@@ -331,7 +336,7 @@ class ManageStudyForm extends FormBase {
         'card' => array(
             '#type' => 'markup',
             '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage</a></div></div>',
+              '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Object Collections</a></div></div>',
         ),
     );
 

@@ -185,6 +185,12 @@ class STDSelectByStudyForm extends FormBase {
         $header = Stream::generateHeader();
         $output = Stream::generateOutput($this->getList());
         break;
+      case "str":
+        $this->single_class_name = "STR";
+        $this->plural_class_name = "STRs";
+        $header = MetadataTemplate::generateHeader();
+        $output = MetadataTemplate::generateOutput('str', $this->getList());
+        break;
       default:
         $this->single_class_name = "Object of Unknown Type";
         $this->plural_class_name = "Objects of Unknown Types";
@@ -236,6 +242,24 @@ class STDSelectByStudyForm extends FormBase {
           '#name' => 'manage_studyobject',
           '#attributes' => [
             'class' => ['btn', 'btn-primary', 'manage_codebookslots-button'],
+          ],
+        ];
+      }
+      if ($this->element_type == 'str') {
+        $form['ingest_mt'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Ingest ' . $this->single_class_name . ' Selected'),
+          '#name' => 'ingest_mt',
+          '#attributes' => [
+            'class' => ['btn', 'btn-primary', 'ingest_mt-button'],
+          ],
+        ];
+        $form['uningest_mt'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Uningest ' . $this->plural_class_name . ' Selected'),
+          '#name' => 'uningest_mt',
+          '#attributes' => [
+            'class' => ['btn', 'btn-primary', 'uningest_mt-element-button'],
           ],
         ];
       }
@@ -410,6 +434,28 @@ class STDSelectByStudyForm extends FormBase {
           ]);
         }
       }
+      if ($this->element_type == 'stream') {
+        Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_stream');
+        if ($this->getStudy() == NULL || $this->getStudy()->uri == NULL) {
+          $url = Url::fromRoute('std.add_stream', [
+            'studyuri' => 'none',
+            'fixstd' => 'F',
+          ]);
+        } else {
+          $url = Url::fromRoute('std.add_stream', [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+            'fixstd' => 'T',
+          ]);
+        }
+      }
+      if ($this->element_type == 'str') {
+        Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
+        $url = Url::fromRoute('rep.add_mt', [
+          'elementtype' => $this->element_type,
+          'studyuri' => base64_encode($this->getStudy()->uri),
+          'fixstd' => 'T',
+        ]);
+      }
       $form_state->setRedirectUrl($url);
     }
 
@@ -455,6 +501,21 @@ class STDSelectByStudyForm extends FormBase {
             'fixstd' => 'T',
           ]);
         }
+        if ($this->element_type == 'stream') {
+          Utils::trackingStoreUrls($uid, $previousUrl, 'std.edit_stream');
+          $url = Url::fromRoute('std.edit_stream', [
+            'streamuri' => base64_encode($first),
+            'fixstd' => 'T',
+          ]);
+        }
+        if ($this->element_type == 'str') {
+          Utils::trackingStoreUrls($uid, $previousUrl, 'rep.edit_mt');
+          $url = Url::fromRoute('rep.edit_mt', [
+            'elementtype' => $this->element_type,
+            'elementuri' => base64_encode($first),
+            'fixstd' => 'T',
+          ]);
+        }
         $form_state->setRedirectUrl($url);
       }
     }
@@ -484,18 +545,7 @@ class STDSelectByStudyForm extends FormBase {
           //    }
           //  }
           //}
-          if ($this->element_type == 'studyrole') {
-            $api->studyRoleDel($uri);
-          }
-          if ($this->element_type == 'studyobjectcollection') {
-            $api->studyObjectCollectionDel($uri);
-          }
-          if ($this->element_type == 'studyobject') {
-            $api->elementDel('studyobject',$uri);
-          }
-          if ($this->element_type == 'virtualcolumn') {
-            $api->virtualColumnDel($uri);
-          }
+          $api->elementDel($this->element_type,$uri);
         }
         \Drupal::messenger()->addMessage(t("Selected " . $this->plural_class_name . " has/have been deleted successfully."));
       }
@@ -519,7 +569,80 @@ class STDSelectByStudyForm extends FormBase {
         $form_state->setRedirectUrl($url);
       }
     }
+
+    // INGEST STR
+    if (($button_name === 'ingest_mt') && ($this->element_type == 'str')) {
+      if (sizeof($rows) < 1) {
+        \Drupal::messenger()->addWarning(t("Select the exact " . $this->single_class_name . " to be ingested."));
+      } else if ((sizeof($rows) > 1)) {
+        \Drupal::messenger()->addWarning(t("Instances from no more than one " . $this->single_class_name . " can be ingested at once."));
+      } else {
+        $first = array_shift($rows);
+        $this->performIngest($first, $form_state);
+      }
+    }
+
+    // UNINGEST STR
+    if (($button_name === 'uningest_mt') && ($this->element_type == 'str')) {
+      if (sizeof($rows) < 1) {
+        \Drupal::messenger()->addWarning(t("Select the exact " . $this->single_class_name . " to be ingested."));
+      } else if ((sizeof($rows) > 1)) {
+        \Drupal::messenger()->addWarning(t("Instances from no more than one " . $this->single_class_name . " can be ingested at once."));
+      } else {
+        $first = array_shift($rows);
+        $this->performUningest($first, $form_state);
+      }
+    }
+
   }
+
+  /**
+   * INGEST STR
+   */
+  protected function performIngest($uri, FormStateInterface $form_state) {
+    $api = \Drupal::service('rep.api_connector');
+    $stream = $api->parseObjectResponse($api->getUri($uri), 'getUri');
+    if ($stream == NULL) {
+      \Drupal::messenger()->addError(t("Failed to retrieve the STR to be ingested."));
+      return;
+    }
+    $msg = $api->parseObjectResponse($api->uploadTemplate($this->element_type, $stream), 'uploadTemplate');
+    if ($msg == NULL) {
+      \Drupal::messenger()->addError(t("The " . $this->single_class_name . " selected FAILD to be submited for Ingestion."));
+      return;
+    }
+    \Drupal::messenger()->addMessage(t("The " . $this->single_class_name . " selected was successfully submited for Ingestion."));
+    return;
+  }
+
+  /**
+   * UNINGEST STR
+   */
+  protected function performUningest($uri, FormStateInterface $form_state) {
+    $api = \Drupal::service('rep.api_connector');
+    $newMT = new MetadataTemplate();
+    $mt = $api->parseObjectResponse($api->getUri($uri), 'getUri');
+    if ($mt == NULL) {
+      \Drupal::messenger()->addError(t("Failed to recover " . $this->single_class_name . " for uningestion."));
+      return;
+    }
+    $newMT->setPreservedMT($mt);
+    $df = $api->parseObjectResponse($api->getUri($mt->hasDataFileUri), 'getUri');
+    if ($df == NULL) {
+      \Drupal::messenger()->addError(t("Fail to recover datafile of" . $this->single_class_name . " from being unigested."));
+      return;
+    }
+    $newMT->setPreservedDF($df);
+    $msg = $api->parseObjectResponse($api->uningestMT($mt->uri), 'uningestMT');
+    if ($msg == NULL) {
+      \Drupal::messenger()->addError(t("The " . $this->single_class_name . " selected FAILED to uningested."));
+      return;
+    }
+    $newMT->savePreservedMT($this->element_type);
+    \Drupal::messenger()->addMessage(t("The " . $this->single_class_name . " seleted was uningested."));
+    return;
+  }
+
 
   function backUrl() {
     $uid = \Drupal::currentUser()->id();
