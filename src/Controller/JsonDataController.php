@@ -458,6 +458,7 @@ class JsonDataController extends ControllerBase
                 'docx' => 'publications/',
                 'jpg' => 'media/',
                 'jpeg' => 'media/',
+                'png' => 'media/',
                 'mov' => 'media/',
                 'avi' => 'media/',
                 'mpeg' => 'media/',
