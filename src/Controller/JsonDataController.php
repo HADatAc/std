@@ -350,7 +350,7 @@ class JsonDataController extends ControllerBase
 
             // Prepara o diretório de destino.
             $file_system = \Drupal::service('file_system');
-            $directory = 'private://' . $uri . '/' . $folder . '/';
+            $directory = 'private://std/' . $uri . '/' . $folder . '/';
             $file_system->prepareDirectory($directory, \Drupal\Core\File\FileSystemInterface::CREATE_DIRECTORY);
 
             // Define o caminho final do arquivo.
@@ -449,7 +449,7 @@ class JsonDataController extends ControllerBase
             $decodedStudyUri = basename(base64_decode($studyuri));
 
             // Define os diretórios com base no tipo do arquivo
-            $basePath = 'private://' . $decodedStudyUri . '/';
+            $basePath = 'private://std/' . $decodedStudyUri . '/';
             $directories = [
                 'csv' => 'da/',
                 'xlsx' => 'da/',
