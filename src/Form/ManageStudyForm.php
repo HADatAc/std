@@ -8,6 +8,8 @@ use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\HASCO;
+use Drupal\std\Controller\JsonDataController;
+use Drupal\Core\Render\Markup;
 
 class ManageStudyForm extends FormBase {
 
@@ -72,7 +74,7 @@ class ManageStudyForm extends FormBase {
     $cards = array(
       1 => array('value' => '<h3>Study Content (0)</h3>',
                  'link' => self::urlSelectByStudy($this->getStudy()->uri,'da')),
-      2 => array('value' => '<h1>'.'</h1><h3>Data Files ('.$totalDAs.')</h3>'),
+      2 => array('value' => 'Data Files ('.$totalDAs.')'),
       3 => array('value' => '<h3>Publications (0)</h3>'),
       4 => array('value' => '<h3>Media (0)</h3>'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
@@ -122,6 +124,9 @@ class ManageStudyForm extends FormBase {
       $title = $this->getStudy()->title;
     }
 
+    //Libraries
+    $form['#attached']['library'][] = 'core/drupal.autocomplete';
+
     // First row with a single card
     $form['row1']['card0'] = array(
         //'#type' => 'container',
@@ -143,6 +148,10 @@ class ManageStudyForm extends FormBase {
         //),
     );
 
+    // Obtenha o valor da sessão para fallback
+    $session = \Drupal::service('session');
+    $da_page_from_session = $session->get('da_current_page', 1);
+
     // Second row with 1 outter card (card 1)
     $form['row2'] = array(
         '#type' => 'container',
@@ -155,20 +164,30 @@ class ManageStudyForm extends FormBase {
       '#attributes' => array('class' => array('row', 'm-3')),
     );
 
-    // Row 2, Card 2, DA content
+    //DA TABLE JQUERY
     $form['row2']['card1']['inner_row2']['card2'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-6')),
       'card' => array(
-          '#type' => 'markup',
-          '#markup' => '<div class="card">' . 
-            '<div class="card-header text-center">' . $cards[2]['value'] . '</div>' .
-            '<div class="card-body">' . 
-            \Drupal::service('renderer')->render(\Drupal::formBuilder()->getForm('Drupal\std\Form\STDSelectByStudyCompactForm', $studyuri, 'da', 'table', 0, 5)) . 
+        '#type' => 'markup',
+        '#markup' => '<div class="card">
+          <div class="card-header text-center"><h3 id="data_files_count">' . $cards[2]['value'] . '</h3></div>' .
+            '<div class="card-body">' .
+              '<div id="json-table-container">Loading...</div>' .
             '</div>' .
-            '</div>',
+            '<div class="card-footer">' .
+              '<div id="json-table-pager" class="pagination"></div>' .
+            '</div>
+          </div>',
       ),
     );
+
+    $form['row2']['card1']['inner_row2']['card2']['pager'] = [
+      '#markup' => '<div id="json-table-pager" class="pagination"></div>',
+      '#attached' => [
+        'library' => ['std/json_table'],
+      ],
+    ];
 
     // Row 2, Card 3, Publication content
     $form['row2']['card1']['inner_row2']['card3'] = array(
@@ -209,18 +228,63 @@ class ManageStudyForm extends FormBase {
     //  ),
     //);
 
-    // Row 2, Outter card 1
+    $uid = \Drupal::currentUser()->id();
+    
+    $previousUrl = Url::fromRoute('std.manage_study_elements', [
+      'studyuri' => base64_encode($this->getStudy()->uri),
+    ])->toString();
+    Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
+
+    $url = Url::fromRoute('rep.add_mt', [
+      'elementtype' => 'da',
+      'studyuri' => base64_encode($this->getStudy()->uri),
+      'fixstd' => 'T',
+    ])->toString();
+
+    //Toas Message
+    $form['row1']['toast'] = array(
+      '#type' => 'markup',
+      '#attributes' => array('style="position: fixed; top: 10px; right: 10px; z-index: 1050;"'),
+      '#markup' => '<div id="toast-container"></div>',
+    );
+
+    //Row 2, Outter card 1
     $form['row2']['card1'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-12')),
       'card' => array(
           '#type' => 'markup',
           '#markup' => '<div class="card">' . 
-            '<div class="card-header text-center">' . $cards[1]['value'] . '</div>' .
-            \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-            '<div class="card-footer text-center"><a href="' . $cards[1]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
+            '<div class="card drop-area" id="drop-card">' .
+              '<div class="card-header text-center">' . $cards[1]['value'].
+                '<div class="info-card">You can drag&drop files directly into this card</div>' .
+              '</div>' . 
+              \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
+              //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
+              '</div>' .
             '</div>',
       ),
+      '#attached' => [
+          'library' => [
+            'std/json_table', 
+            'core/drupal.autocomplete',
+          ],
+          'drupalSettings' => [
+            'std' => [
+              'studyuri' => base64_encode($this->getStudy()->uri),
+              'elementtype' => 'da',
+              'mode' => 'compact',
+              'page' => $da_page_from_session,
+              'pagesize' => 5,
+            ],
+            'addNewDA' => [
+              'url' => Url::fromRoute('std.render_add_da_form', [
+                'elementtype' => 'da',
+                'studyuri' => base64_encode($this->getStudy()->uri),
+              ])->toString(),
+            ],
+          ],
+        ],
     );
 
     // Third row with 5 cards (card 6 to card 10)

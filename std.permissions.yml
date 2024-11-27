@@ -1,0 +1,4 @@
+upload files:
+  title: 'Upload files via custom upload route'
+  description: 'Allows users to upload files using the custom route.'
+  restrict access: true

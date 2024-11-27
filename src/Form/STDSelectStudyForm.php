@@ -12,6 +12,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\Core\Ajax\AjaxResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Drupal\Component\Utility\Html;
 
 class STDSelectStudyForm extends FormBase
 {
@@ -180,9 +181,6 @@ class STDSelectStudyForm extends FormBase
       // Armazena o número da página no estado do formulário
       $form_state->set('page', $page);
 
-      // Adiciona a biblioteca JavaScript para infinite scroll (certifique-se de ter essa biblioteca no seu módulo)
-      // $form['#attached']['library'][] = 'std/infinite_scroll'; // Se você tiver uma biblioteca JS
-
       $items_loaded = $form_state->get('items_loaded') ?? 0;
       $total_pages_to_load = ceil($items_loaded / $pagesize);
 
@@ -220,22 +218,6 @@ class STDSelectStudyForm extends FormBase
             'class' => ['text-center', 'my-3'],
           ],
         ];
-
-        // // Adiciona o botão "Load More" dentro do container
-        // $form['load_more_wrapper']['load_more'] = [
-        //   '#type' => 'submit',
-        //   '#value' => $this->t('Load More'),
-        //   '#ajax' => [
-        //     'callback' => '::loadMoreCallback',
-        //     'wrapper' => 'cards-wrapper',
-        //     'method' => 'append',
-        //   ],
-        //   '#attributes' => [
-        //     'class' => ['btn', 'btn-primary', 'load-more-button'],
-        //     'style' => 'height: auto;', // Ajusta a altura ao conteúdo
-        //   ],
-        //   '#name' => 'load_more',
-        // ];
       }
     } else {
       // Initialize page 1
@@ -365,23 +347,29 @@ class STDSelectStudyForm extends FormBase
       }
 
       // Card Body
+      // Limitar o texto da descrição a 200 caracteres
+      $short_desc = Html::escape(mb_strimwidth($desc, 0, 120, ''));
+
+      // Gerar o modal para mostrar a descrição completa
+      $modal_id = Html::getId($title . '-description-modal');
+
       $card['card']['body'] = [
         '#type' => 'container',
         '#attributes' => [
           'style' => 'margin-bottom:0!important;',
-          'class' => ['card-body', 'mb-0']
+          'class' => ['card-body', 'mb-0'],
         ],
         'row' => [
           '#type' => 'container',
           '#attributes' => [
             'style' => 'margin-bottom:0!important;',
-            'class' => ['row']
+            'class' => ['row'],
           ],
           'image_column' => [
             '#type' => 'container',
             '#attributes' => [
               'style' => 'margin-bottom:0!important;',
-              'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle']
+              'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle'],
             ],
             'image' => [
               '#theme' => 'image',
@@ -397,18 +385,43 @@ class STDSelectStudyForm extends FormBase
             '#type' => 'container',
             '#attributes' => [
               'style' => 'margin-bottom:0!important;',
-              'class' => ['col-md-7']
+              'class' => ['col-md-7'],
             ],
             'text' => [
-              '#markup' => '<p class="card-text"><strong>Name:</strong> ' . $title
-                . '<br><strong>URI:</strong> ' . (is_string($uri) && !empty($uri) ? Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString() : '')
-                . '<br><strong>PI: </strong>' . $pi
-                . '<br><strong>Institution: </strong>' . $ins
-                . '<br><strong>Description: </strong>' . $desc . '</p>',
+              '#markup' => '<p class="card-text">
+                <strong>Name:</strong> ' . $title . '
+                <br><strong>URI:</strong> ' . (is_string($uri) && !empty($uri) ? Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString() : '') . '
+                <br><strong>PI: </strong>' . $pi . '
+                <br><strong>Institution: </strong>' . $ins . '
+                <br><strong>Description: </strong>' . $short_desc . '... 
+                <a href="#" data-bs-toggle="modal" data-bs-target="#' . $modal_id . '">read more</a>
+              </p>',
             ],
           ],
         ],
       ];
+
+      // Adicionar o modal para mostrar a descrição completa
+      $card['card']['body']['modal'] = [
+        '#markup' => '
+          <div class="modal fade" id="' . $modal_id . '" tabindex="-1" aria-labelledby="' . $modal_id . '-label" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="' . $modal_id . '-label">Full Description</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                  <strong>Description:</strong> ' . Html::escape($desc) . '
+                </div>
+                <div class="modal-footer">
+                  <a href="#" class="btn btn-secondary" data-bs-dismiss="modal">Close</a>
+                </div>
+              </div>
+            </div>
+          </div>',
+      ];
+      
 
       // Build action links
       $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
