@@ -208,10 +208,21 @@ class JsonDataController extends ControllerBase
     public function updateSessionPage(Request $request)
     {
         $page = $request->get('page');
+        $elementtype = $request->get('element_type');
         if (is_numeric($page)) {
 
             $session = \Drupal::service('session');
-            $session->set('da_current_page', $page);
+
+            switch ($elementtype) {
+                case 'publications':
+                    $session->set('da_current_page', $page);
+                    break;
+
+                case 'da':
+                default:
+                $session->set('publications_current_page', $page);
+                    break;
+            }            
 
             return new JsonResponse(['status' => 'success', 'page' => $page]);
         }
@@ -244,73 +255,6 @@ class JsonDataController extends ControllerBase
             'form' => $rendered_form,
         ]);
     }
-
-    // public function upload(Request $request, $field_name) {
-    //     try {
-    //         // Captura o arquivo enviado.
-    //         $uploaded_files = $request->files->all();
-    //         $uploaded_file = $uploaded_files['files'][$field_name] ?? null;
-
-    //         // Verifica se o arquivo foi enviado e está em estado válido.
-    //         if (!$uploaded_file || !$uploaded_file instanceof UploadedFile || $uploaded_file->getError() !== UPLOAD_ERR_OK) {
-    //             \Drupal::logger('std')->error('No file uploaded or invalid file structure. Field: @field, Files: @files', [
-    //                 '@field' => $field_name,
-    //                 '@files' => print_r($uploaded_files, TRUE),
-    //             ]);
-    //             return new JsonResponse(['error' => 'No file uploaded or upload error.'], 400);
-    //         }
-
-    //         // Obtem a extensão do arquivo.
-    //         $extension = strtolower($uploaded_file->getClientOriginalExtension());
-
-    //         // Determina a pasta de destino com base na extensão.
-    //         $folder = match ($extension) {
-    //             'csv', 'xlsx' => 'da',
-    //             'pdf', 'docx' => 'publications',
-    //             'jpg', 'jpeg', 'png', 'mp4', 'avi' => 'media',
-    //             default => null,
-    //         };
-
-    //         if (!$folder) {
-    //             \Drupal::logger('std')->error('Unsupported file type: @type', [
-    //                 '@type' => $extension,
-    //             ]);
-    //             return new JsonResponse(['error' => 'Unsupported file type.'], 400);
-    //         }
-
-    //         // Prepara o diretório de destino.
-    //         $file_system = \Drupal::service('file_system');
-    //         $directory = 'private://' . basename($this->getStudy()->uri) . '/' . $folder . '/';
-    //         $file_system->prepareDirectory($directory, \Drupal\Core\File\FileSystemInterface::CREATE_DIRECTORY);
-
-    //         // Define o caminho final do arquivo.
-    //         $destination = $directory . $uploaded_file->getClientOriginalName();
-
-    //         // Move o arquivo da pasta temporária para o destino final.
-    //         $uploaded_file->move($file_system->realpath($directory), $uploaded_file->getClientOriginalName());
-
-    //         // Cria a entidade de arquivo no Drupal.
-    //         $file = File::create([
-    //             'uri' => $destination,
-    //             'status' => 1, // Define como permanente.
-    //         ]);
-    //         $file->save();
-
-    //         // Log de sucesso.
-    //         \Drupal::logger('std')->info('File uploaded successfully to @destination', [
-    //             '@destination' => $destination,
-    //         ]);
-
-    //         return new JsonResponse([
-    //             'status' => 'success',
-    //             'fid' => $file->id(),
-    //             'uri' => $file->getFileUri(),
-    //         ]);
-    //     } catch (\Exception $e) {
-    //         \Drupal::logger('std')->error('Exception occurred: @message', ['@message' => $e->getMessage()]);
-    //         return new JsonResponse(['error' => $e->getMessage()], 500);
-    //     }
-    // }  
 
     public function upload(Request $request, $field_name, $studyuri = NULL)
     {
@@ -513,6 +457,82 @@ class JsonDataController extends ControllerBase
             ], 500);
         }
     }
+
+    /*
+    ** PUBLICATIONS TABLE RELATED FUNCTIONS
+    */
+    public function getPublicationsFiles($studyuri = null, $page = 1, $pagesize = 5)
+    {
+        if (!$studyuri) {
+            return new JsonResponse(['error' => 'Study URI is missing.'], 400);
+        }
+
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/Publications/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return new JsonResponse(['error' => 'Could not access or prepare directory.'], 500);
+        }
+
+        $all_files = scandir($file_system->realpath($directory));
+        $filtered_files = array_filter($all_files, function ($file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            return in_array($extension, ['pdf', 'docx']);
+        });
+
+        $total_files = count($filtered_files);
+        $offset = ($page - 1) * $pagesize;
+        $paginated_files = array_slice($filtered_files, $offset, $pagesize);
+
+        $files = [];
+        foreach ($paginated_files as $file) {
+            $files[] = [
+                'filename' => $file,
+                'view_url' => '/file-view-path/' . $file,
+                'delete_url' => '/file-delete-path/' . $file,
+            ];
+        }
+
+        return new JsonResponse([
+            'files' => $files,
+            'pagination' => [
+                'current_page' => $page,
+                'page_size' => $pagesize,
+                'total_files' => $total_files,
+                'total_pages' => ceil($total_files / $pagesize),
+            ],
+        ]);
+    }
+
+    /*
+    ** DELETE PUBLICATION
+    */
+    public function deletePublicationFile($filename, $studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/Publications/';
+        $file_path = $directory . $filename;
+
+        try {
+            $file_system = \Drupal::service('file_system');
+            $real_path = $file_system->realpath($file_path);
+
+            if (file_exists($real_path)) {
+                unlink($real_path);
+                return new JsonResponse(['status' => 'success']);
+            } else {
+                return new JsonResponse(['error' => 'File not found.'], 404);
+            }
+        } catch (\Exception $e) {
+            \Drupal::logger('std')->error('Error deleting file: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse(['error' => 'Error deleting file.'], 500);
+        }
+    }
+
+
+
+    # TO BE CHECKED IF NEEDED
 
     public function backUrl()
     {

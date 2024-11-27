@@ -11,49 +11,56 @@ use Drupal\rep\Vocabulary\HASCO;
 use Drupal\std\Controller\JsonDataController;
 use Drupal\Core\Render\Markup;
 
-class ManageStudyForm extends FormBase {
+class ManageStudyForm extends FormBase
+{
 
   protected $studyUri;
 
   protected $study;
 
-  public function getStudyUri() {
+  public function getStudyUri()
+  {
     return $this->studyUri;
   }
 
-  public function setStudyUri($uri) {
+  public function setStudyUri($uri)
+  {
     return $this->studyUri = $uri;
   }
 
-  public function getStudy() {
+  public function getStudy()
+  {
     return $this->study;
   }
 
-  public function setStudy($sem) {
+  public function setStudy($sem)
+  {
     return $this->study = $sem;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function getFormId() {
+  public function getFormId()
+  {
     return 'manage_study_form';
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL)
+  {
 
     //if ($studyuri == NULL || $studyuri == "") {
     //  \Drupal::messenger()->addMessage(t("A STUDY URI is required to manage a study."));
     //  $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
     //}
 
-    $uri_decode=base64_decode($studyuri);
+    $uri_decode = base64_decode($studyuri);
     $this->setStudyUri($uri_decode);
     $api = \Drupal::service('rep.api_connector');
-    $study = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
+    $study = $api->parseObjectResponse($api->getUri($uri_decode), 'getUri');
 
     if ($study == NULL) {
       \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
@@ -63,31 +70,40 @@ class ManageStudyForm extends FormBase {
     }
 
     // get totals for current study
-    $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri),'getTotalStudyDAs'));
-    $totalSTRs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri),'getTotalStudySTRs'));
-    $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri),'getTotalStudyRoles'));
-    $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri),'getTotalStudyVCs'));
-    $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri),'getTotalStudySOCs'));
-    $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri),'getTotalStudySOs'));
+    $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
+    $totalSTRs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
+    $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
+    $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
+    $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
+    $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
 
     // Example data for cards
     $cards = array(
-      1 => array('value' => '<h3>Study Content (0)</h3>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'da')),
-      2 => array('value' => 'Data Files ('.$totalDAs.')'),
+      1 => array(
+        'value' => '<h3>Study Content (0)</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
+      ),
+      2 => array('value' => 'Data Files (' . $totalDAs . ')'),
       3 => array('value' => '<h3>Publications (0)</h3>'),
       4 => array('value' => '<h3>Media (0)</h3>'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
-      6 => array('value' => '<h1>'.$totalSTRs.'</h1><h3>Streams<br>&nbsp;</h3>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'stream',),
-                 'link2' => self::urlSelectByStudy($this->getStudy()->uri,'str',),
-                ),
-      7 => array('value' => '<h1>'.$totalRoles.'</h1><h3>Roles<br>&nbsp;</h3>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyrole')),
-      8 => array('value' => '<h1>'.$totalVCs.'</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'virtualcolumn')),
-      9 => array('value' => '<h1>'.$totalSOCs.'</h1><h3>Object Collections</h3><h4>('. $totalSOs.' Objects)</h4>',
-                 'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobjectcollection')),
+      6 => array(
+        'value' => '<h1>' . $totalSTRs . '</h1><h3>Streams<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
+        'link2' => self::urlSelectByStudy($this->getStudy()->uri, 'str',),
+      ),
+      7 => array(
+        'value' => '<h1>' . $totalRoles . '</h1><h3>Roles<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyrole')
+      ),
+      8 => array(
+        'value' => '<h1>' . $totalVCs . '</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'virtualcolumn')
+      ),
+      9 => array(
+        'value' => '<h1>' . $totalSOCs . '</h1><h3>Object Collections</h3><h4>(' . $totalSOs . ' Objects)</h4>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyobjectcollection')
+      ),
       //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
       //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
     );
@@ -105,22 +121,28 @@ class ManageStudyForm extends FormBase {
     //);
 
     $piName = ' ';
-    if (isset($this->getStudy()->pi) &&
-        $this->getStudy()->pi != NULL &&
-        $this->getStudy()->pi->name != NULL) {
+    if (
+      isset($this->getStudy()->pi) &&
+      $this->getStudy()->pi != NULL &&
+      $this->getStudy()->pi->name != NULL
+    ) {
       $piName = $this->getStudy()->pi->name;
     }
 
     $institutionName = ' ';
-    if (isset($this->getStudy()->institution) &&
-        $this->getStudy()->institution != NULL &&
-        $this->getStudy()->institution->name != NULL) {
+    if (
+      isset($this->getStudy()->institution) &&
+      $this->getStudy()->institution != NULL &&
+      $this->getStudy()->institution->name != NULL
+    ) {
       $institutionName = $this->getStudy()->institution->name;
     }
 
     $title = ' ';
-    if (isset($this->getStudy()->title) &&
-        $this->getStudy()->title != NULL) {
+    if (
+      isset($this->getStudy()->title) &&
+      $this->getStudy()->title != NULL
+    ) {
       $title = $this->getStudy()->title;
     }
 
@@ -129,23 +151,23 @@ class ManageStudyForm extends FormBase {
 
     // First row with a single card
     $form['row1']['card0'] = array(
-        //'#type' => 'container',
-        //'#attributes' => array('class' => array('row')),
-        //'card1' => array(
-            '#type' => 'container',
-            '#attributes' => array('class' => array('col-md-12')),
-            'card' => array(
-                '#type' => 'markup',
-                '#markup' => '<br><div class="card"><div class="card-body">' .
-                  $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
-                  $this->t('<b>URI</b>: ') . ' ' . $this->getStudy()->uri . '<br>' .
-                  $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .
-                  $this->t('<b>PI</b>: ') . ' ' . $piName . '<br>' .
-                  $this->t('<b>Institution</b>: ') . ' ' . $institutionName . '<br>' .
-                  $this->t('<b>Description</b>: ') . ' ' . $this->getStudy()->comment . '<br>' .
-                  '</div></div>',
-            ),
-        //),
+      //'#type' => 'container',
+      //'#attributes' => array('class' => array('row')),
+      //'card1' => array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-12')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<br><div class="card"><div class="card-body">' .
+          $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
+          $this->t('<b>URI</b>: ') . ' ' . $this->getStudy()->uri . '<br>' .
+          $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .
+          $this->t('<b>PI</b>: ') . ' ' . $piName . '<br>' .
+          $this->t('<b>Institution</b>: ') . ' ' . $institutionName . '<br>' .
+          $this->t('<b>Description</b>: ') . ' ' . $this->getStudy()->comment . '<br>' .
+          '</div></div>',
+      ),
+      //),
     );
 
     // Obtenha o valor da sessão para fallback
@@ -154,8 +176,8 @@ class ManageStudyForm extends FormBase {
 
     // Second row with 1 outter card (card 1)
     $form['row2'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('row')),
+      '#type' => 'container',
+      '#attributes' => array('class' => array('row')),
     );
 
     // Inner row of second row with 4 cards (cards 2 to 5)
@@ -172,22 +194,22 @@ class ManageStudyForm extends FormBase {
         '#type' => 'markup',
         '#markup' => '<div class="card">
           <div class="card-header text-center"><h3 id="data_files_count">' . $cards[2]['value'] . '</h3></div>' .
-            '<div class="card-body">' .
-              '<div id="json-table-container">Loading...</div>' .
-            '</div>' .
-            '<div class="card-footer">' .
-              '<div id="json-table-pager" class="pagination"></div>' .
-            '</div>
+          '<div class="card-body">' .
+          '<div id="json-table-container">Loading...</div>' .
+          '</div>' .
+          '<div class="card-footer">' .
+          '<div id="json-table-pager" class="pagination"></div>' .
+          '</div>
           </div>',
       ),
     );
 
-    $form['row2']['card1']['inner_row2']['card2']['pager'] = [
-      '#markup' => '<div id="json-table-pager" class="pagination"></div>',
-      '#attached' => [
-        'library' => ['std/json_table'],
-      ],
-    ];
+    // $form['row2']['card1']['inner_row2']['card2']['pager'] = [
+    //   '#markup' => '<div id="json-table-pager" class="pagination"></div>',
+    //   '#attached' => [
+    //     'library' => ['std/json_table'],
+    //   ],
+    // ];
 
     // Row 2, Card 3, Publication content
     $form['row2']['card1']['inner_row2']['card3'] = array(
@@ -195,12 +217,24 @@ class ManageStudyForm extends FormBase {
       '#attributes' => array('class' => array('col-md-3')),
       'card' => array(
         '#type' => 'markup',
-        '#markup' => '<div class="card">' . 
+        '#markup' => '<div class="card">' .
           '<div class="card-header text-center">' . $cards[3]['value'] . '</div>' .
-          '<div class="card-body">' . 'Foo' . '</div>' .
+          '<div class="card-body">
+             <div id="publication-table-container"></div>
+           </div>
+           <div class="card-footer">
+             <div id="publication-table-pager" class="pagination"></div>
+           </div>' .
           '</div>',
       ),
     );
+
+    $form['row2']['card1']['inner_row2']['card3']['pager'] = [
+      '#markup' => '<div id="publication-table-pager" class="pagination"></div>',
+      '#attached' => [
+        'library' => ['std/json_table'],
+      ],
+    ];
 
     // Row 2, Card 4, Media content
     $form['row2']['card1']['inner_row2']['card4'] = array(
@@ -208,7 +242,7 @@ class ManageStudyForm extends FormBase {
       '#attributes' => array('class' => array('col-md-3')),
       'card' => array(
         '#type' => 'markup',
-        '#markup' => '<div class="card">' . 
+        '#markup' => '<div class="card">' .
           '<div class="card-header text-center">' . $cards[4]['value'] . '</div>' .
           '<div class="card-body">' . 'Foo' . '</div>' .
           '</div>',
@@ -229,7 +263,7 @@ class ManageStudyForm extends FormBase {
     //);
 
     $uid = \Drupal::currentUser()->id();
-    
+
     $previousUrl = Url::fromRoute('std.manage_study_elements', [
       'studyuri' => base64_encode($this->getStudy()->uri),
     ])->toString();
@@ -253,38 +287,38 @@ class ManageStudyForm extends FormBase {
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-12')),
       'card' => array(
-          '#type' => 'markup',
-          '#markup' => '<div class="card">' . 
-            '<div class="card drop-area" id="drop-card">' .
-              '<div class="card-header text-center">' . $cards[1]['value'].
-                '<div class="info-card">You can drag&drop files directly into this card</div>' .
-              '</div>' . 
-              \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-              //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
-              '</div>' .
-            '</div>',
+        '#type' => 'markup',
+        '#markup' => '<div class="card">' .
+          '<div class="card drop-area" id="drop-card">' .
+          '<div class="card-header text-center">' . $cards[1]['value'] .
+          '<div class="info-card">You can drag&drop files directly into this card</div>' .
+          '</div>' .
+          \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
+          //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
+          '</div>' .
+          '</div>',
       ),
       '#attached' => [
-          'library' => [
-            'std/json_table', 
-            'core/drupal.autocomplete',
+        'library' => [
+          'std/json_table',
+          'core/drupal.autocomplete',
+        ],
+        'drupalSettings' => [
+          'std' => [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+            'elementtype' => 'da',
+            'mode' => 'compact',
+            'page' => $da_page_from_session,
+            'pagesize' => 5,
           ],
-          'drupalSettings' => [
-            'std' => [
-              'studyuri' => base64_encode($this->getStudy()->uri),
+          'addNewDA' => [
+            'url' => Url::fromRoute('std.render_add_da_form', [
               'elementtype' => 'da',
-              'mode' => 'compact',
-              'page' => $da_page_from_session,
-              'pagesize' => 5,
-            ],
-            'addNewDA' => [
-              'url' => Url::fromRoute('std.render_add_da_form', [
-                'elementtype' => 'da',
-                'studyuri' => base64_encode($this->getStudy()->uri),
-              ])->toString(),
-            ],
+              'studyuri' => base64_encode($this->getStudy()->uri),
+            ])->toString(),
           ],
         ],
+      ],
     );
 
     // Third row with 5 cards (card 6 to card 10)
@@ -295,16 +329,16 @@ class ManageStudyForm extends FormBase {
 
     // Row 3, Card 6
     $form['row3']['card6'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-3')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
-              '<div class="card-footer text-center">'.
-              '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> Manage Streams</a>'.
-              '<a href="' . $cards[6]['link2'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage STRs</a>'.
-              '</div></div>',
-        ),
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-3')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
+          '<div class="card-footer text-center">' .
+          '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> Manage Streams</a>' .
+          '<a href="' . $cards[6]['link2'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage STRs</a>' .
+          '</div></div>',
+      ),
     );
 
     // Row 3, Card 7
@@ -312,32 +346,32 @@ class ManageStudyForm extends FormBase {
       '#type' => 'container',
       '#attributes' => array('class' => array('col-md-3')),
       'card' => array(
-          '#type' => 'markup',
-          '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
-            '<div class="card-footer text-center"><a href="' . $cards[7]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage Roles</a></div></div>',
+        '#type' => 'markup',
+        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
+          '<div class="card-footer text-center"><a href="' . $cards[7]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage Roles</a></div></div>',
       ),
     );
 
     // Row 3, Card 8
     $form['row3']['card8'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-3')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Virtual Columns</a></div></div>',
-        ),
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-3')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
+          '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Virtual Columns</a></div></div>',
+      ),
     );
 
     // Row 3, Card 9
     $form['row3']['card9'] = array(
-        '#type' => 'container',
-        '#attributes' => array('class' => array('col-md-3')),
-        'card' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
-              '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Object Collections</a></div></div>',
-        ),
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-3')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
+          '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Object Collections</a></div></div>',
+      ),
     );
 
     // Bottom part of the form
@@ -371,26 +405,26 @@ class ManageStudyForm extends FormBase {
     return $form;
   }
 
-  public function validateForm(array &$form, FormStateInterface $form_state) {
-  }
+  public function validateForm(array &$form, FormStateInterface $form_state) {}
 
   /**
    * {@inheritdoc}
    */
-  public function submitForm(array &$form, FormStateInterface $form_state) {
+  public function submitForm(array &$form, FormStateInterface $form_state)
+  {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
     if ($button_name === 'back') {
       self::backUrl();
     }
-
   }
 
-  public function extractValue($jsonString) {
+  public function extractValue($jsonString)
+  {
     $data = json_decode($jsonString, true); // Decodes JSON string into associative array
     if (isset($data['total'])) {
-        return $data['total'];
+      return $data['total'];
     }
     return -1;
   }
@@ -398,7 +432,8 @@ class ManageStudyForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public static function urlSelectByStudy($studyuri, $elementType) {
+  public static function urlSelectByStudy($studyuri, $elementType)
+  {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
     Utils::trackingStoreUrls($uid, $previousUrl, 'std.select_element_bystudy');
@@ -415,7 +450,8 @@ class ManageStudyForm extends FormBase {
     return $url->toString();
   }
 
-  function backUrl() {
+  function backUrl()
+  {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.manage_study_elements');
     if ($previousUrl) {
@@ -424,5 +460,4 @@ class ManageStudyForm extends FormBase {
       return;
     }
   }
-
 }

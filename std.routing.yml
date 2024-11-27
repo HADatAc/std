@@ -369,3 +369,27 @@ std.check_file_name:
   requirements:
     _permission: 'access content'
 
+std.get_publication_files:
+  path: '/std/get-publication-files/{studyuri}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getPublicationsFiles'
+    _title: 'Get publication files'
+  requirements:
+    _permission: 'access content'
+    studyuri: '.+'
+    page: '\d+'
+    pagesize: '\d+'
+  options:
+    _format: 'json'
+
+std.delete_publication_file:
+  path: '/std/delete-publication-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deletePublicationFile'
+    _title: 'Delete publication file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  options:
+    _format: 'json'
