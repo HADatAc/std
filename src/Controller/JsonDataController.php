@@ -212,6 +212,8 @@ class JsonDataController extends ControllerBase
         if (is_numeric($page)) {
 
             $session = \Drupal::service('session');
+            $session->set('da_current_page', 1);
+            $session->set('pub_current_page', 1);
 
             switch ($elementtype) {
                 case 'publications':
@@ -220,7 +222,7 @@ class JsonDataController extends ControllerBase
 
                 case 'da':
                 default:
-                $session->set('publications_current_page', $page);
+                $session->set('pub_current_page', $page);
                     break;
             }            
 
@@ -463,9 +465,26 @@ class JsonDataController extends ControllerBase
     */
     public function getPublicationsFiles($studyuri = null, $page = 1, $pagesize = 5)
     {
-        if (!$studyuri) {
-            return new JsonResponse(['error' => 'Study URI is missing.'], 400);
+        // GET SESSION
+        $session = \Drupal::service('session');
+        $page_from_session = $session->get('pub_current_page', 1);
+
+        // USE URL OU SESSION VALUE AS FALLBACK
+        $page = $page ?: $page_from_session;
+
+        // SAVE DA_PAGE ON SESSION
+        $session->set('pub_current_page', $page);
+
+        // CHECK VALID `$page`
+        if (!is_numeric($page) || $page < 1) {
+            $page = 1;
         }
+
+        // VALIDATION
+        if (empty($studyuri) || !is_numeric($page) || !is_numeric($pagesize)) {
+            return new JsonResponse(['error' => 'Invalid parameters'], 400);
+        }
+
 
         $decoded_studyuri = basename(base64_decode($studyuri));
         $directory = 'private://std/' . $decoded_studyuri . '/Publications/';
@@ -496,11 +515,17 @@ class JsonDataController extends ControllerBase
 
         return new JsonResponse([
             'files' => $files,
+            // 'pagination' => [
+            //     'current_page' => $page,
+            //     'page_size' => $pagesize,
+            //     'total_files' => $total_files,
+            //     'total_pages' => ceil($total_files / $pagesize),
+            // ],
             'pagination' => [
-                'current_page' => $page,
-                'page_size' => $pagesize,
-                'total_files' => $total_files,
-                'total_pages' => ceil($total_files / $pagesize),
+                'current_page' => 1,
+                'page_size' => 5,
+                'total_files' => 10,
+                'total_pages' => 2,
             ],
         ]);
     }
@@ -530,10 +555,7 @@ class JsonDataController extends ControllerBase
         }
     }
 
-
-
     # TO BE CHECKED IF NEEDED
-
     public function backUrl()
     {
         $uid = \Drupal::currentUser()->id();

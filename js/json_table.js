@@ -24,11 +24,13 @@
     //     pagesize
     // );
 
-    const url = drupalSettings.path.baseUrl + `/std/json-data/${encodeURIComponent(
-      studyuri
-    )}/${encodeURIComponent(elementtype)}/${encodeURIComponent(
-      mode
-    )}/${encodeURIComponent(page)}/${encodeURIComponent(pagesize)}`;
+    const url =
+      drupalSettings.path.baseUrl +
+      `/std/json-data/${encodeURIComponent(studyuri)}/${encodeURIComponent(
+        elementtype
+      )}/${encodeURIComponent(mode)}/${encodeURIComponent(
+        page
+      )}/${encodeURIComponent(pagesize)}`;
 
     $.ajax({
       url: url,
@@ -145,9 +147,9 @@
       $.ajax({
         url: drupalSettings.path.baseUrl + `/std/update-session-page`,
         type: "POST",
-        data: { 
+        data: {
           page: newPage,
-          element_type: 'da'
+          element_type: "da",
         },
         success: function () {
           //console.log("Session page updated:", newPage);
@@ -165,7 +167,12 @@
     $(document).on("click", ".delete-button", function (e) {
       e.preventDefault();
 
-      const deleteUrl = drupalSettings.path.baseUrl + `/std/delete-publication-file/` + studyuri + `/` + $(this).data("url");
+      const deleteUrl =
+        drupalSettings.path.baseUrl +
+        `/std/delete-publication-file/` +
+        studyuri +
+        `/` +
+        $(this).data("url");
 
       if (confirm("Really Delete?")) {
         $.ajax({
@@ -216,10 +223,6 @@
         const file = files[0];
         const originalFileName = file.name;
         const fileExtension = originalFileName.split(".").pop().toLowerCase();
-        const fileNameWithoutExtension = originalFileName.substring(
-          0,
-          originalFileName.lastIndexOf(".")
-        );
 
         const studyuri = drupalSettings.std.studyuri;
 
@@ -267,7 +270,7 @@
                   const currentPage = drupalSettings.std.page || 1;
                   showToast("File uploaded successfully!", "success");
                   loadTableData(currentPage); //Load DA Files
-                  loadPublicationFiles(currentPage); //Load Publications Files
+                  //loadPublicationFiles(currentPage); //Load Publications Files
                 } else {
                   showToast(
                     "Failed to upload file. Please try again.",
@@ -312,28 +315,7 @@
     });
   };
 
-  // Comportamento de carregamento da tabela
-  Drupal.behaviors.jsonTableLoader = {
-    attach: function (context, settings) {
-      once("json-table", "#json-table-container", context).forEach(function () {
-        const initialPage = drupalSettings.std.page || 1;
-        loadTableData(initialPage);
-      });
-    },
-  };
-
-  // Comportamento de drag-and-drop
-  Drupal.behaviors.dragAndDropCard = {
-    attach: function (context, settings) {
-      once("drag-and-drop", "#drop-card", context).forEach(function () {
-        attachDragAndDropEvents();
-      });
-    },
-  };
-})(jQuery, Drupal, once);
-
-/* PUBLICATIONS TABLE RELATED */
-(function ($, Drupal, once) {
+  //PUBLICATIONS
   const loadPublicationFiles = function (page) {
     if (typeof $ === "undefined") {
       console.error("jQuery not available");
@@ -342,14 +324,17 @@
 
     const studyuri = drupalSettings.std.studyuri;
     const pagesize = 5; // Number of files per page
-    const url = drupalSettings.path.baseUrl + `/std/get-publication-files/${encodeURIComponent(
-      studyuri
-    )}/${page}/${pagesize}`;
+    const url =
+      drupalSettings.path.baseUrl +
+      `/std/get-publication-files/${encodeURIComponent(
+        studyuri
+      )}/${page}/${pagesize}`;
 
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
+        console.log("Response received:", response);
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
@@ -369,8 +354,13 @@
           table += "</tbody></table>";
           $("#publication-table-container").html(table);
 
-          renderPublicationPagination(response.pagination, 1);
-          attachPublicationDeleteEvents();
+          if (response.files && response.pagination) {
+            console.log("Pagination data:", response.pagination);
+            renderPublicationPagination(response.pagination);
+            attachPublicationDeleteEvents();
+          } else {
+            console.error("Files or pagination missing in response.");
+          }
         } else {
           $("#publication-table-container").html("<p>No files available.</p>");
         }
@@ -381,14 +371,45 @@
     });
   };
 
-  // Função para renderizar a paginação
-  const renderPublicationPagination = function (pagination, currentPage) {
+  const attachPublicationDeleteEvents = function () {
+    $(document).off("click", ".delete-publication-button");
+    $(document).on("click", ".delete-publication-button", function (e) {
+      e.preventDefault();
+
+      const deleteUrl = $(this).data("url");
+
+      if (confirm("Do you really want to delete this file?")) {
+        $.ajax({
+          url: deleteUrl,
+          type: "POST",
+          success: function (response) {
+            if (response.status === "success") {
+              const currentPage = drupalSettings.publicationFiles.page || 1;
+              loadPublicationFiles(currentPage);
+            } else {
+              alert("Error: " + response.error);
+            }
+          },
+          error: function () {
+            alert("Failed to delete the file.");
+          },
+        });
+      }
+    });
+  };
+
+  // // Função para renderizar a paginação
+  const renderPublicationPagination = function (pagination) {
+
+    console.log("Rendering pagination with data:", JSON.stringify(pagination));
+
     const $pager = $("#publication-table-pager");
     $pager.empty(); // Limpar o pager existente
 
     const totalPages = pagination.last_page; // Número total de páginas
-    const startPage = Math.max(1, currentPage - 1); // Página inicial
-    const endPage = Math.min(totalPages, currentPage + 1); // Página final
+    const startPage = Math.max(1, pagination.current_page - 1); // Página inicial
+    const endPage = Math.min(totalPages, pagination.current_page + 1); // Página final
+    const currentPage = pagination.current_page;
 
     // Botão 'Primeiro'
     if (currentPage > 1) {
@@ -445,56 +466,55 @@
       $.ajax({
         url: drupalSettings.path.baseUrl + `/std/update-session-page`,
         type: "POST",
-        data: { 
+        data: {
           page: newPage,
-          element_type: 'publications'
+          element_type: "publications",
         },
         success: function () {
-          //console.log("Session page updated:", newPage);
+          console.log("Pub Session page updated:", newPage);
         },
         error: function (xhr, status, error) {
-          //console.error("Error updating session page:", error);
+          console.error("Pub Error updating session page:", error);
         },
       });
     });
   };
 
-  const attachPublicationDeleteEvents = function () {
-    $(document).off("click", ".delete-publication-button");
-    $(document).on("click", ".delete-publication-button", function (e) {
-      e.preventDefault();
-
-      const deleteUrl = $(this).data("url");
-
-      if (confirm("Do you really want to delete this file?")) {
-        $.ajax({
-          url: deleteUrl,
-          type: "POST",
-          success: function (response) {
-            if (response.status === "success") {
-              const currentPage = drupalSettings.publicationFiles.page || 1;
-              loadPublicationFiles(currentPage);
-            } else {
-              alert("Error: " + response.error);
-            }
-          },
-          error: function () {
-            alert("Failed to delete the file.");
-          },
-        });
-      }
-    });
+  // Comportamento de carregamento da tabela
+  Drupal.behaviors.jsonTableLoader = {
+    attach: function (context, settings) {
+      once("json-table", "#json-table-container", context).forEach(function () {
+        const initialPage = drupalSettings.std.page || 1;
+        loadTableData(initialPage);
+      });
+      once("json-table", "#publication-table-container", context).forEach(
+        function () {
+          const initialPubPage = drupalSettings.std.pub_page || 1;
+          loadPublicationFiles(initialPubPage);
+        }
+      );
+    },
   };
 
-  Drupal.behaviors.publicationFilesLoader = {
+  // Comportamento de drag-and-drop
+  Drupal.behaviors.dragAndDropCard = {
     attach: function (context, settings) {
-      once(
-        "publication-files",
-        "#publication-table-container",
-        context
-      ).forEach(function () {
-        loadPublicationFiles(1);
+      once("drag-and-drop", "#drop-card", context).forEach(function () {
+        attachDragAndDropEvents();
       });
     },
   };
+
+  //Publications
+  // Drupal.behaviors.publicationFilesLoader = {
+  //   attach: function (context, settings) {
+  //     once(
+  //       "publication-files",
+  //       "#publication-table-container",
+  //       context
+  //     ).forEach(function () {
+  //       loadPublicationFiles(1);
+  //     });
+  //   },
+  // };
 })(jQuery, Drupal, once);

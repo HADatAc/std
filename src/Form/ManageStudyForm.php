@@ -202,6 +202,21 @@ class ManageStudyForm extends FormBase
           '</div>
           </div>',
       ),
+      '#attached' => [
+        'library' => [
+          'std/json_table',
+          'core/drupal.autocomplete',
+        ],
+        'drupalSettings' => [
+          'pub' => [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+            'elementtype' => 'da',
+            'mode' => 'compact',
+            'pub_page' => $da_page_from_session,
+            'pub_pagesize' => 5,
+          ]
+        ],
+      ]
     );
 
     // $form['row2']['card1']['inner_row2']['card2']['pager'] = [
@@ -229,12 +244,9 @@ class ManageStudyForm extends FormBase
       ),
     );
 
-    $form['row2']['card1']['inner_row2']['card3']['pager'] = [
-      '#markup' => '<div id="publication-table-pager" class="pagination"></div>',
-      '#attached' => [
-        'library' => ['std/json_table'],
-      ],
-    ];
+    // $form['row2']['card1']['inner_row2']['card3']['pager'] = [
+    //   '#markup' => '<div id="publication-table-pager" class="pagination"></div>',
+    // ];
 
     // Row 2, Card 4, Media content
     $form['row2']['card1']['inner_row2']['card4'] = array(
