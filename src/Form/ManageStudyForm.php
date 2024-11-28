@@ -69,8 +69,11 @@ class ManageStudyForm extends FormBase
       $this->setStudy($study);
     }
 
+    //dpr($study);
+
     // get totals for current study
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
+    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
@@ -80,11 +83,11 @@ class ManageStudyForm extends FormBase
     // Example data for cards
     $cards = array(
       1 => array(
-        'value' => '<h3>Study Content (0)</h3>',
+        'value' => 'Study Content (0)',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
       2 => array('value' => 'Data Files (' . $totalDAs . ')'),
-      3 => array('value' => '<h3>Publications (0)</h3>'),
+      3 => array('value' => 'Publications (0)'),
       4 => array('value' => '<h3>Media (0)</h3>'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
@@ -173,6 +176,7 @@ class ManageStudyForm extends FormBase
     // Obtenha o valor da sessão para fallback
     $session = \Drupal::service('session');
     $da_page_from_session = $session->get('da_current_page', 1);
+    $pub_page_from_session = $session->get('pub_current_page', 1);
 
     // Second row with 1 outter card (card 1)
     $form['row2'] = array(
@@ -202,21 +206,6 @@ class ManageStudyForm extends FormBase
           '</div>
           </div>',
       ),
-      '#attached' => [
-        'library' => [
-          'std/json_table',
-          'core/drupal.autocomplete',
-        ],
-        'drupalSettings' => [
-          'pub' => [
-            'studyuri' => base64_encode($this->getStudy()->uri),
-            'elementtype' => 'da',
-            'mode' => 'compact',
-            'pub_page' => $da_page_from_session,
-            'pub_pagesize' => 5,
-          ]
-        ],
-      ]
     );
 
     // $form['row2']['card1']['inner_row2']['card2']['pager'] = [
@@ -233,7 +222,7 @@ class ManageStudyForm extends FormBase
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
-          '<div class="card-header text-center">' . $cards[3]['value'] . '</div>' .
+          '<div class="card-header text-center"><h3 id="publication_files_count">' . $cards[3]['value'] . '</h3></div>' .
           '<div class="card-body">
              <div id="publication-table-container"></div>
            </div>
@@ -302,7 +291,7 @@ class ManageStudyForm extends FormBase
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
           '<div class="card drop-area" id="drop-card">' .
-          '<div class="card-header text-center">' . $cards[1]['value'] .
+          '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
           '<div class="info-card">You can drag&drop files directly into this card</div>' .
           '</div>' .
           \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
@@ -321,6 +310,12 @@ class ManageStudyForm extends FormBase
             'elementtype' => 'da',
             'mode' => 'compact',
             'page' => $da_page_from_session,
+            'pagesize' => 5,
+          ],
+          'pub' => [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+            'elementtype' => 'publications',
+            'page' => $pub_page_from_session,
             'pagesize' => 5,
           ],
           'addNewDA' => [
