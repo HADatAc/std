@@ -11,7 +11,7 @@ std.search:
     pagesize: '12'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -23,7 +23,7 @@ std.list_element:
     _form: '\Drupal\std\Form\STDListForm'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -33,7 +33,7 @@ std.select_study:
     _form: '\Drupal\std\Form\STDSelectStudyForm'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -43,27 +43,27 @@ std.select_element_bystudy:
     _form: '\Drupal\std\Form\STDSelectByStudyForm'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
-    
+
 std.select_element_bysoc:
   path: 'std/selectbysoc/{socuri}/{elementtype}/{page}/{pagesize}'
   defaults:
     _form: '\Drupal\std\Form\ManageStudyObjectForm'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
-    
+
 std.property_element:
   path: 'std/property/{elementuri}/{property}/{elementtype}/{page}/{pagesize}'
   defaults:
     _form: '\Drupal\std\Form\STDPropertyForm'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -73,10 +73,10 @@ std.add_dsg:
   path: 'std/manage/adddsg'
   defaults:
     _form: '\Drupal\std\Form\AddDSGForm'
-    _title: 'Add DSG Template'    
+    _title: 'Add DSG Template'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -84,10 +84,10 @@ std.edit_dsg:
   path: 'std/manage/editdsg/{dsguri}'
   defaults:
     _form: '\Drupal\std\Form\EditDSGForm'
-    _title: 'Edit DSG Template'    
+    _title: 'Edit DSG Template'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -97,10 +97,10 @@ std.manage_study_elements:
   path: 'std/manage/managestudy/{studyuri}'
   defaults:
     _form: '\Drupal\std\Form\ManageStudyForm'
-    _title: 'Manage Study Elements'    
+    _title: 'Manage Study Elements'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -108,10 +108,10 @@ std.add_study:
   path: 'std/manage/addstudy'
   defaults:
     _form: '\Drupal\std\Form\AddStudyForm'
-    _title: 'Add Study'    
+    _title: 'Add Study'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -119,12 +119,12 @@ std.edit_study:
   path: 'std/manage/editstudy/{studyuri}'
   defaults:
     _form: '\Drupal\std\Form\EditStudyForm'
-    _title: 'Edit Study'    
+    _title: 'Edit Study'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
-    no_cache: 'TRUE'  
+    no_cache: 'TRUE'
 
 # Study Role CRUD options
 
@@ -132,10 +132,10 @@ std.add_studyrole:
   path: 'std/manage/addstudyrole/{studyuri}/{fixstd}'
   defaults:
     _form: '\Drupal\std\Form\AddStudyRoleForm'
-    _title: 'Add Study Role'    
+    _title: 'Add Study Role'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -143,10 +143,10 @@ std.edit_studyrole:
   path: 'std/manage/editstudyrole/{studyroleuri}/{fixstd}'
   defaults:
     _form: '\Drupal\std\Form\EditStudyRoleForm'
-    _title: 'Edit Study Role'    
+    _title: 'Edit Study Role'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -156,10 +156,10 @@ std.manage_studyobjectcollection:
   path: 'std/manage/studyobjectcollection/{studyuri}'
   defaults:
     _form: '\Drupal\std\Form\ManageStudyObjectCollectionForm'
-    _title: 'Manage Study Object Collections'    
+    _title: 'Manage Study Object Collections'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -167,10 +167,10 @@ std.add_studyobjectcollection:
   path: 'std/manage/addstudyobjectcollection/{studyuri}/{fixstd}'
   defaults:
     _form: '\Drupal\std\Form\AddStudyObjectCollectionForm'
-    _title: 'Add Study Object Collection'    
+    _title: 'Add Study Object Collection'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -178,10 +178,10 @@ std.edit_studyobjectcollection:
   path: 'std/manage/editstudyobjectcolletion/{studyobjectcollectionuri}'
   defaults:
     _form: '\Drupal\std\Form\EditStudyObjectCollectionForm'
-    _title: 'Edit Study Object Collection'    
+    _title: 'Edit Study Object Collection'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -191,10 +191,10 @@ std.view_studyobject:
   path: 'std/view/studyobjects/{studyobjectcollectionuri}'
   defaults:
     _form: '\Drupal\std\Form\ViewStudyObjectForm'
-    _title: 'View Study Objects'    
+    _title: 'View Study Objects'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -202,10 +202,10 @@ std.add_studyobject:
   path: 'std/manage/addstudyobject/{studyobjectcollectionuri}'
   defaults:
     _form: '\Drupal\std\Form\AddStudyObjectForm'
-    _title: 'Add Study Object'    
+    _title: 'Add Study Object'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -213,10 +213,10 @@ std.edit_studyobject:
   path: 'std/manage/editstudyobject/{studyobjecturi}'
   defaults:
     _form: '\Drupal\std\Form\EditStudyObjectForm'
-    _title: 'Edit Study Object'    
+    _title: 'Edit Study Object'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -226,10 +226,10 @@ std.add_virtualcolumn:
   path: 'std/manage/addvirtualcolumn/{studyuri}/{fixstd}'
   defaults:
     _form: '\Drupal\std\Form\AddVirtualColumnForm'
-    _title: 'Add Virtual Column'    
+    _title: 'Add Virtual Column'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -237,10 +237,10 @@ std.edit_virtualcolumn:
   path: 'std/manage/editvirtualcolumn/{virtualcolumnuri}/{fixstd}'
   defaults:
     _form: '\Drupal\std\Form\EditVirtualColumnForm'
-    _title: 'Edit Virtual Columnn'    
+    _title: 'Edit Virtual Columnn'
   requirements:
-    _permission: 'access content'  
-    _custom_access_check: 'TRUE'      
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -249,10 +249,10 @@ std.edit_virtualcolumn:
 std.manage_study_object:
   path: 'std/manage/studyobject'
   defaults:
-    _title: 'Manage Study Object'    
+    _title: 'Manage Study Object'
   requirements:
     _permission: 'access content'
-    _custom_access_check: 'TRUE'    
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -265,4 +265,17 @@ std.study_autocomplete:
     _format: json
   requirements:
     _permission: 'access content'
+
+# LOAD MORE
+std.load_more_data:
+  path: '/std/select/study/load-more-data'
+  defaults:
+    _controller: '\Drupal\std\Form\STDSelectStudyForm::loadMoreCallback'
+  requirements:
+    _access: 'TRUE'
+  options:
+    _format: 'json'
+
+
+
 
