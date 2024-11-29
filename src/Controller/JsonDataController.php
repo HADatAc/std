@@ -207,24 +207,26 @@ class JsonDataController extends ControllerBase
     #UPDATE SESSION TABLE DA POSITION
     public function updateSessionPage(Request $request)
     {
+        $session = \Drupal::service('session');
+
         $page = $request->get('page');
         $elementtype = $request->get('element_type');
+
         if (is_numeric($page)) {
 
-            $session = \Drupal::service('session');
             $session->set('da_current_page', 1);
             $session->set('pub_current_page', 1);
 
             switch ($elementtype) {
                 case 'publications':
-                    $session->set('da_current_page', $page);
+                    $session->set('pub_current_page', $page);
                     break;
 
                 case 'da':
                 default:
-                $session->set('pub_current_page', $page);
+                    $session->set('da_current_page', $page);
                     break;
-            }            
+            }
 
             return new JsonResponse(['status' => 'success', 'page' => $page]);
         }
@@ -509,23 +511,17 @@ class JsonDataController extends ControllerBase
             $files[] = [
                 'filename' => $file,
                 'view_url' => '/file-view-path/' . $file,
-                'delete_url' => '/file-delete-path/' . $file,
+                'delete_url' => '/delete-publication-file/' . $file . '/' . $studyuri,
             ];
         }
 
         return new JsonResponse([
             'files' => $files,
-            // 'pagination' => [
-            //     'current_page' => $page,
-            //     'page_size' => $pagesize,
-            //     'total_files' => $total_files,
-            //     'total_pages' => ceil($total_files / $pagesize),
-            // ],
             'pagination' => [
-                'current_page' => 1,
-                'page_size' => 5,
-                'total_files' => 10,
-                'total_pages' => 2,
+                'current_page' => $page,
+                'page_size' => $pagesize,
+                'total_files' => $total_files,
+                'total_pages' => ceil($total_files / $pagesize),
             ],
         ]);
     }
@@ -535,23 +531,58 @@ class JsonDataController extends ControllerBase
     */
     public function deletePublicationFile($filename, $studyuri)
     {
+        // Decodifica o URI do estudo e constrói o caminho do arquivo
         $decoded_studyuri = basename(base64_decode($studyuri));
         $directory = 'private://std/' . $decoded_studyuri . '/Publications/';
         $file_path = $directory . $filename;
 
         try {
+            // Obtém o sistema de arquivos do Drupal
             $file_system = \Drupal::service('file_system');
             $real_path = $file_system->realpath($file_path);
 
+            // Verifica se o arquivo existe
             if (file_exists($real_path)) {
+                // Remove o arquivo
                 unlink($real_path);
-                return new JsonResponse(['status' => 'success']);
+
+                // Obter total de arquivos restantes
+                if (is_dir($real_path)) {
+                    $files = array_filter(scandir($real_path), function ($file) use ($real_path) {
+                        return !is_dir($real_path . '/' . $file);
+                    });
+                    $totalFiles = count($files);
+                    $pageSize = 5; // Número de itens por página
+                    $lastPage = ceil($totalFiles / $pageSize);
+                } else {
+                    $totalFiles = 0;
+                    $lastPage = 1; // Se não houver arquivos, a última página será 1
+                }                
+
+                // Retorna uma resposta JSON de sucesso
+                return new JsonResponse([
+                    'status' => 'success',
+                    'message' => 'File deleted successfully.',
+                    'file' => $filename,
+                    'total_files' => $totalFiles,
+                    'last_page' => $lastPage,
+                ]);
             } else {
-                return new JsonResponse(['error' => 'File not found.'], 404);
+                // Retorna um erro de arquivo não encontrado
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'File not found.',
+                    'file' => $filename,
+                ], 404);
             }
         } catch (\Exception $e) {
+            // Registra o erro e retorna uma resposta JSON de erro
             \Drupal::logger('std')->error('Error deleting file: @message', ['@message' => $e->getMessage()]);
-            return new JsonResponse(['error' => 'Error deleting file.'], 500);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error deleting file.',
+                'details' => $e->getMessage(),
+            ], 500);
         }
     }
 

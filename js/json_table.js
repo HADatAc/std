@@ -1,4 +1,22 @@
 (function ($, Drupal, once) {
+  
+  
+  let totals = {
+    daFiles: 0,
+    publications: 0,
+    media: 0, // Inicialmente zero, pode ser adicionado futuramente
+  };
+  
+  // Função para recalcular e atualizar o total no DOM
+  const updateTotal = function () {
+    const total = totals.daFiles + totals.publications + totals.media;
+    if ($("#total_elements_count").length) {
+      $("#total_elements_count").text("Study Content (" + total + ")");
+    } else {
+      console.error("#total_elements_count não encontrado no DOM.");
+    }
+  };
+
   // Função para carregar os dados da tabela dinamicamente
   const loadTableData = function (page) {
     if (typeof $ === "undefined") {
@@ -11,22 +29,9 @@
     const mode = drupalSettings.std.mode;
     const pagesize = drupalSettings.std.pagesize;
 
-    // console.log(
-    //   "Page=" +
-    //     page +
-    //     "\nStudyUri=" +
-    //     studyuri +
-    //     "\nElementType=" +
-    //     elementtype +
-    //     "\nMode=" +
-    //     mode +
-    //     "\nPageSize=" +
-    //     pagesize
-    // );
-
     const url =
       drupalSettings.path.baseUrl +
-      `/std/json-data/${encodeURIComponent(studyuri)}/${encodeURIComponent(
+      `std/json-data/${encodeURIComponent(studyuri)}/${encodeURIComponent(
         elementtype
       )}/${encodeURIComponent(mode)}/${encodeURIComponent(
         page
@@ -61,6 +66,9 @@
             $("#data_files_count").text(
               "Data Files (" + response.pagination.items + ")"
             );
+
+            totals.daFiles = parseInt(response.pagination.items, 10) || 0;
+            updateTotal(); // Recalcular o total
           }
 
           // Reanexa os eventos aos novos elementos carregados
@@ -145,8 +153,8 @@
 
       // Atualizar a sessão no backend
       $.ajax({
-        url: drupalSettings.path.baseUrl + `/std/update-session-page`,
-        type: "POST",
+        url: drupalSettings.path.baseUrl + "std/update-session-page",
+        type: "POST", // Certifique-se de que está como POST
         data: {
           page: newPage,
           element_type: "da",
@@ -155,35 +163,48 @@
           //console.log("Session page updated:", newPage);
         },
         error: function (xhr, status, error) {
-          //console.error("Error updating session page:", error);
+          console.error("Error updating session page:", error);
         },
       });
     });
   };
 
   // Função para anexar eventos de delete
-  const attachDeleteEvents = function (studyuri) {
-    $(document).off("click", ".delete-button"); // Remove eventos duplicados
+  const attachDeleteEvents = function () {
+    // Remove eventos duplicados
+    $(document).off("click", ".delete-button");
+
+    // Adiciona o evento ao botão de delete
     $(document).on("click", ".delete-button", function (e) {
       e.preventDefault();
 
-      const deleteUrl =
-        drupalSettings.path.baseUrl +
-        `/std/delete-publication-file/` +
-        studyuri +
-        `/` +
-        $(this).data("url");
+      // Obtém o valor do atributo data-url do botão clicado
+      const deleteUrl = $(this).data("url");
 
-      if (confirm("Really Delete?")) {
+      // Confirmação do usuário antes de continuar
+      if (confirm("Are you sure you want to delete this file?")) {
         $.ajax({
-          url: deleteUrl,
-          type: "POST",
-          success: function () {
-            const currentPage = drupalSettings.std.page || 1;
-            loadTableData(currentPage); // Recarrega a tabela
+          url: deleteUrl, // Usa o data-url como endpoint
+          type: "POST", // Envia a requisição como POST
+          success: function (response) {
+            // Trata a resposta e exibe feedback ao usuário
+            if (response.status === "success") {
+              showToast("File deleted successfully!", "success");
+              // Você pode recarregar a tabela ou atualizar a página
+              const currentPage = drupalSettings.std.page || 1;
+              loadTableData(currentPage);
+            } else if (response.errors) {
+              // Exibe erros retornados
+              showToast("Error: " + response.errors.join(", "), "dander");
+            } else {
+              showToast("Unknown error occurred.", "danger");
+              console.log(JSON.stringify(response));
+            }
           },
-          error: function () {
-            alert("Failed to delete the element.");
+          error: function (xhr, status, error) {
+            // Exibe mensagem de erro em caso de falha
+            showToast("Failed to delete the file. Please try again.", "danger");
+            console.error("Error details:", error);
           },
         });
       }
@@ -229,7 +250,7 @@
         try {
           const response = await fetch(
             drupalSettings.path.baseUrl +
-              `/std/check-file-name/${encodeURIComponent(
+              `std/check-file-name/${encodeURIComponent(
                 studyuri
               )}/${encodeURIComponent(originalFileName)}`, // Use o nome completo
             {
@@ -268,9 +289,11 @@
               success: function (response) {
                 if (response.fid) {
                   const currentPage = drupalSettings.std.page || 1;
+                  const currentPubPage = drupalSettings.pub.page || 1;
+                  //console.log("daP=" + currentPage + ", pubP=" + currentPubPage);
                   showToast("File uploaded successfully!", "success");
                   loadTableData(currentPage); //Load DA Files
-                  //loadPublicationFiles(currentPage); //Load Publications Files
+                  loadPublicationFiles(currentPubPage); //Load Publications Files
                 } else {
                   showToast(
                     "Failed to upload file. Please try again.",
@@ -317,6 +340,8 @@
 
   //PUBLICATIONS
   const loadPublicationFiles = function (page) {
+    //console.log("Pubs: " + JSON.stringify(drupalSettings.pub));
+
     if (typeof $ === "undefined") {
       console.error("jQuery not available");
       return;
@@ -326,7 +351,7 @@
     const pagesize = 5; // Number of files per page
     const url =
       drupalSettings.path.baseUrl +
-      `/std/get-publication-files/${encodeURIComponent(
+      `std/get-publication-files/${encodeURIComponent(
         studyuri
       )}/${page}/${pagesize}`;
 
@@ -334,19 +359,18 @@
       url: url,
       type: "GET",
       success: function (response) {
-        console.log("Response received:", response);
+        //console.log("Response received:", response);
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
-            "<thead><tr><th>Filename</th><th>Operations</th></tr></thead><tbody>";
+            '<thead><tr><th>Filename</th><th class="w-25">Operations</th></tr></thead><tbody>';
 
           response.files.forEach(function (file) {
             table += `<tr>
-              <td>${file.filename}</td>
-              <td>
-                <a href="${file.view_url}" target="_blank">View</a>
-                | 
-                <a href="#" class="delete-publication-button" data-url="${file.delete_url}">Delete</a>
+              <td class="text-break">${file.filename}</td>
+              <td style="text-align:center">
+                <a href="${file.view_url}" class="btn btn-sm btn-secondary view-publication-button" style="margin-right:5px" target="_blank"><i class="fa-solid fa-eye"></i></a>
+                <a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${file.delete_url}"><i class="fa-solid fa-trash-can"></i></a>
               </td>
             </tr>`;
           });
@@ -355,7 +379,16 @@
           $("#publication-table-container").html(table);
 
           if (response.files && response.pagination) {
-            console.log("Pagination data:", response.pagination);
+            //console.log("Pagination data:", response.pagination);
+
+            if (response.pagination && response.pagination.total_files) {
+              $("#publication_files_count").text(
+                "Publications (" + response.pagination.total_files + ")"
+              );
+
+              totals.publications = parseInt(response.pagination.total_files, 10) || 0;
+              updateTotal(); // Recalcular o total
+            }
             renderPublicationPagination(response.pagination);
             attachPublicationDeleteEvents();
           } else {
@@ -376,7 +409,7 @@
     $(document).on("click", ".delete-publication-button", function (e) {
       e.preventDefault();
 
-      const deleteUrl = $(this).data("url");
+      const deleteUrl = drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
       if (confirm("Do you really want to delete this file?")) {
         $.ajax({
@@ -384,14 +417,25 @@
           type: "POST",
           success: function (response) {
             if (response.status === "success") {
-              const currentPage = drupalSettings.publicationFiles.page || 1;
-              loadPublicationFiles(currentPage);
+              const currentPage = drupalSettings.pub.page || 1;
+
+              // Ajustar a página atual com base na última página válida
+              const lastPage = response.last_page || 1;
+              const adjustedPage = Math.min(currentPage, lastPage);
+
+              // Atualizar a página no Drupal Settings
+              drupalSettings.pub.page = adjustedPage;
+
+              // Recarregar a tabela
+              loadPublicationFiles(adjustedPage);
+
+              showToast(response.message, "success")
             } else {
-              alert("Error: " + response.error);
+              showToast(response.message, "warning");
             }
           },
           error: function () {
-            alert("Failed to delete the file.");
+            showToast("Error: " + response.error, "danger");
           },
         });
       }
@@ -400,28 +444,28 @@
 
   // // Função para renderizar a paginação
   const renderPublicationPagination = function (pagination) {
+    //console.log("Rendering pagination with data:", JSON.stringify(pagination));
 
-    console.log("Rendering pagination with data:", JSON.stringify(pagination));
+    //const $pub_pager = $("#publication-table-pager");
+    const pub_pager = jQuery("#publication-table-pager");
+    pub_pager.empty(); // Limpar o pager existente
 
-    const $pager = $("#publication-table-pager");
-    $pager.empty(); // Limpar o pager existente
-
-    const totalPages = pagination.last_page; // Número total de páginas
+    const totalPages = pagination.total_pages; // Número total de páginas
     const startPage = Math.max(1, pagination.current_page - 1); // Página inicial
     const endPage = Math.min(totalPages, pagination.current_page + 1); // Página final
     const currentPage = pagination.current_page;
 
     // Botão 'Primeiro'
     if (currentPage > 1) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="1">&laquo; First</a>`
+      pub_pager.append(
+        `<a href="#" class="pub-page-link" data-page="1">&laquo; First</a>`
       );
     }
 
     // Botão 'Anterior'
     if (currentPage > 1) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="${
+      pub_pager.append(
+        `<a href="#" class="pub-page-link" data-page="${
           currentPage - 1
         }">Previous</a>`
       );
@@ -431,31 +475,35 @@
     for (let i = startPage; i <= endPage; i++) {
       if (i == currentPage) {
         // Renderizar a página atual como um span (não clicável)
-        $pager.append(`<span class="current-page">${i}</span>`);
+        pub_pager.append(`<span class="current-page">${i}</span>`);
       } else {
         // Renderizar outras páginas como links clicáveis
-        $pager.append(
-          `<a href="#" class="page-link" data-page="${i}">${i}</a>`
+        pub_pager.append(
+          `<a href="#" class="pub-page-link" data-page="${i}">${i}</a>`
         );
       }
     }
 
     // Botão 'Próximo'
     if (currentPage < totalPages) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="${currentPage + 1}">Next</a>`
+      pub_pager.append(
+        `<a href="#" class="pub-page-link" data-page="${
+          currentPage + 1
+        }">Next</a>`
       );
     }
 
     // Botão 'Último'
     if (currentPage < totalPages) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="${totalPages}">Last &raquo;</a>`
+      pub_pager.append(
+        `<a href="#" class="pub-page-link" data-page="${totalPages}">Last &raquo;</a>`
       );
     }
 
+    //console.log("Pager: " + JSON.stringify(pub_pager));
+
     // Adicionar eventos aos links
-    $(".page-link").on("click", function (e) {
+    $(".pub-page-link").on("click", function (e) {
       e.preventDefault();
       const newPage = $(this).data("page");
 
@@ -464,14 +512,14 @@
 
       // Atualizar a sessão no backend
       $.ajax({
-        url: drupalSettings.path.baseUrl + `/std/update-session-page`,
+        url: drupalSettings.path.baseUrl + `std/update-session-page`,
         type: "POST",
         data: {
           page: newPage,
           element_type: "publications",
         },
         success: function () {
-          console.log("Pub Session page updated:", newPage);
+          //console.log("Pub Session page updated:", newPage);
         },
         error: function (xhr, status, error) {
           console.error("Pub Error updating session page:", error);
@@ -487,12 +535,19 @@
         const initialPage = drupalSettings.std.page || 1;
         loadTableData(initialPage);
       });
-      once("json-table", "#publication-table-container", context).forEach(
-        function () {
-          const initialPubPage = drupalSettings.std.pub_page || 1;
-          loadPublicationFiles(initialPubPage);
-        }
-      );
+    },
+  };
+
+  Drupal.behaviors.publicationPagination = {
+    attach: function (context, settings) {
+      once(
+        "publication-table",
+        "#publication-table-container",
+        context
+      ).forEach(function () {
+        const initialPubPage = drupalSettings.pub.page || 1;
+        loadPublicationFiles(initialPubPage);
+      });
     },
   };
 
@@ -504,17 +559,4 @@
       });
     },
   };
-
-  //Publications
-  // Drupal.behaviors.publicationFilesLoader = {
-  //   attach: function (context, settings) {
-  //     once(
-  //       "publication-files",
-  //       "#publication-table-container",
-  //       context
-  //     ).forEach(function () {
-  //       loadPublicationFiles(1);
-  //     });
-  //   },
-  // };
 })(jQuery, Drupal, once);
