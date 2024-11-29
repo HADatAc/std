@@ -290,10 +290,12 @@
                 if (response.fid) {
                   const currentPage = drupalSettings.std.page || 1;
                   const currentPubPage = drupalSettings.pub.page || 1;
+                  const currentMediaPage = drupalSettings.media.page || 1;
                   //console.log("daP=" + currentPage + ", pubP=" + currentPubPage);
                   showToast("File uploaded successfully!", "success");
                   loadTableData(currentPage); //Load DA Files
                   loadPublicationFiles(currentPubPage); //Load Publications Files
+                  loadMediaFiles(currentMediaPage); //Load Media Files
                 } else {
                   showToast(
                     "Failed to upload file. Please try again.",
@@ -528,6 +530,196 @@
     });
   };
 
+  //MEDIA
+  const loadMediaFiles = function (page) {
+    //console.log("Pubs: " + JSON.stringify(drupalSettings.pub));
+
+    if (typeof $ === "undefined") {
+      console.error("jQuery not available");
+      return;
+    }
+
+    const studyuri = drupalSettings.std.studyuri;
+    const pagesize = 5; // Number of files per page
+    const url =
+      drupalSettings.path.baseUrl +
+      `std/get-media-files/${encodeURIComponent(
+        studyuri
+      )}/${page}/${pagesize}`;
+
+    $.ajax({
+      url: url,
+      type: "GET",
+      success: function (response) {
+        //console.log("Response received:", response);
+        if (response.files && response.pagination) {
+          let table = '<table class="table table-striped table-bordered">';
+          table +=
+            '<thead><tr><th>Filename</th><th class="w-25">Operations</th></tr></thead><tbody>';
+
+          response.files.forEach(function (file) {
+            table += `<tr>
+              <td class="text-break">${file.filename}</td>
+              <td style="text-align:center">
+                <a href="${file.view_url}" class="btn btn-sm btn-secondary view-media-button" style="margin-right:5px" target="_blank"><i class="fa-solid fa-eye"></i></a>
+                <a href="#" class="btn btn-sm btn-secondary btn-danger delete-media-button" data-url="${file.delete_url}"><i class="fa-solid fa-trash-can"></i></a>
+              </td>
+            </tr>`;
+          });
+
+          table += "</tbody></table>";
+          $("#media-table-container").html(table);
+
+          if (response.files && response.pagination) {
+            //console.log("Pagination data:", response.pagination);
+
+            if (response.pagination && response.pagination.total_files) {
+              $("#media_files_count").text(
+                "Media (" + response.pagination.total_files + ")"
+              );
+
+              totals.media = parseInt(response.pagination.total_files, 10) || 0;
+              updateTotal(); // Recalcular o total
+            }
+            renderMediaPagination(response.pagination);
+            attachMediaDeleteEvents();
+          } else {
+            console.error("Files or pagination missing in response.");
+          }
+        } else {
+          $("#media-table-container").html("<p>No files available.</p>");
+        }
+      },
+      error: function () {
+        console.error("Error loading publication files.");
+      },
+    });
+  };
+
+  const attachMediaDeleteEvents = function () {
+    $(document).off("click", ".delete-media-button");
+    $(document).on("click", ".delete-media-button", function (e) {
+      e.preventDefault();
+
+      const deleteUrl = drupalSettings.path.baseUrl + `std/` + $(this).data("url");
+
+      if (confirm("Do you really want to delete this file?")) {
+        $.ajax({
+          url: deleteUrl,
+          type: "POST",
+          success: function (response) {
+            if (response.status === "success") {
+              const currentPage = drupalSettings.media.page || 1;
+
+              // Ajustar a página atual com base na última página válida
+              const lastPage = response.last_page || 1;
+              const adjustedPage = Math.min(currentPage, lastPage);
+
+              // Atualizar a página no Drupal Settings
+              drupalSettings.media.page = adjustedPage;
+
+              // Recarregar a tabela
+              loadPublicationFiles(adjustedPage);
+
+              showToast(response.message, "success")
+            } else {
+              showToast(response.message, "warning");
+            }
+          },
+          error: function () {
+            showToast("Error: " + response.error, "danger");
+          },
+        });
+      }
+    });
+  };
+
+  // // Função para renderizar a paginação
+  const renderMediaPagination = function (pagination) {
+    //console.log("Rendering pagination with data:", JSON.stringify(pagination));
+
+    //const $pub_pager = $("#publication-table-pager");
+    const media_pager = jQuery("#media-table-pager");
+    media_pager.empty(); // Limpar o pager existente
+
+    const totalPages = pagination.total_pages; // Número total de páginas
+    const startPage = Math.max(1, pagination.current_page - 1); // Página inicial
+    const endPage = Math.min(totalPages, pagination.current_page + 1); // Página final
+    const currentPage = pagination.current_page;
+
+    // Botão 'Primeiro'
+    if (currentPage > 1) {
+      media_pager.append(
+        `<a href="#" class="media-page-link" data-page="1">&laquo; First</a>`
+      );
+    }
+
+    // Botão 'Anterior'
+    if (currentPage > 1) {
+      media_pager.append(
+        `<a href="#" class="media-page-link" data-page="${
+          currentPage - 1
+        }">Previous</a>`
+      );
+    }
+
+    // Números das páginas
+    for (let i = startPage; i <= endPage; i++) {
+      if (i == currentPage) {
+        // Renderizar a página atual como um span (não clicável)
+        media_pager.append(`<span class="current-page">${i}</span>`);
+      } else {
+        // Renderizar outras páginas como links clicáveis
+        media_pager.append(
+          `<a href="#" class="media-page-link" data-page="${i}">${i}</a>`
+        );
+      }
+    }
+
+    // Botão 'Próximo'
+    if (currentPage < totalPages) {
+      media_pager.append(
+        `<a href="#" class="media-page-link" data-page="${
+          currentPage + 1
+        }">Next</a>`
+      );
+    }
+
+    // Botão 'Último'
+    if (currentPage < totalPages) {
+      media_pager.append(
+        `<a href="#" class="media-page-link" data-page="${totalPages}">Last &raquo;</a>`
+      );
+    }
+
+    //console.log("Pager: " + JSON.stringify(pub_pager));
+
+    // Adicionar eventos aos links
+    $(".media-page-link").on("click", function (e) {
+      e.preventDefault();
+      const newPage = $(this).data("page");
+
+      // Atualizar a tabela com a nova página
+      loadMediaFiles(newPage);
+
+      // Atualizar a sessão no backend
+      $.ajax({
+        url: drupalSettings.path.baseUrl + `std/update-session-page`,
+        type: "POST",
+        data: {
+          page: newPage,
+          element_type: "media",
+        },
+        success: function () {
+          //console.log("Media Session page updated:", newPage);
+        },
+        error: function (xhr, status, error) {
+          console.error("Media Error updating session page:", error);
+        },
+      });
+    });
+  };
+
   // Comportamento de carregamento da tabela
   Drupal.behaviors.jsonTableLoader = {
     attach: function (context, settings) {
@@ -547,6 +739,19 @@
       ).forEach(function () {
         const initialPubPage = drupalSettings.pub.page || 1;
         loadPublicationFiles(initialPubPage);
+      });
+    },
+  };
+
+  Drupal.behaviors.mediaPagination = {
+    attach: function (context, settings) {
+      once(
+        "media-table",
+        "#media-table-container",
+        context
+      ).forEach(function () {
+        const initialMediaPage = drupalSettings.media.page || 1;
+        loadMediaFiles(initialMediaPage);
       });
     },
   };

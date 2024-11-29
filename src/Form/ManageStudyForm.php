@@ -88,7 +88,7 @@ class ManageStudyForm extends FormBase
       ),
       2 => array('value' => 'Data Files (' . $totalDAs . ')'),
       3 => array('value' => 'Publications (0)'),
-      4 => array('value' => '<h3>Media (0)</h3>'),
+      4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
         'value' => '<h1>' . $totalSTRs . '</h1><h3>Streams<br>&nbsp;</h3>',
@@ -177,6 +177,7 @@ class ManageStudyForm extends FormBase
     $session = \Drupal::service('session');
     $da_page_from_session = $session->get('da_current_page', 1);
     $pub_page_from_session = $session->get('pub_current_page', 1);
+    $media_page_from_session = $session->get('media_current_page', 1);
 
     // Second row with 1 outter card (card 1)
     $form['row2'] = array(
@@ -208,13 +209,6 @@ class ManageStudyForm extends FormBase
       ),
     );
 
-    // $form['row2']['card1']['inner_row2']['card2']['pager'] = [
-    //   '#markup' => '<div id="json-table-pager" class="pagination"></div>',
-    //   '#attached' => [
-    //     'library' => ['std/json_table'],
-    //   ],
-    // ];
-
     // Row 2, Card 3, Publication content
     $form['row2']['card1']['inner_row2']['card3'] = array(
       '#type' => 'container',
@@ -233,10 +227,6 @@ class ManageStudyForm extends FormBase
       ),
     );
 
-    // $form['row2']['card1']['inner_row2']['card3']['pager'] = [
-    //   '#markup' => '<div id="publication-table-pager" class="pagination"></div>',
-    // ];
-
     // Row 2, Card 4, Media content
     $form['row2']['card1']['inner_row2']['card4'] = array(
       '#type' => 'container',
@@ -244,8 +234,13 @@ class ManageStudyForm extends FormBase
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
-          '<div class="card-header text-center">' . $cards[4]['value'] . '</div>' .
-          '<div class="card-body">' . 'Foo' . '</div>' .
+          '<div class="card-header text-center"><h3 id="media_files_count">' . $cards[4]['value'] . '</h3></div>' .
+          '<div class="card-body">
+             <div id="media-table-container"></div>
+           </div>
+           <div class="card-footer">
+             <div id="media-table-pager" class="pagination"></div>
+           </div>' .
           '</div>',
       ),
     );
@@ -316,6 +311,12 @@ class ManageStudyForm extends FormBase
             'studyuri' => base64_encode($this->getStudy()->uri),
             'elementtype' => 'publications',
             'page' => $pub_page_from_session,
+            'pagesize' => 5,
+          ],
+          'media' => [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+            'elementtype' => 'media',
+            'page' => $media_page_from_session,
             'pagesize' => 5,
           ],
           'addNewDA' => [

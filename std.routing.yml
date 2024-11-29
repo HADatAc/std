@@ -393,3 +393,28 @@ std.delete_publication_file:
     studyuri: '.+'
   options:
     _format: 'json'
+
+std.get_media_files:
+  path: '/std/get-media-files/{studyuri}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getMediaFiles'
+    _title: 'Get media files'
+  requirements:
+    _permission: 'access content'
+    studyuri: '.+'
+    page: '\d+'
+    pagesize: '\d+'
+  options:
+    _format: 'json'
+
+std.delete_media_file:
+  path: '/std/delete-media-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deleteMediaFile'
+    _title: 'Delete media file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  options:
+    _format: 'json'
