@@ -60,6 +60,10 @@ jobs:
         run: |
           javac -cp ".:tests/selenium-java-4.26.0/selenium-java-4.26.0.jar:tests/selenium-java-4.26.0/libs/*:tests/junit-platform-console-standalone-1.8.2.jar" tests/SDD.java
 
+      - name: Compile DSG.java
+        run: |
+          javac -cp ".:tests/selenium-java-4.26.0/selenium-java-4.26.0.jar:tests/selenium-java-4.26.0/libs/*:tests/junit-platform-console-standalone-1.8.2.jar" tests/DSG.java
+
       - name: Wait for hascogui to be ready
         run: |
           until curl -s http://localhost:8081/ > /dev/null; do
@@ -67,9 +71,13 @@ jobs:
             sleep 5
           done
 
-      - name: Run UnitTest
+      - name: Run SDD Test
         run: |
           java -Dfile="/metadata/NHANES-2017-2018/SDDs/SDD-NHANES-BMX.xlsx" -Dcard-name="NHANES BMX" -Dsdd-title="NHANES-BMX" -cp ".:tests/junit-platform-console-standalone-1.8.2.jar:tests/selenium-java-4.26.0/selenium-java-4.26.0.jar:tests/selenium-java-4.26.0/libs/*:tests" org.junit.platform.console.ConsoleLauncher --select-class "tests.SDD"
+
+      - name: Run DSG Test
+        run: |
+          java -Dfile="/metadata/NHANES-2017-2018/DSGs/DSG-NHANES-2017-2018-100.xlsx" -Dcard-name="NHANES 2017-2018" -Ddsg-title="NHANES-2017-2018" -cp ".:tests/junit-platform-console-standalone-1.8.2.jar:tests/selenium-java-4.26.0/selenium-java-4.26.0.jar:tests/selenium-java-4.26.0/libs/*:tests" org.junit.platform.console.ConsoleLauncher --select-class "tests.DSG"
 
       - name: Notify on failure
         if: failure()
