@@ -383,7 +383,7 @@
           if (response.files && response.pagination) {
             //console.log("Pagination data:", response.pagination);
 
-            if (response.pagination && response.pagination.total_files) {
+            if (response.pagination) {
               $("#publication_files_count").text(
                 "Publications (" + response.pagination.total_files + ")"
               );
@@ -571,9 +571,9 @@
           $("#media-table-container").html(table);
 
           if (response.files && response.pagination) {
-            //console.log("Pagination data:", response.pagination);
+            //console.log("Media Pagination data:", response.pagination);
 
-            if (response.pagination && response.pagination.total_files) {
+            if (response.pagination) {
               $("#media_files_count").text(
                 "Media (" + response.pagination.total_files + ")"
               );
@@ -619,7 +619,7 @@
               drupalSettings.media.page = adjustedPage;
 
               // Recarregar a tabela
-              loadPublicationFiles(adjustedPage);
+              loadMediaFiles(adjustedPage);
 
               showToast(response.message, "success")
             } else {

@@ -662,7 +662,7 @@ class JsonDataController extends ControllerBase
     {
         // Decodifica o URI do estudo e constrói o caminho do arquivo
         $decoded_studyuri = basename(base64_decode($studyuri));
-        $directory = 'private://std/' . $decoded_studyuri . '/Publications/';
+        $directory = 'private://std/' . $decoded_studyuri . '/media/';
         $file_path = $directory . $filename;
 
         try {

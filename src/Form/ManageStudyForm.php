@@ -69,12 +69,13 @@ class ManageStudyForm extends FormBase
       $this->setStudy($study);
     }
 
-    //dpr($study);
+    //dpr($this->getStudy()->uri);
 
     // get totals for current study
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
-    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
-    $totalSTRs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
+    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));    
+    $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
+    $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri,'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
@@ -91,19 +92,22 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
-        'value' => '<h1>' . $totalSTRs . '</h1><h3>Streams<br>&nbsp;</h3>',
+        'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
-        'link2' => self::urlSelectByStudy($this->getStudy()->uri, 'str',),
       ),
       7 => array(
+        'value' => '<h1>' . $totalSTRs . '</h1><h3>STR<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'str',),
+      ),
+      8 => array(
         'value' => '<h1>' . $totalRoles . '</h1><h3>Roles<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyrole')
       ),
-      8 => array(
+      9 => array(
         'value' => '<h1>' . $totalVCs . '</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'virtualcolumn')
       ),
-      9 => array(
+      10 => array(
         'value' => '<h1>' . $totalSOCs . '</h1><h3>Object Collections</h3><h4>(' . $totalSOs . ' Objects)</h4>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyobjectcollection')
       ),
@@ -332,19 +336,18 @@ class ManageStudyForm extends FormBase
     // Third row with 5 cards (card 6 to card 10)
     $form['row3'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('row')),
+      '#attributes' => array('class' => array('row row-cols-5')),
     );
 
     // Row 3, Card 6
     $form['row3']['card6'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
           '<div class="card-footer text-center">' .
           '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> Manage Streams</a>' .
-          '<a href="' . $cards[6]['link2'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage STRs</a>' .
           '</div></div>',
       ),
     );
@@ -352,33 +355,46 @@ class ManageStudyForm extends FormBase
     // Row 3, Card 7
     $form['row3']['card7'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
-          '<div class="card-footer text-center"><a href="' . $cards[7]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage Roles</a></div></div>',
+          '<div class="card-footer text-center">' .
+          '<a href="' . $cards[7]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage STRs</a>' .
+          '</div></div>',
       ),
     );
 
     // Row 3, Card 8
     $form['row3']['card8'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
-          '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Virtual Columns</a></div></div>',
+          '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage Roles</a></div></div>',
       ),
     );
 
     // Row 3, Card 9
     $form['row3']['card9'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
-          '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Object Collections</a></div></div>',
+          '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Virtual Columns</a></div></div>',
+      ),
+    );
+
+    // Row 3, Card 10
+    $form['row3']['card10'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[10]['value'] . '</div>' .
+          '<div class="card-footer text-center"><a href="' . $cards[10]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Object Collections</a></div></div>',
       ),
     );
 
