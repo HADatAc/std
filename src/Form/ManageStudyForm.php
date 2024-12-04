@@ -165,7 +165,9 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('col-md-12')),
       'card' => array(
         '#type' => 'markup',
-        '#markup' => '<br><div class="card"><div class="card-body">' .
+        '#markup' => '        
+          <div id="modal-container" class="hidden"></div>
+          <br><div class="card"><div class="card-body">' .
           $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
           $this->t('<b>URI</b>: ') . ' ' . $this->getStudy()->uri . '<br>' .
           $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .

@@ -639,7 +639,7 @@ class JsonDataController extends ControllerBase
         foreach ($paginated_files as $file) {
             $files[] = [
                 'filename' => $file,
-                'view_url' => '/media-file-view-path/' . $file,
+                'view_url' =>  'std/' . $decoded_studyuri . '/media/' . $file,
                 'delete_url' => '/delete-media-file/' . $file . '/' . $studyuri,
             ];
         }
@@ -714,6 +714,36 @@ class JsonDataController extends ControllerBase
             ], 500);
         }
     }
+
+    /*
+    ** VIEW MEDIA FILES
+    */
+    public function viewMediaFile($filename)
+    {
+        // Decodifica o URI do estudo (se necessário)
+        $studyuri = \Drupal::service('session')->get('current_study_uri');
+        if (empty($studyuri)) {
+            return new JsonResponse(['error' => 'No study URI found in session.'], 400);
+        }
+
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/media/';
+        $file_system = \Drupal::service('file_system');
+        $real_path = $file_system->realpath($directory . $filename);
+
+        // Verifica se o arquivo existe
+        if (!file_exists($real_path)) {
+            return new JsonResponse(['error' => 'File not found.'], 404);
+        }
+
+        // Define o tipo MIME
+        $mime_type = mime_content_type($real_path);
+        $response = new \Symfony\Component\HttpFoundation\Response(file_get_contents($real_path));
+        $response->headers->set('Content-Type', $mime_type);
+
+        return $response;
+    }
+
 
     # TO BE CHECKED IF NEEDED
     public function backUrl()

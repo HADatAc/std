@@ -1,12 +1,10 @@
 (function ($, Drupal, once) {
-  
-  
   let totals = {
     daFiles: 0,
     publications: 0,
     media: 0, // Inicialmente zero, pode ser adicionado futuramente
   };
-  
+
   // Função para recalcular e atualizar o total no DOM
   const updateTotal = function () {
     const total = totals.daFiles + totals.publications + totals.media;
@@ -388,7 +386,8 @@
                 "Publications (" + response.pagination.total_files + ")"
               );
 
-              totals.publications = parseInt(response.pagination.total_files, 10) || 0;
+              totals.publications =
+                parseInt(response.pagination.total_files, 10) || 0;
               updateTotal(); // Recalcular o total
             }
             renderPublicationPagination(response.pagination);
@@ -411,7 +410,8 @@
     $(document).on("click", ".delete-publication-button", function (e) {
       e.preventDefault();
 
-      const deleteUrl = drupalSettings.path.baseUrl + `std/` + $(this).data("url");
+      const deleteUrl =
+        drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
       if (confirm("Do you really want to delete this file?")) {
         $.ajax({
@@ -431,7 +431,7 @@
               // Recarregar a tabela
               loadPublicationFiles(adjustedPage);
 
-              showToast(response.message, "success")
+              showToast(response.message, "success");
             } else {
               showToast(response.message, "warning");
             }
@@ -543,9 +543,7 @@
     const pagesize = 5; // Number of files per page
     const url =
       drupalSettings.path.baseUrl +
-      `std/get-media-files/${encodeURIComponent(
-        studyuri
-      )}/${page}/${pagesize}`;
+      `std/get-media-files/${encodeURIComponent(studyuri)}/${page}/${pagesize}`;
 
     $.ajax({
       url: url,
@@ -559,12 +557,21 @@
 
           response.files.forEach(function (file) {
             table += `<tr>
-              <td class="text-break">${file.filename}</td>
-              <td style="text-align:center">
-                <a href="${file.view_url}" class="btn btn-sm btn-secondary view-media-button" style="margin-right:5px" target="_blank"><i class="fa-solid fa-eye"></i></a>
-                <a href="#" class="btn btn-sm btn-secondary btn-danger delete-media-button" data-url="${file.delete_url}"><i class="fa-solid fa-trash-can"></i></a>
-              </td>
-            </tr>`;
+                <td class="text-break">${file.filename}</td>
+                <td style="text-align:center">
+                  <a href="#" 
+                     class="btn btn-sm btn-secondary view-media-button" 
+                     data-view-url="${encodeURIComponent(file.filename)}" 
+                     style="margin-right:5px">
+                     <i class="fa-solid fa-eye"></i>
+                  </a>
+                  <a href="#" 
+                     class="btn btn-sm btn-danger delete-media-button" 
+                     data-url="${file.delete_url}">
+                     <i class="fa-solid fa-trash-can"></i>
+                  </a>
+                </td>
+              </tr>`;
           });
 
           table += "</tbody></table>";
@@ -582,7 +589,8 @@
               updateTotal(); // Recalcular o total
             }
             renderMediaPagination(response.pagination);
-            attachMediaDeleteEvents();
+            //attachMediaDeleteEvents();
+            attachMediaEvents();
           } else {
             console.error("Files or pagination missing in response.");
           }
@@ -596,12 +604,55 @@
     });
   };
 
-  const attachMediaDeleteEvents = function () {
+  // const attachMediaDeleteEvents = function () {
+  //   $(document).off("click", ".delete-media-button");
+  //   $(document).on("click", ".delete-media-button", function (e) {
+  //     e.preventDefault();
+
+  //     const deleteUrl =
+  //       drupalSettings.path.baseUrl + `std/` + $(this).data("url");
+
+  //     if (confirm("Do you really want to delete this file?")) {
+  //       $.ajax({
+  //         url: deleteUrl,
+  //         type: "POST",
+  //         success: function (response) {
+  //           if (response.status === "success") {
+  //             const currentPage = drupalSettings.media.page || 1;
+
+  //             // Ajustar a página atual com base na última página válida
+  //             const lastPage = response.last_page || 1;
+  //             const adjustedPage = Math.min(currentPage, lastPage);
+
+  //             // Atualizar a página no Drupal Settings
+  //             drupalSettings.media.page = adjustedPage;
+
+  //             // Recarregar a tabela
+  //             loadMediaFiles(adjustedPage);
+
+  //             showToast(response.message, "success");
+  //           } else {
+  //             showToast(response.message, "warning");
+  //           }
+  //         },
+  //         error: function () {
+  //           showToast("Error: " + response.error, "danger");
+  //         },
+  //       });
+  //     }
+  //   });
+  // };
+  const attachMediaEvents = function () {
+    // Remove eventos duplicados
     $(document).off("click", ".delete-media-button");
+    $(document).off("click", ".view-media-button");
+
+    // Adicionar evento para deletar
     $(document).on("click", ".delete-media-button", function (e) {
       e.preventDefault();
 
-      const deleteUrl = drupalSettings.path.baseUrl + `std/` + $(this).data("url");
+      const deleteUrl =
+        drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
       if (confirm("Do you really want to delete this file?")) {
         $.ajax({
@@ -611,17 +662,14 @@
             if (response.status === "success") {
               const currentPage = drupalSettings.media.page || 1;
 
-              // Ajustar a página atual com base na última página válida
               const lastPage = response.last_page || 1;
               const adjustedPage = Math.min(currentPage, lastPage);
 
-              // Atualizar a página no Drupal Settings
               drupalSettings.media.page = adjustedPage;
 
-              // Recarregar a tabela
               loadMediaFiles(adjustedPage);
 
-              showToast(response.message, "success")
+              showToast(response.message, "success");
             } else {
               showToast(response.message, "warning");
             }
@@ -631,6 +679,35 @@
           },
         });
       }
+    });
+
+    // Gerenciar o clique no botão para abrir o modal
+    $(document).on('click', '.view-media-button', function (e) {
+      e.preventDefault();
+
+      const modalUrl = drupalSettings.path.baseUrl + `std/view-media-file/` + $(this).data('view-url');
+
+      // Carregar o modal dinamicamente via AJAX
+      $.ajax({
+        url: modalUrl,
+        type: 'GET',
+        success: function (response) {
+          if (response) {
+            // Renderizar o modal
+            $('#modal-container').html(response).removeClass('hidden');
+          } else {
+            console.error('Error loading modal content.');
+          }
+        },
+        error: function (xhr, status, error) {
+          console.error('AJAX error:', error);
+        },
+      });
+    });
+
+    // Fechar o modal ao clicar no botão de fechar
+    $(document).on("click", ".close-modal", function () {
+      $("#rep-file-view-modal").addClass("hidden");
     });
   };
 
@@ -745,14 +822,12 @@
 
   Drupal.behaviors.mediaPagination = {
     attach: function (context, settings) {
-      once(
-        "media-table",
-        "#media-table-container",
-        context
-      ).forEach(function () {
-        const initialMediaPage = drupalSettings.media.page || 1;
-        loadMediaFiles(initialMediaPage);
-      });
+      once("media-table", "#media-table-container", context).forEach(
+        function () {
+          const initialMediaPage = drupalSettings.media.page || 1;
+          loadMediaFiles(initialMediaPage);
+        }
+      );
     },
   };
 
