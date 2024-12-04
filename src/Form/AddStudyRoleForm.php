@@ -158,7 +158,7 @@ class AddStudyRoleForm extends FormBase {
     }
 
     $newStudyRoleUri = Utils::uriGen('studyrole');
-    $studyJSON = '{"uri":"'. $newStudyRoleUri .'",'.
+    $studyRoleJSON = '{"uri":"'. $newStudyRoleUri .'",'.
         '"typeUri":"'.HASCO::STUDY_ROLE.'",'.
         '"hascoTypeUri":"'.HASCO::STUDY_ROLE.'",'.
         '"label":"'.$form_state->getValue('studyrole_name').'",'.
@@ -168,7 +168,7 @@ class AddStudyRoleForm extends FormBase {
 
     try {
       $api = \Drupal::service('rep.api_connector');
-      $message = $api->parseObjectResponse($api->studyRoleAdd($studyJSON),'studyRoleAdd');
+      $message = $api->parseObjectResponse($api->elementAdd('studyrole',$studyRoleJSON),'elementAdd');
       if ($message != null) {
         \Drupal::messenger()->addMessage(t("Study Role has been added successfully."));
       }

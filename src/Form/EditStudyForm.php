@@ -137,8 +137,8 @@ class EditStudyForm extends FormBase {
     try {
       // UPDATE BY DELETING AND CREATING
       $api = \Drupal::service('rep.api_connector');
-      $api->studyDel($this->getStudy()->uri);
-      $api->studyAdd($studyJson);
+      $api->elementDel('study',$this->getStudy()->uri);
+      $api->elementAdd('study',$studyJson);
 
       \Drupal::messenger()->addMessage(t("Study has been updated successfully."));
       self::backUrl();

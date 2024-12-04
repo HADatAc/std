@@ -165,7 +165,7 @@ class AddVirtualColumnForm extends FormBase {
 
     try {
       $api = \Drupal::service('rep.api_connector');
-      $message = $api->parseObjectResponse($api->virtualColumnAdd($virtualColumnJSON),'virtualColumnAdd');
+      $message = $api->parseObjectResponse($api->elementAdd('virtualcolumn',$virtualColumnJSON),'elementAdd');
       if ($message != null) {
         \Drupal::messenger()->addMessage(t("Virtual column has been added successfully."));
       }

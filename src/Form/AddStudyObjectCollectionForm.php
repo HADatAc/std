@@ -232,7 +232,7 @@ class AddStudyObjectCollectionForm extends FormBase {
 
     try {
       $api = \Drupal::service('rep.api_connector');
-      $message = $api->parseObjectResponse($api->studyObjectCollectionAdd($studyObjectCollectionJSON),'studyObjectCollectionAdd');
+      $message = $api->parseObjectResponse($api->elementAdd('studyobjectcollection',$studyObjectCollectionJSON),'elementAdd');
       if ($message != null) {
         \Drupal::messenger()->addMessage(t("Study Object Collection has been added successfully."));
       } else {

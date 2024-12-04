@@ -157,8 +157,8 @@ class EditStudyRoleForm extends FormBase {
     try {
       // UPDATE BY DELETING AND CREATING
       $api = \Drupal::service('rep.api_connector');
-      $api->studyRoleDel($this->getStudyRole()->uri);
-      $api->studyRoleAdd($studyRoleJSON);
+      $api->elementDel('studyrole',$this->getStudyRole()->uri);
+      $api->elementAdd('studyrole',$studyRoleJSON);
 
       \Drupal::messenger()->addMessage(t("Study Role has been updated successfully."));
       self::backUrl();

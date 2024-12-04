@@ -118,7 +118,7 @@ class AddStudyForm extends FormBase {
 
       try {
         $api = \Drupal::service('rep.api_connector');
-        $message = $api->parseObjectResponse($api->studyAdd($studyJSON),'studyAdd');
+        $message = $api->parseObjectResponse($api->elementAdd('study',$studyJSON),'elementAdd');
         if ($message != null) {
           \Drupal::messenger()->addMessage(t("Study has been added successfully."));
         }

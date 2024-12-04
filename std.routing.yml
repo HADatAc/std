@@ -69,27 +69,27 @@ std.property_element:
 
 # DSG CRUD options
 
-std.add_dsg:
-  path: 'std/manage/adddsg'
-  defaults:
-    _form: '\Drupal\std\Form\AddDSGForm'
-    _title: 'Add DSG Template'
-  requirements:
-    _permission: 'access content'
-    _custom_access_check: 'TRUE'
-  options:
-    no_cache: 'TRUE'
+#std.add_dsg:
+#  path: 'std/manage/adddsg'
+#  defaults:
+#    _form: '\Drupal\std\Form\AddDSGForm'
+#    _title: 'Add DSG Template'
+#  requirements:
+#    _permission: 'access content'
+#    _custom_access_check: 'TRUE'
+#  options:
+#    no_cache: 'TRUE'
 
-std.edit_dsg:
-  path: 'std/manage/editdsg/{dsguri}'
-  defaults:
-    _form: '\Drupal\std\Form\EditDSGForm'
-    _title: 'Edit DSG Template'
-  requirements:
-    _permission: 'access content'
-    _custom_access_check: 'TRUE'
-  options:
-    no_cache: 'TRUE'
+#std.edit_dsg:
+#  path: 'std/manage/editdsg/{dsguri}'
+#  defaults:
+#    _form: '\Drupal\std\Form\EditDSGForm'
+#    _title: 'Edit DSG Template'
+#  requirements:
+#    _permission: 'access content'
+#    _custom_access_check: 'TRUE'
+#  options:
+#    no_cache: 'TRUE'
 
 # Study CRUD options
 
@@ -256,12 +256,52 @@ std.manage_study_object:
   options:
     no_cache: 'TRUE'
 
+# Stream CRUD options
+
+std.add_stream:
+  path: 'std/manage/addstream/{studyuri}/{fixstd}'
+  defaults:
+    _form: '\Drupal\std\Form\AddStreamForm'
+    _title: 'Add Stream'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.edit_stream:
+  path: 'std/manage/editstream/{streamuri}/{fixstd}'
+  defaults:
+    _form: '\Drupal\std\Form\EditStreamForm'
+    _title: 'Edit Stream Role'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
 # AUTOCOMPLETE
 
 std.study_autocomplete:
   path: '/std/study/autocomplete'
   defaults:
-    _controller: '\Drupal\std\Controller\JsonApiStudyController::handleAutocomplete'
+    _controller: '\Drupal\std\Controller\JsonApiController::studyAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
+std.semanticdatadictionary_autocomplete:
+  path: '/std/semanticdatadictionary/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiController::semanticDataDictionaryAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
+std.deployment_autocomplete:
+  path: '/std/deployment/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiController::deploymentAutocomplete'
     _format: json
   requirements:
     _permission: 'access content'
@@ -276,6 +316,105 @@ std.load_more_data:
   options:
     _format: 'json'
 
+std.json_data:
+  path: '/std/json-data/{studyuri}/{elementtype}/{mode}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getTableData'
+    _title: 'Table Data'
+  requirements:
+    _permission: 'access content'
+  options:
+    parameters:
+      studyuri:
+        type: string
+      elementtype:
+        type: string
+      mode:
+        type: string
+      page:
+        type: integer
+      pagesize:
+        type: integer
 
+std.update_session_page:
+  path: '/std/update-session-page'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::updateSessionPage'
+    _title: 'Update Session Page'
+  requirements:
+    _permission: 'access content'
+  methods: [POST]
 
+std.render_add_da_form:
+  path: '/std/add-da-form/{elementtype}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::renderAddDAForm'
+    _title: 'Add DA Form'
+  requirements:
+    _permission: 'access content'
 
+std.file_upload:
+  path: '/std/file-upload/{field_name}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::upload'
+    _title: 'File Upload'
+  requirements:
+    _permission: 'upload files'
+
+std.check_file_name:
+  path: '/std/check-file-name/{studyuri}/{fileNameWithoutExtension}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::checkFileName'
+    _title: 'Check File Name'
+  requirements:
+    _permission: 'access content'
+
+std.get_publication_files:
+  path: '/std/get-publication-files/{studyuri}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getPublicationsFiles'
+    _title: 'Get publication files'
+  requirements:
+    _permission: 'access content'
+    studyuri: '.+'
+    page: '\d+'
+    pagesize: '\d+'
+  options:
+    _format: 'json'
+
+std.delete_publication_file:
+  path: '/std/delete-publication-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deletePublicationFile'
+    _title: 'Delete publication file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  options:
+    _format: 'json'
+
+std.get_media_files:
+  path: '/std/get-media-files/{studyuri}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getMediaFiles'
+    _title: 'Get media files'
+  requirements:
+    _permission: 'access content'
+    studyuri: '.+'
+    page: '\d+'
+    pagesize: '\d+'
+  options:
+    _format: 'json'
+
+std.delete_media_file:
+  path: '/std/delete-media-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deleteMediaFile'
+    _title: 'Delete media file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  options:
+    _format: 'json'

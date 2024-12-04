@@ -11,21 +11,14 @@ use Drupal\file\Entity\File;
 use Drupal\rep\ListManagerEmailPageByStudy;
 use Drupal\rep\Utils;
 use Drupal\rep\Entity\MetadataTemplate;
-use Drupal\rep\Entity\StudyObject;
-use Drupal\std\Entity\DSG;
-use Drupal\std\Entity\Stream;
-use Drupal\std\Entity\Study;
-use Drupal\std\Entity\StudyRole;
-use Drupal\std\Entity\VirtualColumn;
-use Drupal\std\Entity\StudyObjectCollection;
 
-class STDSelectByStudyForm extends FormBase {
+class STDSelectByStudyCompactForm extends FormBase {
 
   /**
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'std_select_bystudy_form';
+    return 'std_select_bystudy_compact_form';
   }
 
   public $study;
@@ -147,160 +140,22 @@ class STDSelectByStudyForm extends FormBase {
       case "da":
         $this->single_class_name = "DA";
         $this->plural_class_name = "DAs";
-        $header = MetadataTemplate::generateHeader();
-        if ($this->getMode() == 'table') {
-          $output = MetadataTemplate::generateOutput('da',$this->getList());
-          //dpm($output);
-        } else {
-          $output = MetadataTemplate::generateOutputAsCards('da',$this->getList());
-        }
-        break;
-      case "studyrole":
-        $this->single_class_name = "Study Role";
-        $this->plural_class_name = "Study Roles";
-        $header = StudyRole::generateHeader();
-        $output = StudyRole::generateOutput($this->getList());
-        break;
-      case "virtualcolumn":
-        $this->single_class_name = "Virtual Column";
-        $this->plural_class_name = "Virtual Columns";
-        $header = VirtualColumn::generateHeader();
-        $output = VirtualColumn::generateOutput($this->getList());
-        break;
-      case "studyobjectcollection":
-        $this->single_class_name = "Study Object Collection";
-        $this->plural_class_name = "Study Object Collections";
-        $header = StudyObjectCollection::generateHeader();
-        $output = StudyObjectCollection::generateOutput($this->getList());
-        break;
-      case "studyobject":
-        $this->single_class_name = "Study Object";
-        $this->plural_class_name = "Study Objects";
-        $header = StudyObject::generateHeader();
-        $output = StudyObject::generateOutput($this->getList());
-        break;
-      case "stream":
-        $this->single_class_name = "Stream";
-        $this->plural_class_name = "Streams";
-        $header = Stream::generateHeader();
-        $output = Stream::generateOutput($this->getList());
-        break;
-      case "str":
-        $this->single_class_name = "STR";
-        $this->plural_class_name = "STRs";
-        $header = MetadataTemplate::generateHeader();
-        $output = MetadataTemplate::generateOutput('str', $this->getList());
+        $header = MetadataTemplate::generateHeaderCompact();
+        $output = MetadataTemplate::generateOutputCompact('da',$this->getList());
         break;
       default:
         $this->single_class_name = "Object of Unknown Type";
         $this->plural_class_name = "Objects of Unknown Types";
     }
 
-    // PUT FORM TOGETHER
-    $form['page_title'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h3 class="mt-5">Manage ' . $this->plural_class_name . '</h3>'),
+    // ADD TABLE
+    $form['element_table'] = [
+      '#type' => 'tableselect',
+      '#header' => $header,
+      '#options' => $output,
+      '#js_select' => FALSE,
+      '#empty' => t('No ' . $this->plural_class_name . ' found'),
     ];
-    $form['page_study_context'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h4>' . $this->plural_class_name . ' belonging to study <font color="DarkGreen">' . $this->getStudy()->label . ' (' . $this->getStudy()->title . ')</font></h4>'),
-    ];
-    $form['page_subtitle'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h4>' . $this->plural_class_name . ' maintained by <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
-    ];
-    $form['add_element'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add new ' . $this->single_class_name),
-      '#name' => 'add_element',
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'add-element-button'],
-      ],
-    ];
-    if ($this->getMode() == 'table') {
-      $form['edit_selected_element'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Edit selected ' . $this->single_class_name),
-        '#name' => 'edit_element',
-        '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'edit-element-button'],
-        ],
-      ];
-      $form['delete_selected_element'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Delete selected ' . $this->plural_class_name),
-        '#name' => 'delete_element',
-        '#attributes' => [
-          'onclick' => 'if(!confirm("Really Delete?")){return false;}',
-          'class' => ['btn', 'btn-primary', 'delete-element-button'],
-        ],
-      ];
-      if ($this->element_type == 'studyobjectcollection') {
-        $form['manage_study_objects'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Manage objects of selected Study Object Collection'),
-          '#name' => 'manage_studyobject',
-          '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'manage_codebookslots-button'],
-          ],
-        ];
-      }
-      if ($this->element_type == 'str') {
-        $form['ingest_mt'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Ingest ' . $this->single_class_name . ' Selected'),
-          '#name' => 'ingest_mt',
-          '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'ingest_mt-button'],
-          ],
-        ];
-        $form['uningest_mt'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Uningest ' . $this->plural_class_name . ' Selected'),
-          '#name' => 'uningest_mt',
-          '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'uningest_mt-element-button'],
-          ],
-        ];
-      }
-    } else {
-      $form['space_top'] = [
-        '#type' => 'item',
-        '#value' => $this->t('<br><br>'),
-      ];
-    }
-
-    if ($this->element_type == 'da' && $this->getMode() == 'card') {
-
-      // Loop through $output and creates two cards per row
-      $index = 0;
-      foreach (array_chunk($output, 2, true) as $row) {
-          $index++;
-          $form['row_' . $index] = [
-              '#type' => 'container',
-              '#attributes' => [
-                  'class' => ['row', 'mb-3'],
-              ],
-          ];
-          $indexCard = 0;
-          foreach ($row as $uri => $card) {
-              $indexCard++;
-              $form['row_' . $index]['element_' . $indexCard] = $card;
-          }
-      }
-
-    } else {
-
-      // ADD TABLE
-      $form['element_table'] = [
-        '#type' => 'tableselect',
-        '#header' => $header,
-        '#options' => $output,
-        '#js_select' => FALSE,
-        '#empty' => t('No ' . $this->plural_class_name . ' found'),
-      ];
-
-    }
 
     $form['pager'] = [
       '#theme' => 'list-page',
@@ -314,29 +169,6 @@ class STDSelectByStudyForm extends FormBase {
         'links' => null,
         'title' => ' ',
       ],
-    ];
-
-    if ($this->element_type == 'da') {
-      $form['ingestion_note'] = [
-        '#type' => 'markup',
-        '#markup' =>
-          $this->t('<b>Note 1</b>: "Ingestion" is the process of moving the content of a file inside the repository\'s knowlegde graph. <br>' .
-                  '<b>Note 2</b>: A DA can only be ingested if it is associated with an SDD, and the SDD itself needs ingested. <br><br>'),
-      ];
-    }
-
-    $form['submit'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Back to Manage Study'),
-      '#name' => 'back',
-      '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'back-button'],
-        ],
-    ];
-
-    $form['space_bottom'] = [
-      '#type' => 'item',
-      '#value' => $this->t('<br><br><br>'),
     ];
 
     return $form;
@@ -434,28 +266,6 @@ class STDSelectByStudyForm extends FormBase {
           ]);
         }
       }
-      if ($this->element_type == 'stream') {
-        Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_stream');
-        if ($this->getStudy() == NULL || $this->getStudy()->uri == NULL) {
-          $url = Url::fromRoute('std.add_stream', [
-            'studyuri' => 'none',
-            'fixstd' => 'F',
-          ]);
-        } else {
-          $url = Url::fromRoute('std.add_stream', [
-            'studyuri' => base64_encode($this->getStudy()->uri),
-            'fixstd' => 'T',
-          ]);
-        }
-      }
-      if ($this->element_type == 'str') {
-        Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
-        $url = Url::fromRoute('rep.add_mt', [
-          'elementtype' => $this->element_type,
-          'studyuri' => base64_encode($this->getStudy()->uri),
-          'fixstd' => 'T',
-        ]);
-      }
       $form_state->setRedirectUrl($url);
     }
 
@@ -501,21 +311,6 @@ class STDSelectByStudyForm extends FormBase {
             'fixstd' => 'T',
           ]);
         }
-        if ($this->element_type == 'stream') {
-          Utils::trackingStoreUrls($uid, $previousUrl, 'std.edit_stream');
-          $url = Url::fromRoute('std.edit_stream', [
-            'streamuri' => base64_encode($first),
-            'fixstd' => 'T',
-          ]);
-        }
-        if ($this->element_type == 'str') {
-          Utils::trackingStoreUrls($uid, $previousUrl, 'rep.edit_mt');
-          $url = Url::fromRoute('rep.edit_mt', [
-            'elementtype' => $this->element_type,
-            'elementuri' => base64_encode($first),
-            'fixstd' => 'T',
-          ]);
-        }
         $form_state->setRedirectUrl($url);
       }
     }
@@ -545,7 +340,18 @@ class STDSelectByStudyForm extends FormBase {
           //    }
           //  }
           //}
-          $api->elementDel($this->element_type,$uri);
+          if ($this->element_type == 'studyrole') {
+            $api->studyRoleDel($uri);
+          }
+          if ($this->element_type == 'studyobjectcollection') {
+            $api->studyObjectCollectionDel($uri);
+          }
+          if ($this->element_type == 'studyobject') {
+            $api->elementDel('studyobject',$uri);
+          }
+          if ($this->element_type == 'virtualcolumn') {
+            $api->virtualColumnDel($uri);
+          }
         }
         \Drupal::messenger()->addMessage(t("Selected " . $this->plural_class_name . " has/have been deleted successfully."));
       }
@@ -570,79 +376,7 @@ class STDSelectByStudyForm extends FormBase {
       }
     }
 
-    // INGEST STR
-    if (($button_name === 'ingest_mt') && ($this->element_type == 'str')) {
-      if (sizeof($rows) < 1) {
-        \Drupal::messenger()->addWarning(t("Select the exact " . $this->single_class_name . " to be ingested."));
-      } else if ((sizeof($rows) > 1)) {
-        \Drupal::messenger()->addWarning(t("Instances from no more than one " . $this->single_class_name . " can be ingested at once."));
-      } else {
-        $first = array_shift($rows);
-        $this->performIngest($first, $form_state);
-      }
-    }
-
-    // UNINGEST STR
-    if (($button_name === 'uningest_mt') && ($this->element_type == 'str')) {
-      if (sizeof($rows) < 1) {
-        \Drupal::messenger()->addWarning(t("Select the exact " . $this->single_class_name . " to be ingested."));
-      } else if ((sizeof($rows) > 1)) {
-        \Drupal::messenger()->addWarning(t("Instances from no more than one " . $this->single_class_name . " can be ingested at once."));
-      } else {
-        $first = array_shift($rows);
-        $this->performUningest($first, $form_state);
-      }
-    }
-
   }
-
-  /**
-   * INGEST STR
-   */
-  protected function performIngest($uri, FormStateInterface $form_state) {
-    $api = \Drupal::service('rep.api_connector');
-    $stream = $api->parseObjectResponse($api->getUri($uri), 'getUri');
-    if ($stream == NULL) {
-      \Drupal::messenger()->addError(t("Failed to retrieve the STR to be ingested."));
-      return;
-    }
-    $msg = $api->parseObjectResponse($api->uploadTemplate($this->element_type, $stream), 'uploadTemplate');
-    if ($msg == NULL) {
-      \Drupal::messenger()->addError(t("The " . $this->single_class_name . " selected FAILD to be submited for Ingestion."));
-      return;
-    }
-    \Drupal::messenger()->addMessage(t("The " . $this->single_class_name . " selected was successfully submited for Ingestion."));
-    return;
-  }
-
-  /**
-   * UNINGEST STR
-   */
-  protected function performUningest($uri, FormStateInterface $form_state) {
-    $api = \Drupal::service('rep.api_connector');
-    $newMT = new MetadataTemplate();
-    $mt = $api->parseObjectResponse($api->getUri($uri), 'getUri');
-    if ($mt == NULL) {
-      \Drupal::messenger()->addError(t("Failed to recover " . $this->single_class_name . " for uningestion."));
-      return;
-    }
-    $newMT->setPreservedMT($mt);
-    $df = $api->parseObjectResponse($api->getUri($mt->hasDataFileUri), 'getUri');
-    if ($df == NULL) {
-      \Drupal::messenger()->addError(t("Fail to recover datafile of" . $this->single_class_name . " from being unigested."));
-      return;
-    }
-    $newMT->setPreservedDF($df);
-    $msg = $api->parseObjectResponse($api->uningestMT($mt->uri), 'uningestMT');
-    if ($msg == NULL) {
-      \Drupal::messenger()->addError(t("The " . $this->single_class_name . " selected FAILED to uningested."));
-      return;
-    }
-    $newMT->savePreservedMT($this->element_type);
-    \Drupal::messenger()->addMessage(t("The " . $this->single_class_name . " seleted was uningested."));
-    return;
-  }
-
 
   function backUrl() {
     $uid = \Drupal::currentUser()->id();
@@ -653,5 +387,6 @@ class STDSelectByStudyForm extends FormBase {
       return;
     }
   }
+
 
 }
