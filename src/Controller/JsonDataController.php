@@ -216,10 +216,15 @@ class JsonDataController extends ControllerBase
 
             $session->set('da_current_page', 1);
             $session->set('pub_current_page', 1);
+            $session->set('media_current_page', 1);
 
             switch ($elementtype) {
                 case 'publications':
                     $session->set('pub_current_page', $page);
+                    break;
+
+                case 'media':
+                    $session->set('media_current_page', $page);
                     break;
 
                 case 'da':
@@ -510,7 +515,7 @@ class JsonDataController extends ControllerBase
         foreach ($paginated_files as $file) {
             $files[] = [
                 'filename' => $file,
-                'view_url' => '/file-view-path/' . $file,
+                'view_url' => '/publication-file-view-path/' . $file,
                 'delete_url' => '/delete-publication-file/' . $file . '/' . $studyuri,
             ];
         }
@@ -557,7 +562,131 @@ class JsonDataController extends ControllerBase
                 } else {
                     $totalFiles = 0;
                     $lastPage = 1; // Se não houver arquivos, a última página será 1
-                }                
+                }
+
+                // Retorna uma resposta JSON de sucesso
+                return new JsonResponse([
+                    'status' => 'success',
+                    'message' => 'File deleted successfully.',
+                    'file' => $filename,
+                    'total_files' => $totalFiles,
+                    'last_page' => $lastPage,
+                ]);
+            } else {
+                // Retorna um erro de arquivo não encontrado
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'File not found.',
+                    'file' => $filename,
+                ], 404);
+            }
+        } catch (\Exception $e) {
+            // Registra o erro e retorna uma resposta JSON de erro
+            \Drupal::logger('std')->error('Error deleting file: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error deleting file.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /*
+    ** MEDIA TABLE RELATED FUNCTIONS
+    */
+    public function getMediaFiles($studyuri = null, $page = 1, $pagesize = 5)
+    {
+        // GET SESSION
+        $session = \Drupal::service('session');
+        $page_from_session = $session->get('media_current_page', 1);
+
+        // USE URL OU SESSION VALUE AS FALLBACK
+        $page = $page ?: $page_from_session;
+
+        // SAVE DA_PAGE ON SESSION
+        $session->set('media_current_page', $page);
+
+        // CHECK VALID `$page`
+        if (!is_numeric($page) || $page < 1) {
+            $page = 1;
+        }
+
+        // VALIDATION
+        if (empty($studyuri) || !is_numeric($page) || !is_numeric($pagesize)) {
+            return new JsonResponse(['error' => 'Invalid parameters'], 400);
+        }
+
+
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/media/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return new JsonResponse(['error' => 'Could not access or prepare directory.'], 500);
+        }
+
+        $all_files = scandir($file_system->realpath($directory));
+        $filtered_files = array_filter($all_files, function ($file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            return in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'mp3', 'mp4', 'avi', 'mpeg', 'wav']);
+        });
+
+        $total_files = count($filtered_files);
+        $offset = ($page - 1) * $pagesize;
+        $paginated_files = array_slice($filtered_files, $offset, $pagesize);
+
+        $files = [];
+        foreach ($paginated_files as $file) {
+            $files[] = [
+                'filename' => $file,
+                'view_url' => '/media-file-view-path/' . $file,
+                'delete_url' => '/delete-media-file/' . $file . '/' . $studyuri,
+            ];
+        }
+
+        return new JsonResponse([
+            'files' => $files,
+            'pagination' => [
+                'current_page' => $page,
+                'page_size' => $pagesize,
+                'total_files' => $total_files,
+                'total_pages' => ceil($total_files / $pagesize),
+            ],
+        ]);
+    }
+
+    /*
+    ** DELETE MEDIA
+    */
+    public function deleteMediaFile($filename, $studyuri)
+    {
+        // Decodifica o URI do estudo e constrói o caminho do arquivo
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/media/';
+        $file_path = $directory . $filename;
+
+        try {
+            // Obtém o sistema de arquivos do Drupal
+            $file_system = \Drupal::service('file_system');
+            $real_path = $file_system->realpath($file_path);
+
+            // Verifica se o arquivo existe
+            if (file_exists($real_path)) {
+                // Remove o arquivo
+                unlink($real_path);
+
+                // Obter total de arquivos restantes
+                if (is_dir($real_path)) {
+                    $files = array_filter(scandir($real_path), function ($file) use ($real_path) {
+                        return !is_dir($real_path . '/' . $file);
+                    });
+                    $totalFiles = count($files);
+                    $pageSize = 5; // Número de itens por página
+                    $lastPage = ceil($totalFiles / $pageSize);
+                } else {
+                    $totalFiles = 0;
+                    $lastPage = 1; // Se não houver arquivos, a última página será 1
+                }
 
                 // Retorna uma resposta JSON de sucesso
                 return new JsonResponse([

@@ -150,7 +150,7 @@ class STDSelectByStudyForm extends FormBase {
         $header = MetadataTemplate::generateHeader();
         if ($this->getMode() == 'table') {
           $output = MetadataTemplate::generateOutput('da',$this->getList());
-          dpm($output);
+          //dpm($output);
         } else {
           $output = MetadataTemplate::generateOutputAsCards('da',$this->getList());
         }
