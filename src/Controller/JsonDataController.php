@@ -469,14 +469,14 @@ class JsonDataController extends ControllerBase
         }
     }
 
-    public function downloadFile($fileUri, $studyUri)
+    public function downloadFile($fileUri, $studyUri, $type)
     {
         // Decodificar os parâmetros recebidos
         $fileUri = base64_decode($fileUri);
         $studyUri = base64_decode($studyUri);
 
         // Construir o caminho real do arquivo
-        $directory = 'private://std/' . basename($studyUri) . '/da/';
+        $directory = 'private://std/' . basename($studyUri) . '/' . $type . '/';
         $fileSystem = \Drupal::service('file_system');
         $realPath = $fileSystem->realpath($directory . basename($fileUri));
 
@@ -558,6 +558,7 @@ class JsonDataController extends ControllerBase
                 'filename' => $file,
                 'view_url' => $view_url,
                 'delete_url' => '/delete-publication-file/' . $file . '/' . $studyuri,
+                'download_url' => '/download-file/' . base64_encode($file) . '/' . $studyuri . '/Publications',
             ];
         }
 
@@ -692,6 +693,7 @@ class JsonDataController extends ControllerBase
                 'filename' => $file,
                 'view_url' =>  $view_url,
                 'delete_url' => '/delete-media-file/' . $file . '/' . $studyuri,
+                'download_url' => '/download-file/' . base64_encode($file) . '/' . $studyuri . '/media',
             ];
         }
 

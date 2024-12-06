@@ -433,7 +433,7 @@ std.view_media_file:
     _format: 'json'
 
 std.download_file:
-  path: '/std/download-file/{fileUri}/{studyUri}'
+  path: '/std/download-file/{fileUri}/{studyUri}/{type}'
   defaults:
     _controller: '\Drupal\std\Controller\JsonDataController::downloadFile'
     _title: 'Download File'
@@ -441,4 +441,5 @@ std.download_file:
     _permission: 'access content'
     fileUri: '.+'
     studyUri: '.+'
+    type: '.+'
 

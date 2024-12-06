@@ -157,8 +157,7 @@
           page: newPage,
           element_type: "da",
         },
-        success: function () {
-        },
+        success: function () {},
         error: function (xhr, status, error) {
           showToast("Error updating session page.", "danger");
         },
@@ -178,7 +177,7 @@
       if (confirm("Are you sure you want to delete this file?")) {
         $.ajax({
           url: deleteUrl,
-          type: "POST", 
+          type: "POST",
           success: function (response) {
             if (response.status === "success") {
               showToast("File deleted successfully!", "success");
@@ -201,31 +200,33 @@
 
     $(document).on("click", ".download-url", function (e) {
       e.preventDefault();
-    
+
       const viewUrl =
         drupalSettings.path.baseUrl + `std` + $(this).data("download-url");
-    
+
       if (!viewUrl) {
         showToast("URL not found.", "danger");
         return;
       }
-    
+
       fetch(viewUrl, { method: "GET" })
         .then((response) => {
           if (!response.ok) {
             throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
           }
-    
-          const contentDisposition = response.headers.get("Content-Disposition");
+
+          const contentDisposition = response.headers.get(
+            "Content-Disposition"
+          );
           let filename = "arquivo";
-    
+
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
               filename = matches[1];
             }
           }
-    
+
           return response.blob().then((blob) => ({ blob, filename }));
         })
         .then(({ blob, filename }) => {
@@ -233,21 +234,20 @@
           const a = document.createElement("a");
           a.style.display = "none";
           a.href = url;
-    
+
           a.download = filename;
-    
+
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
-    
+
           showToast(`Download started: ${filename}`, "success");
         })
         .catch((error) => {
           showToast(error, "danger");
         });
     });
-    
   };
 
   const attachDragAndDropEvents = function () {
@@ -375,7 +375,6 @@
 
   //PUBLICATIONS
   const loadPublicationFiles = function (page) {
-
     if (typeof $ === "undefined") {
       showToast("jQuery not available", "danger");
       return;
@@ -396,28 +395,43 @@
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
-            '<thead><tr><th>Filename</th><th class="w-25">Operations</th></tr></thead><tbody>';
+            '<thead><tr><th>Filename</th><th style="width: 1%; white-space: nowrap; text-align: center;">Operations</th></tr></thead><tbody>';
 
           response.files.forEach(function (file) {
+            // Verificar se o arquivo tem a extensão `.docx`
+            const isDocx = file.filename.endsWith(".docx");
+
             table += `<tr>
-              <td class="text-break">${file.filename}</td>
-              <td style="text-align:center">
-                <a href="#" 
-                    class="btn btn-sm btn-secondary view-media-button" 
-                    data-view-url="${file.view_url}" 
-                    style="margin-right:5px">
-                    <i class="fa-solid fa-eye"></i>
-                </a>
-                <a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${file.delete_url}"><i class="fa-solid fa-trash-can"></i></a>
-              </td>
-            </tr>`;
+                <td class="text-break">${file.filename}</td>
+                <td style="white-space: nowrap; text-align: center;">
+                  <a href="#" 
+                      class="btn btn-sm btn-secondary view-media-button ${
+                        isDocx ? "disabled-link" : ""
+                      }" 
+                      data-view-url="${file.view_url}" 
+                      style="margin-right:5px"
+                      ${isDocx ? 'aria-disabled="true" tabindex="-1"' : ""}>
+                      <i class="fa-solid fa-eye"></i>
+                  </a>
+                  <a href="#" 
+                      class="btn btn-sm btn-secondary download-url" 
+                      data-download-url="${file.download_url}" 
+                      style="margin-right:5px">
+                      <i class="fa-solid fa-save"></i>
+                  </a>
+                  <a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
+                    file.delete_url
+                  }">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </a>
+                </td>
+              </tr>`;
           });
 
           table += "</tbody></table>";
           $("#publication-table-container").html(table);
 
           if (response.files && response.pagination) {
-
             if (response.pagination) {
               $("#publication_files_count").text(
                 "Publications (" + response.pagination.total_files + ")"
@@ -482,7 +496,6 @@
   };
 
   const renderPublicationPagination = function (pagination) {
-
     const pub_pager = jQuery("#publication-table-pager");
     pub_pager.empty();
 
@@ -542,8 +555,7 @@
           page: newPage,
           element_type: "publications",
         },
-        success: function () {
-        },
+        success: function () {},
         error: function (xhr, status, error) {
           showToast(error, "danger");
         },
@@ -553,7 +565,6 @@
 
   //MEDIA
   const loadMediaFiles = function (page) {
-
     if (typeof $ === "undefined") {
       showToast("jQuery not available", "danger");
       return;
@@ -572,17 +583,23 @@
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
-            '<thead><tr><th>Filename</th><th class="w-25">Operations</th></tr></thead><tbody>';
+            '<thead><tr><th>Filename</th><th style="width: 1%; white-space: nowrap; text-align: center;">Operations</th></tr></thead><tbody>';
 
           response.files.forEach(function (file) {
             table += `<tr>
                 <td class="text-break">${file.filename}</td>
-                <td style="text-align:center">
+                <td style="text-align: center; white-space: nowrap;">
                   <a href="#" 
                      class="btn btn-sm btn-secondary view-media-button" 
                      data-view-url="${file.view_url}" 
                      style="margin-right:5px">
                      <i class="fa-solid fa-eye"></i>
+                  </a>
+                  <a href="#" 
+                     class="btn btn-sm btn-secondary download-url" 
+                     data-download-url="${file.download_url}" 
+                     style="margin-right:5px">
+                     <i class="fa-solid fa-save"></i>
                   </a>
                   <a href="#" 
                      class="btn btn-sm btn-danger delete-media-button" 
@@ -597,7 +614,6 @@
           $("#media-table-container").html(table);
 
           if (response.files && response.pagination) {
-
             if (response.pagination) {
               $("#media_files_count").text(
                 "Media (" + response.pagination.total_files + ")"
@@ -794,7 +810,6 @@
 
   // // Função para renderizar a paginação
   const renderMediaPagination = function (pagination) {
-
     const media_pager = jQuery("#media-table-pager");
     media_pager.empty();
 
@@ -854,8 +869,7 @@
           page: newPage,
           element_type: "media",
         },
-        success: function () {
-        },
+        success: function () {},
         error: function (xhr, status, error) {
           showToast(error, "danger");
         },
