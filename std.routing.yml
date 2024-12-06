@@ -420,12 +420,25 @@ std.delete_media_file:
     _format: 'json'
 
 std.view_media_file:
-  path: '/std/view-media-file/{filename}'
+  path: '/std/view-file/{filename}/{studyuri}/{type}/{token}'
   defaults:
-    _controller: '\Drupal\std\Controller\JsonDataController::viewMediaFile'
-    _title: 'Delete media file'
+    _controller: '\Drupal\std\Controller\JsonDataController::viewFile'
+    _title: 'View media file'
   requirements:
     _permission: 'access content'
     filename: '.+'
+    studyuri: '.+'
+    type: '.+'
   options:
     _format: 'json'
+
+std.download_file:
+  path: '/std/download-file/{fileUri}/{studyUri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::downloadFile'
+    _title: 'Download File'
+  requirements:
+    _permission: 'access content'
+    fileUri: '.+'
+    studyUri: '.+'
+

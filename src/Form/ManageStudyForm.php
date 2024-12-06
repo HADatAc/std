@@ -75,7 +75,7 @@ class ManageStudyForm extends FormBase
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
     //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));    
     $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
-    $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri,'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
+    $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
@@ -155,6 +155,22 @@ class ManageStudyForm extends FormBase
 
     //Libraries
     $form['#attached']['library'][] = 'core/drupal.autocomplete';
+    $form['#attached']['library'][] = 'std/pdfjs';
+
+    //MODAL
+    $form['row0']['modal'] = [
+      '#type' => 'markup',
+      '#markup' => Markup::create('
+        <div id="modal-container" class="modal-media hidden">
+          <div class="modal-content">
+            <button class="close-btn" type="button">&times;</button>
+            <div id="pdf-scroll-container"></div>
+            <div id="modal-content"></div>
+          </div>
+          <div class="modal-backdrop"></div>
+        </div>
+      '),
+    ];
 
     // First row with a single card
     $form['row1']['card0'] = array(
@@ -165,9 +181,7 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('col-md-12')),
       'card' => array(
         '#type' => 'markup',
-        '#markup' => '        
-          <div id="modal-container" class="hidden"></div>
-          <br><div class="card"><div class="card-body">' .
+        '#markup' => '<br><div class="card"><div class="card-body">' .
           $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
           $this->t('<b>URI</b>: ') . ' ' . $this->getStudy()->uri . '<br>' .
           $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .

@@ -9,10 +9,14 @@ std_js_css:
     - core/jquery
     - core/jquery.once
     - core/drupalSettings
-
 json_table:
   version: 1.x
   js:
     js/json_table.js: {}
+  dependencies:
+    - core/jquery
+pdfjs:
+  js:
+    js/pdf.min.js: {}
   dependencies:
     - core/jquery

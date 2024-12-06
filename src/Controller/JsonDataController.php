@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\rep\Constant;
 use Drupal\Core\File\FileSystemInterface;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
 class JsonDataController extends ControllerBase
 {
@@ -467,6 +469,35 @@ class JsonDataController extends ControllerBase
         }
     }
 
+    public function downloadFile($fileUri, $studyUri)
+    {
+        // Decodificar os parâmetros recebidos
+        $fileUri = base64_decode($fileUri);
+        $studyUri = base64_decode($studyUri);
+
+        // Construir o caminho real do arquivo
+        $directory = 'private://std/' . basename($studyUri) . '/da/';
+        $fileSystem = \Drupal::service('file_system');
+        $realPath = $fileSystem->realpath($directory . basename($fileUri));
+
+        //dpm($realPath);
+
+        // Verificar se o arquivo existe
+        if (!file_exists($realPath)) {
+            return new JsonResponse(['error' => 'File not found.'], 404);
+        }
+
+        // Retornar o arquivo como resposta para download
+        $response = new BinaryFileResponse($realPath);
+        $response->setContentDisposition(
+            ResponseHeaderBag::DISPOSITION_ATTACHMENT,
+            basename($realPath)
+        );
+
+        return $response;
+    }
+
+
     /*
     ** PUBLICATIONS TABLE RELATED FUNCTIONS
     */
@@ -492,7 +523,6 @@ class JsonDataController extends ControllerBase
             return new JsonResponse(['error' => 'Invalid parameters'], 400);
         }
 
-
         $decoded_studyuri = basename(base64_decode($studyuri));
         $directory = 'private://std/' . $decoded_studyuri . '/Publications/';
         $file_system = \Drupal::service('file_system');
@@ -513,9 +543,20 @@ class JsonDataController extends ControllerBase
 
         $files = [];
         foreach ($paginated_files as $file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+            // Gerar token para arquivos Word
+            $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
+
+            // Adicionar token ao view_url para arquivos Word
+            $view_url = '/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
+            if ($token !== null) {
+                $view_url .= '/' . $token;
+            }
+
             $files[] = [
                 'filename' => $file,
-                'view_url' => '/publication-file-view-path/' . $file,
+                'view_url' => $view_url,
                 'delete_url' => '/delete-publication-file/' . $file . '/' . $studyuri,
             ];
         }
@@ -530,6 +571,7 @@ class JsonDataController extends ControllerBase
             ],
         ]);
     }
+
 
     /*
     ** DELETE PUBLICATION
@@ -637,9 +679,18 @@ class JsonDataController extends ControllerBase
 
         $files = [];
         foreach ($paginated_files as $file) {
+
+            // Gerar token para arquivos Word
+            $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
+
+            // Adicionar token ao view_url para arquivos Word
+            $view_url = '/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
+            if ($token !== null) {
+                $view_url .= '/' . $token;
+            }
             $files[] = [
                 'filename' => $file,
-                'view_url' =>  'std/' . $decoded_studyuri . '/media/' . $file,
+                'view_url' =>  $view_url,
                 'delete_url' => '/delete-media-file/' . $file . '/' . $studyuri,
             ];
         }
@@ -716,34 +767,99 @@ class JsonDataController extends ControllerBase
     }
 
     /*
-    ** VIEW MEDIA FILES
+    ** VIEW FILES
     */
-    public function viewMediaFile($filename)
+    // public function viewFile($filename, $studyuri, $type)
+    // {
+    //     // Verificar se os parâmetros necessários estão presentes
+    //     if (empty($studyuri)) {
+    //         return new JsonResponse(['error' => 'No study provided.'], 400);
+    //     }
+
+    //     if (empty($type)) {
+    //         return new JsonResponse(['error' => 'No type provided.'], 400);
+    //     }
+
+    //     if (empty($filename)) {
+    //         return new JsonResponse(['error' => 'No file provided.'], 400);
+    //     }
+
+    //     // Decodificar e construir o caminho do arquivo
+    //     $decoded_studyuri = basename(base64_decode($studyuri));
+    //     $directory = 'private://std/' . $decoded_studyuri . '/' . $type . '/';
+    //     $file_system = \Drupal::service('file_system');
+    //     $real_path = $file_system->realpath($directory . $filename);
+
+    //     // Verificar se o arquivo existe
+    //     if (!file_exists($real_path)) {
+    //         return new JsonResponse(['error' => 'File not found.'], 404);
+    //     }
+
+    //     // Definir o tipo MIME do arquivo
+    //     $mime_type = mime_content_type($real_path);
+
+    //     // Retornar o arquivo como uma resposta binária
+    //     $response = new \Symfony\Component\HttpFoundation\BinaryFileResponse($real_path);
+    //     $response->headers->set('Content-Type', $mime_type);
+    //     $response->setContentDisposition(
+    //         \Symfony\Component\HttpFoundation\ResponseHeaderBag::DISPOSITION_INLINE,
+    //         $filename
+    //     );
+
+    //     return $response;
+    // }
+    public function viewFile($filename, $studyuri, $type, $token = null)
     {
-        // Decodifica o URI do estudo (se necessário)
-        $studyuri = \Drupal::service('session')->get('current_study_uri');
-        if (empty($studyuri)) {
-            return new JsonResponse(['error' => 'No study URI found in session.'], 400);
+        // Verificar se os parâmetros necessários estão presentes
+        if (empty($studyuri) || empty($type) || empty($filename)) {
+            return new JsonResponse(['error' => 'Missing parameters.'], 400);
         }
 
-        $decoded_studyuri = basename(base64_decode($studyuri));
-        $directory = 'private://std/' . $decoded_studyuri . '/media/';
+        // Decodificar o studyuri
+        $decoded_studyuri = base64_decode(rawurldecode($studyuri));
+
+        $directory = 'private://std/' . basename($decoded_studyuri) . '/' . $type . '/';
         $file_system = \Drupal::service('file_system');
         $real_path = $file_system->realpath($directory . $filename);
 
-        // Verifica se o arquivo existe
         if (!file_exists($real_path)) {
             return new JsonResponse(['error' => 'File not found.'], 404);
         }
 
-        // Define o tipo MIME
+        // Identificar o tipo MIME do arquivo
         $mime_type = mime_content_type($real_path);
-        $response = new \Symfony\Component\HttpFoundation\Response(file_get_contents($real_path));
+
+        // Tratamento especial para ficheiros Word
+        if (in_array($mime_type, ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])) {
+            // Validar o token
+            $expected_token = hash_hmac('sha256', $filename, '1357924680'); // Substituir pela chave segura
+            if ($token === null || $token !== $expected_token) {
+                \Drupal::logger('custom_module')->warning('Access denied for file: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
+                return new JsonResponse(['error' => 'Access denied.'], 403);
+            }
+
+            // Gerar um link público temporário para o Microsoft Viewer
+            $url = \Drupal::service('file_url_generator')->generateAbsoluteString("private://std/$decoded_studyuri/$type/$filename");
+            $viewer_url = 'https://view.officeapps.live.com/op/embed.aspx?src=' . urlencode($url);
+
+            \Drupal::logger('custom_module')->debug('Generated viewer URL: ' . $viewer_url);
+
+            return new JsonResponse(['viewer_url' => $viewer_url], 200);
+        }
+
+        // Para todos os outros tipos de ficheiros, retornar como está atualmente
+        $response = new \Symfony\Component\HttpFoundation\BinaryFileResponse($real_path);
         $response->headers->set('Content-Type', $mime_type);
+        $response->setContentDisposition(
+            \Symfony\Component\HttpFoundation\ResponseHeaderBag::DISPOSITION_INLINE,
+            $filename
+        );
+
+        // Registrar o log de acesso ao arquivo
+        \Drupal::logger('custom_module')->info('File served: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
 
         return $response;
     }
-
 
     # TO BE CHECKED IF NEEDED
     public function backUrl()
