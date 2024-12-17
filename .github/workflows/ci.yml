@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - workflow
+      - stable_version
 jobs:
   run-selenium-tests:
     runs-on: self-hosted
