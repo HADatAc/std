@@ -191,8 +191,8 @@ class EditStudyObjectCollectionForm extends FormBase {
     try {
       // UPDATE BY DELETING AND CREATING
       $api = \Drupal::service('rep.api_connector');
-      $api->studyObjectCollectionDel($this->getStudyObjectCollection()->uri);
-      $api->studyObjectCollectionAdd($studyObjectCollectionJSON);
+      $api->elementDel('studyobjectcollection',$this->getStudyObjectCollection()->uri);
+      $api->elementAdd('studyobjectcollection',$studyObjectCollectionJSON);
 
       \Drupal::messenger()->addMessage(t("Study Object Collection has been updated successfully."));
       self::backUrl();

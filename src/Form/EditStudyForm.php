@@ -42,6 +42,7 @@ class EditStudyForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL) {
+
     $uri=$studyuri ?? 'default';
     $uri_decode=base64_decode($uri);
     $this->setStudyUri($uri_decode);
@@ -136,8 +137,8 @@ class EditStudyForm extends FormBase {
     try {
       // UPDATE BY DELETING AND CREATING
       $api = \Drupal::service('rep.api_connector');
-      $api->studyDel($this->getStudy()->uri);
-      $api->studyAdd($studyJson);
+      $api->elementDel('study',$this->getStudy()->uri);
+      $api->elementAdd('study',$studyJson);
 
       \Drupal::messenger()->addMessage(t("Study has been updated successfully."));
       self::backUrl();
@@ -151,13 +152,47 @@ class EditStudyForm extends FormBase {
 
   }
 
-  function backUrl() {
-    $uid = \Drupal::currentUser()->id();
-    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_study');
-    if ($previousUrl) {
-      $response = new RedirectResponse($previousUrl);
+  function backUrl($back_url = NULL) {
+    if ($back_url) {
+      // Se uma URL específica for fornecida, usa essa para o redirecionamento
+      $response = new RedirectResponse($back_url);
       $response->send();
       return;
+    } else {
+      // Se não houver uma URL de retorno específica, usa a URL da página inicial com a página e o tamanho de página
+      $uid = \Drupal::currentUser()->id();
+      $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_study');
+
+      // Verifica se a URL retornada é uma URL de /load-more-data, em caso positivo, gera a URL correta da listagem
+      if ($previousUrl && strpos($previousUrl, '/load-more-data') !== false) {
+        // Extrair o número da página da query string da URL
+        parse_str(parse_url($previousUrl, PHP_URL_QUERY), $params);
+        $page = isset($params['page']) ? $params['page'] : 1;
+        $element_type = isset($params['element_type']) ? $params['element_type'] : 'study';
+        $pagesize = 9; // Utilize o valor padrão do tamanho da página
+
+        // Gera a URL correta da listagem usando a rota "std.select_study"
+        $previousUrl = Url::fromRoute('std.select_study', [
+          'elementtype' => $element_type,
+          'page' => $page,
+          'pagesize' => $pagesize,
+        ])->toString();
+      }
+
+      if ($previousUrl) {
+        $response = new RedirectResponse($previousUrl);
+        $response->send();
+        return;
+      } else {
+        // Rota padrão caso nenhuma URL seja encontrada
+        $default_url = Url::fromRoute('std.select_study', [
+          'elementtype' => 'study',
+          'page' => 1,
+          'pagesize' => 9,
+        ])->toString();
+        $response = new RedirectResponse($default_url);
+        $response->send();
+      }
     }
   }
 

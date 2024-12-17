@@ -3,7 +3,20 @@ std_js_css:
   css:
     theme:
       css/std.css: {}
+  js:
+    js/std.js: {}
   dependencies:
     - core/jquery
-    - core/drupal
     - core/jquery.once
+    - core/drupalSettings
+json_table:
+  version: 1.x
+  js:
+    js/json_table.js: {}
+  dependencies:
+    - core/jquery
+pdfjs:
+  js:
+    js/pdf.min.js: {}
+  dependencies:
+    - core/jquery

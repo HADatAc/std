@@ -160,8 +160,8 @@ class EditVirtualColumnForm extends FormBase {
     try {
       // UPDATE BY DELETING AND CREATING
       $api = \Drupal::service('rep.api_connector');
-      $api->virtualColumnDel($this->getVirtualColumn()->uri);
-      $api->virtualColumnAdd($virtualColumnJSON);
+      $api->elementDel('virtualcolumn',$this->getVirtualColumn()->uri);
+      $api->elementAdd('virtualcolumn',$virtualColumnJSON);
 
       \Drupal::messenger()->addMessage(t("Virtual column has been updated successfully."));
       self::backUrl();
