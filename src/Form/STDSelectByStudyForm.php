@@ -599,19 +599,23 @@ class STDSelectByStudyForm extends FormBase {
   /**
    * INGEST STR
    */
-  protected function performIngest($uri, FormStateInterface $form_state) {
+  protected function performIngest($uri, FormStateInterface $form_state, String $status = "_") {
     $api = \Drupal::service('rep.api_connector');
     $stream = $api->parseObjectResponse($api->getUri($uri), 'getUri');
     if ($stream == NULL) {
       \Drupal::messenger()->addError(t("Failed to retrieve the STR to be ingested."));
       return;
     }
-    $msg = $api->parseObjectResponse($api->uploadTemplate($this->element_type, $stream), 'uploadTemplate');
+    $msg = $api->parseObjectResponse($api->uploadTemplate($this->element_type, $stream, $status), 'uploadTemplateStatus');
     if ($msg == NULL) {
-      \Drupal::messenger()->addError(t("The " . $this->single_class_name . " selected FAILD to be submited for Ingestion."));
+      \Drupal::messenger()->addError(t("The " . $this->single_class_name . " selected FAILED to be submited for Ingestion."));
       return;
     }
     \Drupal::messenger()->addMessage(t("The " . $this->single_class_name . " selected was successfully submited for Ingestion."));
+
+    // // Set redirect page
+    // $form_state->setRedirectUrl(self::backSelect($this->element_type, $this->getMode(), $this->studyuri));
+
     return;
   }
 
