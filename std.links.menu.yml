@@ -50,71 +50,71 @@ std.divider1:
 #    _permission: 'access content'
 #    _role: 'authenticated'
 
-std.manage_dsg_template:
-  title: Manage DSG Templates
-  description: Manage DSG Templates
-  route_name: rep.select_mt_element
-  route_parameters:
-    elementtype: 'dsg'
-    mode: 'table'
-    page: '1'
-    pagesize: '9'
-    studyuri: 'none'
-  parent: std.top_level
-  menu_name: main
-  weight: 12
-  requirements:
-    _permission: 'access content'
-    _role: 'authenticated'
+# std.manage_dsg_template:
+#   title: Manage DSG Templates
+#   description: Manage DSG Templates
+#   route_name: rep.select_mt_element
+#   route_parameters:
+#     elementtype: 'dsg'
+#     mode: 'table'
+#     page: '1'
+#     pagesize: '9'
+#     studyuri: 'none'
+#   parent: std.top_level
+#   menu_name: main
+#   weight: 12
+#   requirements:
+#     _permission: 'access content'
+#     _role: 'authenticated'
 
-std.manage_dd_template:
-  title: Manage DD Templates
-  description: Manage DD Templates
-  route_name: rep.select_mt_element
-  route_parameters:
-    elementtype: 'dd'
-    mode: 'table'
-    page: '1'
-    pagesize: '9'
-    studyuri: 'none'
-  parent: std.top_level
-  menu_name: main
-  weight: 13
-  requirements:
-    _permission: 'access content'
-    _role: 'authenticated'
+# std.manage_dd_template:
+#   title: Manage DD Templates
+#   description: Manage DD Templates
+#   route_name: rep.select_mt_element
+#   route_parameters:
+#     elementtype: 'dd'
+#     mode: 'table'
+#     page: '1'
+#     pagesize: '9'
+#     studyuri: 'none'
+#   parent: std.top_level
+#   menu_name: main
+#   weight: 13
+#   requirements:
+#     _permission: 'access content'
+#     _role: 'authenticated'
 
-std.manage_sdd_template:
-  title: Manage SDD Templates
-  description: Manage SDD Templates
-  route_name: rep.select_mt_element
-  route_parameters:
-    elementtype: 'sdd'
-    mode: 'table'
-    page: '1'
-    pagesize: '9'
-    studyuri: 'none'
-  parent: std.top_level
-  menu_name: main
-  weight: 14
-  requirements:
-    _permission: 'access content'
-    _role: 'authenticated'
+# std.manage_sdd_template:
+#   title: Manage SDD Templates
+#   description: Manage SDD Templates
+#   route_name: rep.select_mt_element
+#   route_parameters:
+#     elementtype: 'sdd'
+#     mode: 'table'
+#     page: '1'
+#     pagesize: '9'
+#     studyuri: 'none'
+#   parent: std.top_level
+#   menu_name: main
+#   weight: 14
+#   requirements:
+#     _permission: 'access content'
+#     _role: 'authenticated'
 
-std.divider2:
-  title: '_________________________________'
-  parent: std.top_level
-  menu_name: main
-  weight: 20
-#  class: 'menu-divider'
-#  options:
-#    attributes:
-#      class:
-#        - 'menu-divider'
-  route_name: '<none>'
-  requirements:
-   _permission: 'access content'
-   _role: 'authenticated'
+# std.divider2:
+#   title: '_________________________________'
+#   parent: std.top_level
+#   menu_name: main
+#   weight: 20
+# #  class: 'menu-divider'
+# #  options:
+# #    attributes:
+# #      class:
+# #        - 'menu-divider'
+#   route_name: '<none>'
+#   requirements:
+#    _permission: 'access content'
+#    _role: 'authenticated'
 
 std.manage_studies:
   title: Manage Studies
