@@ -8,7 +8,7 @@ std.search:
     keyword: '_'
     language: '_'
     page: '1'
-    pagesize: '12'
+    pagesize: '9'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'

@@ -12,6 +12,10 @@ use Drupal\std\Entity\Study;
 use Drupal\std\Entity\StudyRole;
 use Drupal\std\Entity\StudyObjectCollection;
 use Drupal\std\Entity\VirtualColumn;
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\Core\Ajax\InvokeCommand;
+use Drupal\Core\Ajax\ScrollCommand;
 
 /**
  * Provides a STD List Form with table and card view logic.
@@ -75,8 +79,9 @@ class STDListForm extends FormBase {
    * The form builds a header with the title and two view toggle buttons (Table View
    * and Card View) placed on the right. The element type defaults to "dsg" if not provided.
    */
-  public function buildForm(array $form, FormStateInterface $form_state) {
+  public function buildForm(array $form, FormStateInterface $form_state, $elementtype=NULL, $keyword=NULL, $page=NULL, $pagesize=NULL) {
 
+    // dpm($elementtype);
     // CSS and JS library
     $form['#attached']['library'][] = 'std/std_js_css';
 
@@ -92,14 +97,14 @@ class STDListForm extends FormBase {
     }
 
     // Retrieve element type; default to 'dsg' if not provided.
-    $elementtype = \Drupal::request()->query->get('elementtype');
+    // $elementtype = \Drupal::request()->query->get('elementtype');
     if (empty($elementtype)) {
       $elementtype = 'dsg';
     }
     // Retrieve keyword, page and pagesize from query parameters.
     $keyword = \Drupal::request()->query->get('keyword');
     $page = \Drupal::request()->query->get('page') ? \Drupal::request()->query->get('page') : 1;
-    $pagesize = \Drupal::request()->query->get('pagesize') ? \Drupal::request()->query->get('pagesize') : 10;
+    $pagesize = \Drupal::request()->query->get('pagesize') ? \Drupal::request()->query->get('pagesize') : 9;
 
     // Get total number of elements.
     $this->setListSize(-1);
@@ -154,6 +159,7 @@ class STDListForm extends FormBase {
     $header = [];
     $output = [];
 
+    // dpm($elementtype);
     // Build output based on element type and view type.
     switch ($elementtype) {
       case "dsg":
@@ -207,7 +213,7 @@ class STDListForm extends FormBase {
           $output = Study::generateOutput($this->getList());
         }
         else if ($view_type == 'cards') {
-          $output = Study::generateOutputAsCard($this->getList());
+          $output = Study::generateOutputAsCard($this->getList(), \Drupal::currentUser()->getEmail());
         }
         break;
 
@@ -276,23 +282,6 @@ class STDListForm extends FormBase {
       '#type' => 'item',
       '#markup' => '<h3>Available <span style="color:DarkGreen;">' . $class_name . '</span></h3>',
     ];
-
-    // $form['header']['view_toggle'] = [
-    //   '#type' => 'container',
-    //   '#attributes' => ['class' => ['view-toggle-buttons']],
-    // ];
-    // $form['header']['view_toggle']['table_view'] = [
-    //   '#type' => 'link',
-    //   '#title' => $this->t('Table View'),
-    //   '#url' => $table_url,
-    //   '#attributes' => ['class' => ['btn', 'btn-secondary']],
-    // ];
-    // $form['header']['view_toggle']['card_view'] = [
-    //   '#type' => 'link',
-    //   '#title' => $this->t('Card View'),
-    //   '#url' => $cards_url,
-    //   '#attributes' => ['class' => ['btn', 'btn-secondary']],
-    // ];
 
     $form['header']['view_toggle'] = [
       '#type' => 'container',
@@ -363,19 +352,30 @@ class STDListForm extends FormBase {
       // Render card view container with AJAX wrapper.
       $form['content'] = [
         '#type' => 'container',
-        '#attributes' => ['id' => 'card-container-wrapper'],
-        '#markup' => '<div class="card-container">' . implode('', $output) . '</div>',
-      ];
-      // Add a "Load More" button that triggers an AJAX callback.
-      $form['load_more'] = [
-        '#type' => 'button',
-        '#value' => $this->t('Load More'),
-        '#ajax' => [
-          'callback' => '::loadMoreCallback',
-          'wrapper' => 'card-container-wrapper',
-          'effect' => 'fade',
+        '#attributes' => [
+          'id' => 'card-container-wrapper',
+          'class' => ['card-container'],
         ],
       ];
+
+      // Add each card render array as a child of the container.
+      foreach ($output as $card) {
+        $form['content'][] = $card;
+      }
+
+      // Only add the "Load More" button if the total number of elements is greater than the pagesize.
+      // dpm($current_pagesize);
+      if ($this->list_size > $current_pagesize) {
+        $form['content']['load_more'] = [
+          '#type' => 'button',
+          '#value' => $this->t('Load More'),
+          '#ajax' => [
+            'callback' => '::loadMoreCallback',
+            'wrapper' => 'card-container-wrapper',
+            'effect' => 'fade',
+          ],
+        ];
+      }
     }
 
     return $form;
@@ -415,7 +415,19 @@ class STDListForm extends FormBase {
    *   The updated content container.
    */
   public function loadMoreCallback(array &$form, FormStateInterface $form_state) {
-    return $form['content'];
+    $response = new AjaxResponse();
+
+    // Substitui o container com os novos cards.
+    $response->addCommand(new ReplaceCommand('#card-container-wrapper', $form['content']));
+
+    // Executa um trecho de JavaScript para rolar a página até o container.
+    $response->addCommand(new InvokeCommand('html, body', 'animate', [
+      ['scrollTop' => 99999],
+      'slow'
+    ]));
+
+
+    return $response;
   }
 
   /**
