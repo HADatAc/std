@@ -73,7 +73,7 @@ class ManageStudyForm extends FormBase
 
     // get totals for current study
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
-    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));    
+    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
     $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
@@ -271,7 +271,7 @@ class ManageStudyForm extends FormBase
     //  '#attributes' => array('class' => array('col-md-3')),
     //  'card' => array(
     //    '#type' => 'markup',
-    //    '#markup' => '<div class="card">' . 
+    //    '#markup' => '<div class="card">' .
     //      '<div class="card-header text-center">' . $cards[5]['value'] . '</div>' .
     //      '<div class="card-body">' . 'Foo' . '</div>' .
     //      '</div>',
@@ -310,7 +310,7 @@ class ManageStudyForm extends FormBase
           '<div class="info-card">You can drag&drop files directly into this card</div>' .
           '</div>' .
           \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-          //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
+          //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' .
           '</div>' .
           '</div>',
       ),
@@ -428,12 +428,22 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('row')),
     );
 
-    $form['row6']['back_submit'] = [
+    // $form['row6']['back_submit'] = [
+    //   '#type' => 'submit',
+    //   '#value' => $this->t('Back to Manage Studies'),
+    //   '#name' => 'back',
+    //   '#attributes' => [
+    //     'class' => ['col-md-2', 'btn', 'btn-primary', 'back-button'],
+    //   ],
+    // ];
+    $form['back_link'] = [
       '#type' => 'submit',
       '#value' => $this->t('Back to Manage Studies'),
+      '#url' => Url::fromUri('internal:/'),
       '#name' => 'back',
       '#attributes' => [
-        'class' => ['col-md-2', 'btn', 'btn-primary', 'back-button'],
+        'class' => ['col-md-1', 'btn', 'btn-primary', 'back-button'],
+        'onclick' => 'window.history.back(); return false;',
       ],
     ];
 
@@ -493,7 +503,7 @@ class ManageStudyForm extends FormBase
   function backUrl()
   {
     $uid = \Drupal::currentUser()->id();
-    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.manage_study_elements');
+    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.list_element');
     if ($previousUrl) {
       $response = new RedirectResponse($previousUrl);
       $response->send();

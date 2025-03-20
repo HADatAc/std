@@ -7,6 +7,7 @@ use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\rep\Utils;
 use Drupal\Core\Render\Markup;
 use Drupal\Component\Utility\Html;
+use Drupal\Core\Link;
 
 class Study {
 
@@ -49,7 +50,7 @@ class Study {
       $root_url = \Drupal::request()->getBaseUrl();
       $encodedUri = rawurlencode(rawurlencode($element->uri));
       $output[$element->uri] = [
-        'element_uri' => t('<a href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($uri).'">'.$uri.'</a>'),
+        'element_uri' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($uri).'">'.$uri.'</a>'),
         'element_short_name' => t($label),
         'element_name' => t($title),
         'element_n_roles' => $element->totalStudyRoles,
@@ -60,133 +61,9 @@ class Study {
     return $output;
   }
 
-  // public static function generateOutputAsCard($list) {
-  //   $output = [];
+  public static function generateOutputAsCard($list) {
 
-  //   // ROOT URL
-  //   $root_url = \Drupal::request()->getBaseUrl();
-
-  //   if ($list == NULL) {
-  //       return $output;
-  //   }
-
-  //   //foreach ($output as $uri => $card) {
-  //   //    $form['element_' . $index] = $card;
-  //   //}
-
-  //   $index = 0;
-  //   foreach ($list as $element) {
-  //     $index++;
-  //     $uri = $element->uri ?? '';
-  //     $label = $element->label ?? '';
-  //     $title = $element->title ?? '';
-
-  //     $urlComponents = parse_url($uri);
-
-  //     if (isset($urlComponents['scheme']) && isset($urlComponents['host'])) {
-  //       $url = Url::fromUri($uri);
-  //     } else {
-  //       $url = '';
-  //     }
-
-  //     if ($element->uri != NULL && $element->uri != "") {
-  //       $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
-
-  //       $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', ['studyuri' => base64_encode($element->uri)])->toString());
-  //       $manage_elements = Url::fromRoute('rep.back_url', [
-  //         'previousurl' => $previousUrl,
-  //         'currenturl' => $manage_elements_str,
-  //         'currentroute' => 'std.manage_study_elements'
-  //       ]);
-
-  //       $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', ['elementuri' => base64_encode($element->uri)])->toString());
-  //       $view_study_route = 'rep.describe_element';
-  //       $view_study = Url::fromRoute('rep.back_url', [
-  //         'previousurl' => $previousUrl,
-  //         'currenturl' => $view_study_str,
-  //         'currentroute' => 'rep.describe_element'
-  //       ]);
-
-  //       $edit_study_str = base64_encode(Url::fromRoute('std.edit_study', ['studyuri' => base64_encode($element->uri)])->toString());
-  //       $edit_study = Url::fromRoute('rep.back_url', [
-  //         'previousurl' => $previousUrl,
-  //         'currenturl' => $edit_study_str,
-  //         'currentroute' => 'std.edit_study'
-  //       ]);
-
-  //       $delete_study = Url::fromRoute('rep.delete_element', [
-  //         'elementtype' => 'study',
-  //         'elementuri' => base64_encode($element->uri),
-  //         'currenturl' => $previousUrl,
-  //       ]);
-  //     }
-
-  //     $output[$index] = [
-  //       '#type' => 'container', // Use container instead of html_tag for better semantics
-  //       '#attributes' => [
-  //           'class' => ['card', 'mb-3'],
-  //       ],
-  //       '#prefix' => '<div class="col-md-6">',
-  //       '#suffix' => '</div>',
-  //       'card_body_'.$index => [
-  //           '#type' => 'container', // Use container for the card body
-  //           '#attributes' => [
-  //               'class' => ['card-body'],
-  //           ],
-  //           'title' => [
-  //               '#markup' => '<h5 class="card-title">' . $label . '</h5>',
-  //           ],
-  //           'text' => [
-  //               '#markup' => '<p class="card-text">'. $title . '<br>' . $uri . '</p>',
-  //           ],
-  //           'link1_'.$index   => [
-  //             '#type' => 'link',
-  //             '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
-  //             '#url' => $manage_elements,
-  //             '#attributes' => [
-  //                 'class' => ['btn', 'btn-sm', 'btn-secondary'],
-  //                 'style' => 'margin-right: 10px;',
-  //             ],
-  //           ],
-  //           'link2_'.$index => [
-  //             '#type' => 'link',
-  //             '#title' => Markup::create('<i class="fa-solid fa-eye"></i> View'),
-  //             '#url' => $view_study,
-  //             '#attributes' => [
-  //                 'class' => ['btn', 'btn-sm', 'btn-secondary'],
-  //                 'style' => 'margin-right: 10px;',
-  //             ],
-  //           ],
-  //           'link3_'.$index => [
-  //             '#type' => 'link',
-  //             '#title' => Markup::create('<i class="fa-solid fa-pen-to-square"></i> Edit'),
-  //             '#url' => $edit_study,
-  //             '#attributes' => [
-  //                 'class' => ['btn', 'btn-sm', 'btn-secondary'],
-  //                 'style' => 'margin-right: 10px;',
-  //             ],
-  //           ],
-  //           'link4_'.$index => [
-  //             '#type' => 'link',
-  //             '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
-  //             '#url' => $delete_study,
-  //             '#attributes' => [
-  //               'onclick' => 'if(!confirm("Really Delete?")){return false;}',
-  //               'class' => ['btn', 'btn-sm', 'btn-secondary', 'btn-danger'],
-  //             ],
-  //           ],
-  //       ],
-  //     ];
-
-  //   }
-
-  //   return $output;
-  // }
-
-  public static function generateOutputAsCard($list, $useremail) {
-
-    if (isset($useremail) && empty($useremail))
-      $useremail = \Drupal::currentUser()->getEmail();
+    $useremail = \Drupal::currentUser()->getEmail();
 
     $cards = [];
 
@@ -253,6 +130,12 @@ class Study {
       // Generate a unique modal ID for the "read more" modal.
       $modal_id = Html::getId($title . '-description-modal');
 
+      if (is_string($uri) && !empty($uri)) {
+        $url = Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri));
+        $url->setOption('attributes', ['target' => '_new']);
+        $link = Link::fromTextAndUrl($uri, $url)->toString();
+      }
+
       $card['card']['body'] = [
         '#type' => 'container',
         '#attributes' => [
@@ -292,7 +175,7 @@ class Study {
             'text' => [
               '#markup' => '<p class="card-text">
                 <strong>Name:</strong> ' . $title . '
-                <br><strong>URI:</strong> ' . (is_string($uri) && !empty($uri) ? \Drupal\Core\Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString() : '') . '
+                <br><strong>URI:</strong> ' . $link . '
                 <br><strong>PI:</strong> ' . $pi . '
                 <br><strong>Institution:</strong> ' . $ins . '
                 <br><strong>Description:</strong> ' . $short_desc . '...
@@ -327,16 +210,21 @@ class Study {
       // Build action links if the element has a valid URI.
 
       if (!empty($element->uri)) {
+
         $studyUriEncoded = rtrim(strtr(base64_encode($element->uri), '+/', '-_'), '=');
 
         // Use URL-safe encoding for the previous URL.
         $safe_previousUrl = rtrim(strtr(base64_encode(\Drupal::request()->getRequestUri()), '+/', '-_'), '=');
+        $safe_previousUrl_str = base64_encode($safe_previousUrl);
 
         // Management link.
         if ($element->hasSIRManagerEmail === $useremail) {
-          $manage_elements_str = rtrim(strtr(base64_encode(Url::fromRoute('std.manage_study_elements', ['studyuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
+          $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
+            'studyuri' => base64_encode($element->uri)
+          ])->toString());
+
           $manage_elements = Url::fromRoute('rep.back_url', [
-            'previousurl' => $safe_previousUrl,
+            'previousurl' => $safe_previousUrl_str,
             'currenturl' => $manage_elements_str,
             'currentroute' => 'std.manage_study_elements',
           ]);
@@ -345,29 +233,29 @@ class Study {
         // View link.
         $view_study_str = rtrim(strtr(base64_encode(Url::fromRoute('rep.describe_element', ['elementuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
         $view_study = Url::fromRoute('rep.back_url', [
-          'previousurl' => $safe_previousUrl,
+          'previousurl' => $safe_previousUrl_str,
           'currenturl' => $view_study_str,
           'currentroute' => 'rep.describe_element',
         ]);
 
         // Edit link.
-        if ($element->hasSIRManagerEmail === $useremail) {
-          $edit_study_str = rtrim(strtr(base64_encode(Url::fromRoute('std.edit_study', ['studyuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
-          $edit_study = Url::fromRoute('rep.back_url', [
-            'previousurl' => $safe_previousUrl,
-            'currenturl' => $edit_study_str,
-            'currentroute' => 'std.edit_study',
-          ]);
-        }
+        // if ($element->hasSIRManagerEmail === $useremail) {
+        //   $edit_study_str = rtrim(strtr(base64_encode(Url::fromRoute('std.edit_study', ['studyuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
+        //   $edit_study = Url::fromRoute('rep.back_url', [
+        //     'previousurl' => $safe_previousUrl_str,
+        //     'currenturl' => $edit_study_str,
+        //     'currentroute' => 'std.edit_study',
+        //   ]);
+        // }
 
         // Delete link.
-        if ($element->hasSIRManagerEmail === $useremail) {
-          $delete_study = Url::fromRoute('rep.delete_element', [
-            'elementtype' => 'study',
-            'elementuri' => $studyUriEncoded,
-            'currenturl' => $safe_previousUrl,
-          ]);
-        }
+        // if ($element->hasSIRManagerEmail === $useremail) {
+        //   $delete_study = Url::fromRoute('rep.delete_element', [
+        //     'elementtype' => 'study',
+        //     'elementuri' => $studyUriEncoded,
+        //     'currenturl' => $safe_previousUrl,
+        //   ]);
+        // }
       }
 
       // Card Footer: action buttons.
@@ -393,6 +281,7 @@ class Study {
             '#url' => $view_study,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+              'target' => '_new',
             ],
           ],
           'link3' => [

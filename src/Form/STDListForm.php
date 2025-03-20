@@ -101,10 +101,10 @@ class STDListForm extends FormBase {
     if (empty($elementtype)) {
       $elementtype = 'dsg';
     }
-    // Retrieve keyword, page and pagesize from query parameters.
-    $keyword = \Drupal::request()->query->get('keyword');
-    $page = \Drupal::request()->query->get('page') ? \Drupal::request()->query->get('page') : 1;
-    $pagesize = \Drupal::request()->query->get('pagesize') ? \Drupal::request()->query->get('pagesize') : 9;
+    // // Retrieve keyword, page and pagesize from query parameters.
+    $keyword = $keyword;
+    $page = $page ?? 1;
+    $pagesize = $pagesize ?? 9;
 
     // Get total number of elements.
     $this->setListSize(-1);
@@ -280,7 +280,7 @@ class STDListForm extends FormBase {
     ];
     $form['header']['title'] = [
       '#type' => 'item',
-      '#markup' => '<h3>Available <span style="color:DarkGreen;">' . $class_name . '</span></h3>',
+      '#markup' => t('<h3>Available <font style="color:DarkGreen;">' . $class_name . '</font></h3>'),
     ];
 
     $form['header']['view_toggle'] = [
@@ -366,7 +366,14 @@ class STDListForm extends FormBase {
       // Only add the "Load More" button if the total number of elements is greater than the pagesize.
       // dpm($current_pagesize);
       if ($this->list_size > $current_pagesize) {
-        $form['content']['load_more'] = [
+        $form['content']['load_more_wrapper'] = [
+          '#type' => 'container',
+          '#attributes' => [
+            'class' => ['d-flex', 'justify-content-center', 'mt-4', 'w-100'],
+          ],
+        ];
+
+        $form['content']['load_more_wrapper']['load_more'] = [
           '#type' => 'button',
           '#value' => $this->t('Load More'),
           '#ajax' => [
@@ -374,7 +381,11 @@ class STDListForm extends FormBase {
             'wrapper' => 'card-container-wrapper',
             'effect' => 'fade',
           ],
+          '#attributes' => [
+            'class' => ['btn', 'btn-primary', 'w-25'],
+          ],
         ];
+
       }
     }
 
