@@ -362,7 +362,7 @@ class JsonDataController extends ControllerBase
                 '"hascoTypeUri":"' . HASCO::DATAFILE . '",' .
                 '"label":"' . $filename . '",' .
                 '"filename":"' . $filename . '",' .
-                '"id":"' . $fileId[0] . '",' .
+                '"id":"' . $fileId . '",' .
                 '"fileStatus":"' . Constant::FILE_STATUS_UNPROCESSED . '",' .
                 '"hasSIRManagerEmail":"' . $useremail . '"}';
 

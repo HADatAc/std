@@ -404,18 +404,18 @@
             table += `<tr>
                 <td class="text-break">${file.filename}</td>
                 <td style="white-space: nowrap; text-align: center;">
-                  <a href="#" 
+                  <a href="#"
                       class="btn btn-sm btn-secondary view-media-button ${
                         isDocx ? "disabled-link" : ""
-                      }" 
-                      data-view-url="${file.view_url}" 
+                      }"
+                      data-view-url="${file.view_url}"
                       style="margin-right:5px"
                       ${isDocx ? 'aria-disabled="true" tabindex="-1"' : ""}>
                       <i class="fa-solid fa-eye"></i>
                   </a>
-                  <a href="#" 
-                      class="btn btn-sm btn-secondary download-url" 
-                      data-download-url="${file.download_url}" 
+                  <a href="#"
+                      class="btn btn-sm btn-secondary download-url"
+                      data-download-url="${file.download_url}"
                       style="margin-right:5px">
                       <i class="fa-solid fa-save"></i>
                   </a>
@@ -589,20 +589,20 @@
             table += `<tr>
                 <td class="text-break">${file.filename}</td>
                 <td style="text-align: center; white-space: nowrap;">
-                  <a href="#" 
-                     class="btn btn-sm btn-secondary view-media-button" 
-                     data-view-url="${file.view_url}" 
+                  <a href="#"
+                     class="btn btn-sm btn-secondary view-media-button"
+                     data-view-url="${file.view_url}"
                      style="margin-right:5px">
                      <i class="fa-solid fa-eye"></i>
                   </a>
-                  <a href="#" 
-                     class="btn btn-sm btn-secondary download-url" 
-                     data-download-url="${file.download_url}" 
+                  <a href="#"
+                     class="btn btn-sm btn-secondary download-url"
+                     data-download-url="${file.download_url}"
                      style="margin-right:5px">
                      <i class="fa-solid fa-save"></i>
                   </a>
-                  <a href="#" 
-                     class="btn btn-sm btn-danger delete-media-button" 
+                  <a href="#"
+                     class="btn btn-sm btn-danger delete-media-button"
                      data-url="${file.delete_url}">
                      <i class="fa-solid fa-trash-can"></i>
                   </a>
@@ -808,7 +808,7 @@
     });
   };
 
-  // // Função para renderizar a paginação
+  // Render Media Pagination
   const renderMediaPagination = function (pagination) {
     const media_pager = jQuery("#media-table-pager");
     media_pager.empty();
@@ -910,7 +910,7 @@
     },
   };
 
-  // Comportamento de drag-and-drop
+  // Drag and Drop Behaviour
   Drupal.behaviors.dragAndDropCard = {
     attach: function (context, settings) {
       once("drag-and-drop", "#drop-card", context).forEach(function () {

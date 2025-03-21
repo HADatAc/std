@@ -218,7 +218,7 @@ class Study {
         $safe_previousUrl_str = base64_encode($safe_previousUrl);
 
         // Management link.
-        if ($element->hasSIRManagerEmail === $useremail) {
+        // if ($element->hasSIRManagerEmail === $useremail) {
           $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
             'studyuri' => base64_encode($element->uri)
           ])->toString());
@@ -228,7 +228,7 @@ class Study {
             'currenturl' => $manage_elements_str,
             'currentroute' => 'std.manage_study_elements',
           ]);
-        }
+        // }
 
         // View link.
         $view_study_str = rtrim(strtr(base64_encode(Url::fromRoute('rep.describe_element', ['elementuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
