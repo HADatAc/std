@@ -408,6 +408,9 @@ class ManageStudyForm extends FormBase
               'studyuri' => base64_encode($this->getStudy()->uri),
             ])->toString(),
           ],
+          'user' => [
+            'logged' => ($this->getStudy()->hasSIRManagerEmail === $useremail ? TRUE:FALSE),
+          ],
         ],
       ],
     ];

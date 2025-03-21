@@ -112,8 +112,8 @@ class Study {
       ];
 
       // Get image URI: use provided image or fallback to a placeholder.
-      if (!empty($element->image)) {
-        $image_uri = $element->image;
+      if (!empty($element->hasImageUri)) {
+        $image_uri = $element->hasImageUri;
       }
       else {
         $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';

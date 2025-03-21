@@ -78,7 +78,7 @@ class JsonDataController extends ControllerBase
         return $this->list_size = $list_size;
     }
 
-    public function getTableData($studyuri = NULL, $elementtype = NULL, $mode = 'compact', $page = 1, $pagesize = 5)
+    public function getTableData($studyuri = NULL, $elementtype = NULL, $mode = 'compact', $page = 1, $pagesize = 5, $json = false)
     {
 
         // GET SESSION
@@ -101,8 +101,6 @@ class JsonDataController extends ControllerBase
             return new JsonResponse(['error' => 'Invalid parameters'], 400);
         }
 
-        // GET MANAGER EMAIL
-        $this->manager_email = \Drupal::currentUser()->getEmail();
         $uid = \Drupal::currentUser()->id();
         $user = \Drupal\user\Entity\User::load($uid);
         $this->manager_name = $user->name->value;
@@ -121,11 +119,17 @@ class JsonDataController extends ControllerBase
             $this->setStudy($study);
         }
 
+        // GET MANAGER EMAIL
+        if (!$json)
+          $this->manager_email = \Drupal::currentUser()->getEmail();
+        else
+          $this->manager_email = $this->getStudy()->hasSIRManagerEmail;
+
         // GET TOTAL NUMBER OF ELEMENTS AND TOTAL NUMBER OF PAGES
         $this->element_type = $elementtype;
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
-            $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+          $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
         }
 
         if (gettype($this->list_size) == 'string') {

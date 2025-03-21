@@ -26,6 +26,7 @@
     const elementtype = drupalSettings.std.elementtype;
     const mode = drupalSettings.std.mode;
     const pagesize = drupalSettings.std.pagesize;
+    const loggedUser = drupalSettings.user.logged;
 
     const url =
       drupalSettings.path.baseUrl +
@@ -33,14 +34,14 @@
         elementtype
       )}/${encodeURIComponent(mode)}/${encodeURIComponent(
         page
-      )}/${encodeURIComponent(pagesize)}`;
+      )}/${encodeURIComponent(pagesize)}/true`;
 
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
         if (response.headers && response.output) {
-          // Renderiza a tabela
+          // Render table
           let table = '<table class="table table-striped table-bordered">';
           table += "<thead><tr>";
           response.headers.forEach(function (header) {
@@ -89,7 +90,7 @@
     });
   };
 
-  // Função para renderizar a paginação
+  // Render Pagination Function
   const renderPagination = function (pagination, currentPage) {
     const $pager = $("#json-table-pager");
     $pager.empty(); // Limpar o pager existente
@@ -387,6 +388,7 @@
       `std/get-publication-files/${encodeURIComponent(
         studyuri
       )}/${page}/${pagesize}`;
+    const loggedUser = drupalSettings.user.logged;
 
     $.ajax({
       url: url,
@@ -401,10 +403,7 @@
             // Verificar se o arquivo tem a extensão `.docx`
             const isDocx = file.filename.endsWith(".docx");
 
-            table += `<tr>
-                <td class="text-break">${file.filename}</td>
-                <td style="white-space: nowrap; text-align: center;">
-                  <a href="#"
+            let fView = `<a href="#"
                       class="btn btn-sm btn-secondary view-media-button ${
                         isDocx ? "disabled-link" : ""
                       }"
@@ -412,19 +411,26 @@
                       style="margin-right:5px"
                       ${isDocx ? 'aria-disabled="true" tabindex="-1"' : ""}>
                       <i class="fa-solid fa-eye"></i>
-                  </a>
-                  <a href="#"
+                  </a>`;
+            let fDownload = `<a href="#"
                       class="btn btn-sm btn-secondary download-url"
                       data-download-url="${file.download_url}"
                       style="margin-right:5px">
                       <i class="fa-solid fa-save"></i>
-                  </a>
-                  <a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
+                  </a>`;
+            let fDelete = `<a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
                     file.delete_url
                   }">
                     <i class="fa-solid fa-trash-can"></i>
-                  </a>
-                </td>
+                  </a>`;
+
+            table += `<tr>
+                <td class="text-break">${file.filename}</td>
+                <td style="white-space: nowrap; text-align: center;">` +
+                fView +
+                fDownload +
+                (loggedUser ? fDelete : "") +
+                `</td>
               </tr>`;
           });
 
@@ -575,6 +581,7 @@
     const url =
       drupalSettings.path.baseUrl +
       `std/get-media-files/${encodeURIComponent(studyuri)}/${page}/${pagesize}`;
+    const loggedUser = drupalSettings.user.logged;
 
     $.ajax({
       url: url,
@@ -586,27 +593,32 @@
             '<thead><tr><th>Filename</th><th style="width: 1%; white-space: nowrap; text-align: center;">Operations</th></tr></thead><tbody>';
 
           response.files.forEach(function (file) {
-            table += `<tr>
-                <td class="text-break">${file.filename}</td>
-                <td style="text-align: center; white-space: nowrap;">
-                  <a href="#"
+
+            let fView = `<a href="#"
                      class="btn btn-sm btn-secondary view-media-button"
                      data-view-url="${file.view_url}"
                      style="margin-right:5px">
                      <i class="fa-solid fa-eye"></i>
-                  </a>
-                  <a href="#"
-                     class="btn btn-sm btn-secondary download-url"
-                     data-download-url="${file.download_url}"
-                     style="margin-right:5px">
-                     <i class="fa-solid fa-save"></i>
-                  </a>
-                  <a href="#"
+                  </a>`;
+            let fDownload = `<a href="#"
+                      class="btn btn-sm btn-secondary download-url"
+                      data-download-url="${file.download_url}"
+                      style="margin-right:5px">
+                      <i class="fa-solid fa-save"></i>
+                  </a>`;
+            let fDelete = `<a href="#"
                      class="btn btn-sm btn-danger delete-media-button"
                      data-url="${file.delete_url}">
                      <i class="fa-solid fa-trash-can"></i>
-                  </a>
-                </td>
+                  </a>`;
+
+            table += `<tr>
+                <td class="text-break">${file.filename}</td>
+                <td style="text-align: center; white-space: nowrap;">` +
+                fView +
+                fDownload +
+                (loggedUser ? fDelete : ``) +
+                `</td>
               </tr>`;
           });
 

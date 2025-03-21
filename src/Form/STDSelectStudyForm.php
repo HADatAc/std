@@ -335,8 +335,8 @@ class STDSelectStudyForm extends FormBase
       ];
 
       // Check if the element has an image or should use a placeholder
-      if (!empty($element->image)) {
-        $image_uri = $element->image;
+      if (!empty($element->hasImageUri)) {
+        $image_uri = $element->hasImageUri;
       } else {
         $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
       }
@@ -393,7 +393,7 @@ class STDSelectStudyForm extends FormBase
                 <br><strong>URI:</strong> ' . (is_string($uri) && !empty($uri) ? Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString() : '') . '
                 <br><strong>PI: </strong>' . $pi . '
                 <br><strong>Institution: </strong>' . $ins . '
-                <br><strong>Description: </strong>' . $short_desc . '... 
+                <br><strong>Description: </strong>' . $short_desc . '...
                 <a href="#" data-bs-toggle="modal" data-bs-target="#' . $modal_id . '">read more</a>
               </p>',
             ],
@@ -421,7 +421,7 @@ class STDSelectStudyForm extends FormBase
             </div>
           </div>',
       ];
-      
+
 
       // Build action links
       $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
