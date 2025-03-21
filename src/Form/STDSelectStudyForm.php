@@ -298,6 +298,8 @@ class STDSelectStudyForm extends FormBase
 
     $cards = [];
 
+    // dpm($items);
+
     // Process each entry to build cards
     foreach ($items as $index => $element) {
       // Ensure uri is a string; if it's an object, access the desired property or default to an empty string

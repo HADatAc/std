@@ -175,11 +175,14 @@ class Study {
             'text' => [
               '#markup' => '<p class="card-text">
                 <strong>Name:</strong> ' . $title . '
-                <br><strong>URI:</strong> ' . $link . '
-                <br><strong>PI:</strong> ' . $pi . '
-                <br><strong>Institution:</strong> ' . $ins . '
+                <br><strong>URI:</strong> ' . $link .
+                ($pi ? '
+                <br><strong>PI:</strong> ' . $pi : '') .
+                ($pi ? '
+                <br><strong>Institution:</strong> ' . $ins : '') .
+                ($short_desc ? '
                 <br><strong>Description:</strong> ' . $short_desc . '...
-                <a href="#" data-bs-toggle="modal" data-bs-target="#' . $modal_id . '">read more</a>
+                <a href="#" data-bs-toggle="modal" data-bs-target="#' . $modal_id . '">read more</a>' : '') . '
               </p>',
             ],
           ],
