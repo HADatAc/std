@@ -8,7 +8,7 @@ std.search:
     keyword: '_'
     language: '_'
     page: '1'
-    pagesize: '12'
+    pagesize: '9'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
@@ -317,7 +317,7 @@ std.load_more_data:
     _format: 'json'
 
 std.json_data:
-  path: '/std/json-data/{studyuri}/{elementtype}/{mode}/{page}/{pagesize}'
+  path: '/std/json-data/{studyuri}/{elementtype}/{mode}/{page}/{pagesize}/{json}'
   defaults:
     _controller: '\Drupal\std\Controller\JsonDataController::getTableData'
     _title: 'Table Data'
@@ -335,6 +335,8 @@ std.json_data:
         type: integer
       pagesize:
         type: integer
+      json:
+        type: string
 
 std.update_session_page:
   path: '/std/update-session-page'

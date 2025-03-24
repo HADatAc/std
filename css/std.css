@@ -11,4 +11,7 @@ th {
   display: inline-block;
 }
 
-
+button.view-active {
+  background-color: #d1e7dd!important;
+  color:#0f5132;
+}
