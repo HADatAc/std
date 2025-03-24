@@ -178,7 +178,7 @@ class Study {
                 <br><strong>URI:</strong> ' . $link .
                 ($pi ? '
                 <br><strong>PI:</strong> ' . $pi : '') .
-                ($pi ? '
+                ($ins ? '
                 <br><strong>Institution:</strong> ' . $ins : '') .
                 ($short_desc ? '
                 <br><strong>Description:</strong> ' . $short_desc . '...
