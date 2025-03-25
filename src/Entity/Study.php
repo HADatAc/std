@@ -152,7 +152,7 @@ class Study {
           'image_column' => [
             '#type' => 'container',
             '#attributes' => [
-              'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle'],
+              'class' => ['col-md-5', 'd-flex', 'justify-content-center', 'align-items-center'],
               'style' => 'margin-bottom:0!important;',
             ],
             'image' => [
@@ -160,7 +160,7 @@ class Study {
               '#uri' => $image_uri,
               '#alt' => t('Image for @name', ['@name' => $title]),
               '#attributes' => [
-                'class' => ['img-fluid', 'mb-0'],
+                'class' => ['img-fluid', 'mb-0', 'border', 'border-5', 'rounded', 'rounded-5'],
                 'style' => 'width: 70%',
               ],
             ],

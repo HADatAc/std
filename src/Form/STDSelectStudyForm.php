@@ -371,7 +371,7 @@ class STDSelectStudyForm extends FormBase
             '#type' => 'container',
             '#attributes' => [
               'style' => 'margin-bottom:0!important;',
-              'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle'],
+              'class' => ['col-md-5', 'd-flex', 'justify-content-center', 'align-items-center'],
             ],
             'image' => [
               '#theme' => 'image',
@@ -379,7 +379,7 @@ class STDSelectStudyForm extends FormBase
               '#alt' => $this->t('Image for @name', ['@name' => $title]),
               '#attributes' => [
                 'style' => 'width: 70%',
-                'class' => ['img-fluid', 'mb-0'],
+                'class' => ['img-fluid', 'mb-0', 'border', 'border-5', 'rounded', 'rounded-5'],
               ],
             ],
           ],
