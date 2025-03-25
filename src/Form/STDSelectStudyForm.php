@@ -378,7 +378,7 @@ class STDSelectStudyForm extends FormBase
               '#uri' => $image_uri,
               '#alt' => $this->t('Image for @name', ['@name' => $title]),
               '#attributes' => [
-                'style' => 'width: 70%',
+                // 'style' => 'width: 70%',
                 'class' => ['img-fluid', 'mb-0', 'border', 'border-5', 'rounded', 'rounded-5'],
               ],
             ],

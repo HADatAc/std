@@ -161,7 +161,7 @@ class Study {
               '#alt' => t('Image for @name', ['@name' => $title]),
               '#attributes' => [
                 'class' => ['img-fluid', 'mb-0', 'border', 'border-5', 'rounded', 'rounded-5'],
-                'style' => 'width: 70%',
+                // 'style' => 'width: 70%',
               ],
             ],
           ],
