@@ -621,9 +621,6 @@ class STDSelectStudyForm extends FormBase
         'currenturl' => $previousUrl,
       ]);
 
-      // Ações
-      $actions = [];
-
       // Link para Gerenciar Elemento
       $actions['manage_element'] = [
         '#type' => 'link',
