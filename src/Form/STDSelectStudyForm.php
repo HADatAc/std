@@ -370,11 +370,8 @@ class STDSelectStudyForm extends FormBase
       ];
 
       // Check if the element has an image or should use a placeholder
-      if (!empty($element->hasImageUri)) {
-        $image_uri = $element->hasImageUri;
-      } else {
-        $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
-      }
+      $placeholder_image = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
+      $image_src = Utils::getAPIImage($uri, $element->hasImageUri, $placeholder_image);
 
       // Safely create URI with Utils::namespaceUri if it's not empty
       if (!empty($uri)) {
@@ -408,7 +405,7 @@ class STDSelectStudyForm extends FormBase
             ],
             'image' => [
               '#theme' => 'image',
-              '#uri' => $image_uri,
+              '#uri' => $image_src,
               '#alt' => $this->t('Image for @name', ['@name' => $title]),
               '#attributes' => [
                 // 'style' => 'width: 70%',
@@ -852,7 +849,7 @@ class STDSelectStudyForm extends FormBase
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
 
-    if ($this->element_type == 'stydy') {
+    if ($this->element_type == 'study') {
       Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_study');
       $url = Url::fromRoute('std.add_study');
     } elseif ($this->element_type == 'processstem') {
