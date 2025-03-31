@@ -13,6 +13,8 @@ use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\Core\Ajax\AjaxResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Drupal\Component\Utility\Html;
+use Drupal\std\Entity\ProcessStem;
+use Drupal\std\Entity\Process;
 
 class STDSelectStudyForm extends FormBase
 {
@@ -94,6 +96,8 @@ class STDSelectStudyForm extends FormBase
     $form_state->set('page_size', $pagesize);
 
     // Determina os nomes de classe com base no tipo de elemento
+    $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
+
     $this->single_class_name = "";
     $this->plural_class_name = "";
     switch ($this->element_type) {
@@ -101,6 +105,24 @@ class STDSelectStudyForm extends FormBase
         $this->single_class_name = "Study";
         $this->plural_class_name = "Studies";
         break;
+      // PROCESS STEM
+      case "processstem":
+        $this->single_class_name = $preferred_process . " Stem";
+        $this->plural_class_name = $preferred_process . " Stems";
+        break;
+
+      // PROCESS
+      case "process":
+        $this->single_class_name = $preferred_process;
+        $this->plural_class_name =  $preferred_process . "s";
+        break;
+
+      // TASK
+      case "task":
+        $this->single_class_name = "Task";
+        $this->plural_class_name =  "Task's";
+        break;
+
       default:
         $this->single_class_name = "Object of Unknown Type";
         $this->plural_class_name = "Objects of Unknown Types";
@@ -160,6 +182,17 @@ class STDSelectStudyForm extends FormBase
         'class' => ['btn', 'btn-primary', 'add-element-button'],
       ],
     ];
+
+    if ($this->element_type == 'processstem') {
+      $form['derive_processstem'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('Derive New ' . $this->single_class_name),
+        '#name' => 'derive_processstem',
+        '#attributes' => [
+          'class' => ['btn', 'btn-primary', 'derive-button'],
+        ],
+      ];
+    }
 
     if ($view_type == 'card') {
 
@@ -517,6 +550,24 @@ class STDSelectStudyForm extends FormBase
         ],
       ];
 
+      // TODO add derive option to CARDS
+
+      if ($this->element_type == 'processstem') {
+        $card['card']['footer']['actions']['derive_processstem'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Derive New '),
+          '#name' => 'derive_processstemelements_' . md5($uri),
+          '#attributes' => [
+              'class' => ['btn', 'btn-secondary', 'btn-sm', 'derive-button', 'button', 'js-form-submit', 'form-submit'],
+              'data-drupal-selector' => 'edit-derive',
+              'id' => 'edit-derive--' . md5($uri),
+          ],
+          '#submit' => ['::deriveProcessStemSubmit'],
+          '#limit_validation_errors' => [],
+          '#element_uri' => $uri,
+        ];
+      }
+
       $cards[] = $card;
     }
 
@@ -555,6 +606,18 @@ class STDSelectStudyForm extends FormBase
       'name' => ['data' => $this->t('Name')],
       'actions' => ['data' => $this->t('Actions')],
     ];
+
+    // TODO
+    // case "processstem":
+    //   return ProcessStem::generateHeader();
+    // case "process":
+    //   return Process::generateHeader();
+
+    // // TODO OUTPUT
+    // case "processstem":
+    //   return ProcessStem::generateOutput($this->getList());
+    // case "process":
+    //   return Process::generateOutput($this->getList());
 
     // Constrói as linhas da tabela
     $rows = [];
@@ -767,19 +830,45 @@ class STDSelectStudyForm extends FormBase
 
     // Lida com ações com base no nome do botão
     if ($button_name === 'add_element') {
-      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_study');
-      $url = Url::fromRoute('std.add_study');
-      $form_state->setRedirectUrl($url);
+      $this->performAdd($form_state);
     } elseif ($button_name === 'back') {
       $url = Url::fromRoute('std.search');
       $form_state->setRedirectUrl($url);
     } elseif ($button_name === 'edit_element') {
       // Lida com a edição de elementos selecionados na visualização em tabela
       $this->handleEditSelected($form_state);
+    } elseif ($button_name === 'derive_processstem') {
+      $this->performDeriveProcessStem($form_state);
     } elseif ($button_name === 'delete_element') {
       // Lida com a exclusão de elementos selecionados na visualização em tabela
       $this->handleDeleteSelected($form_state);
     }
+  }
+
+  /**
+   * Perform the add action.
+   */
+  protected function performAdd(FormStateInterface $form_state) {
+    $uid = \Drupal::currentUser()->id();
+    $previousUrl = \Drupal::request()->getRequestUri();
+
+    if ($this->element_type == 'stydy') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_study');
+      $url = Url::fromRoute('std.add_study');
+    } elseif ($this->element_type == 'processstem') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_processstem');
+      $url = Url::fromRoute('std.add_processstem');
+      $url->setRouteParameter('sourceprocessstemuri', 'EMPTY');
+    } elseif ($this->element_type == 'process') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_process');
+      $url = Url::fromRoute('std.add_process');
+      $url->setRouteParameter('state', 'basic');
+    } elseif ($this->element_type == 'task') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_task');
+      $url = Url::fromRoute('std.add_task');
+      $url->setRouteParameter('state', 'basic');
+    }
+    $form_state->setRedirectUrl($url);
   }
 
   /**
@@ -789,14 +878,21 @@ class STDSelectStudyForm extends FormBase
   {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
-    $items_loaded = $form_state->get('items_loaded') ?? 0;
 
-    // Adiciona parâmetro com o número de itens carregados
-    Utils::trackingStoreUrls($uid, $previousUrl, 'std.edit_study');
-    $url = Url::fromRoute('std.edit_study', [
-      'studyuri' => base64_encode($uri),
-      'items_loaded' => $items_loaded,
-    ]);
+    if ($this->element_type == 'study') {
+      $items_loaded = $form_state->get('items_loaded') ?? 0;
+      $url = Url::fromRoute('std.edit_study', [
+        'studyuri' => base64_encode($uri),
+        'items_loaded' => $items_loaded,
+      ]);
+    } elseif ($this->element_type == 'processstem') {
+      $url = Url::fromRoute('sir.edit_processstem', ['processstemuri' => base64_encode($uri)]);
+    } elseif ($this->element_type == 'process') {
+      $url = Url::fromRoute('sir.edit_process', ['state' => 'init', 'processuri' => base64_encode($uri)]);
+    } else {
+      \Drupal::messenger()->addError($this->t('No edit route found for this element type.'));
+      return;
+    }
 
     // Se a chamada for via AJAX, redireciona diretamente
     if (\Drupal::request()->isXmlHttpRequest()) {
@@ -805,6 +901,10 @@ class STDSelectStudyForm extends FormBase
       $response->addCommand(new RedirectCommand($url));
       return $response;
     }
+
+    // Definir redirecionamento explícito
+    Utils::trackingStoreUrls($uid,$previousUrl,$url->toString());
+    $form_state->setRedirectUrl($url);
 
     $form_state->setRedirectUrl($url);
   }
@@ -868,6 +968,28 @@ class STDSelectStudyForm extends FormBase
     } else {
       $this->performDelete($selected_uris, $form_state);
     }
+  }
+
+  /**
+   * Submit handler for deriving a process stem in card view.
+   */
+  public function deriveProcessStemSubmit(array &$form, FormStateInterface $form_state) {
+    $triggering_element = $form_state->getTriggeringElement();
+    $uri = $triggering_element['#element_uri'];
+    $this->performDeriveProcessStem($uri, $form_state);
+  }
+
+  /**
+   * Perform derive process stem action.
+   */
+  protected function performDeriveProcessStem(FormStateInterface $form_state) {
+    $uid = \Drupal::currentUser()->id();
+    $previousUrl = \Drupal::request()->getRequestUri();
+    Utils::trackingStoreUrls($uid, $previousUrl, 'sir.add_processstem');
+    $url = Url::fromRoute('sir.add_processstem');
+    $url->setRouteParameter('sourceprocessstemuri', 'DERIVED');
+    // $url->setRouteParameter('containersloturi', 'DERIVED');
+    $form_state->setRedirectUrl($url);
   }
 
   /**

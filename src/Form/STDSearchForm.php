@@ -108,6 +108,8 @@ class STDSearchForm extends FormBase {
         'virtualcolumn' => $this->t('Virtual Columns'),
         'studyobjectcollection' => $this->t('Study Object Collections'),
         'studyobject' => $this->t('Study Objects'),
+        'processstem' => $this->t('Process Stems'),
+        'process' => $this->t('Processes'),
       ],
       '#default_value' => $this->getElementType(),
       '#ajax' => [
