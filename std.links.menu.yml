@@ -134,7 +134,7 @@ std.manage_studies:
 std.manage_processstems :
   title: Manage Process Stems
   description: Manage Process Stems
-  route_name: std.select_element
+  route_name: std.select_study
   route_parameters:
     elementtype: 'processstem'
     page: '1'
@@ -149,7 +149,7 @@ std.manage_processstems :
 std.manage_process :
   title: Manage Processes
   description: Manage Processes
-  route_name: std.select_element
+  route_name: std.select_study
   route_parameters:
     elementtype: 'process'
     page: '1'
