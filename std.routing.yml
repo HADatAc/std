@@ -445,3 +445,138 @@ std.download_file:
     studyUri: '.+'
     type: '.+'
 
+# Process CRUD options
+
+std.manage_process:
+  path: 'std/manage/process'
+  defaults:
+    _title: 'Manage Process'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.add_process:
+  path: 'std/manage/addprocess/{state}'
+  defaults:
+    _form: '\Drupal\std\Form\AddProcessForm'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.edit_process:
+  path: 'std/manage/editprocess/{state}/{processuri}'
+  defaults:
+    _form: '\Drupal\std\Form\EditProcessForm'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.process_instrument_autocomplete:
+  path: '/std/manage/instrument/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiInstrumentController::handleAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
+std.load_detectors:
+  path: '/std/load-detectors'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiProcessController::loadDetectors'
+    _title: 'Load Detectors'
+  requirements:
+    _permission: 'access content'
+  methods: [GET, POST]
+
+std.process_task_autocomplete:
+  path: '/std/manage/process/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiProcessController::handleTasksAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
+# Process Stem CRUD options
+
+std.add_processstem:
+  path: 'std/manage/addprocessstem/{sourceprocessstemuri}'
+  defaults:
+    _form: '\Drupal\std\Form\AddProcessStemForm'
+    _title: 'Add Process Stem'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.edit_processstem:
+  path: 'std/manage/editprocessstem/{processstemuri}'
+  defaults:
+    _form: '\Drupal\std\Form\EditProcessStemForm'
+    _title: 'Edit Process Stem'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+# Task CRUD options
+
+std.manage_task:
+  path: 'std/manage/task'
+  defaults:
+    _title: 'Manage Task'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.add_task:
+  path: 'std/manage/addtask/{state}'
+  defaults:
+    _form: '\Drupal\std\Form\AddTaskForm'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.edit_task:
+  path: 'std/manage/edittasl/{state}/{taskuri}'
+  defaults:
+    _form: '\Drupal\std\Form\EditTaskForm'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.task_autocomplete:
+  path: '/std/manage/task/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiTaskController::handleTasksAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
+
+# REVIEW OPTIONS
+# Process Stem
+
+std.review_processstem:
+  path: 'std/manage/reviewprocessstem/{processstemuri}'
+  defaults:
+    _form: '\Drupal\std\Form\Review\ReviewProcessStemForm'
+    _title: 'Review Process Stem'
+  requirements:
+    # _permission: 'access reviewer menu'
+    _role: 'content_editor'
+  options:
+    no_cache: 'TRUE'

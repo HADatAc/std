@@ -16,6 +16,8 @@ use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\ScrollCommand;
+use Drupal\std\Entity\ProcessStem;
+use Drupal\std\Entity\Process;
 
 /**
  * Provides a STD List Form with table and card view logic.
@@ -259,6 +261,20 @@ class STDListForm extends FormBase {
         else if ($view_type == 'cards') {
           $output = VirtualColumn::generateOutputCards($this->getList());
         }
+        break;
+
+      // PROCESS STEM
+      case "processstem":
+        $class_name = "Process Stems";
+        $header = ProcessStem::generateHeader();
+        $output = ProcessStem::generateOutput($this->getList());
+        break;
+
+      // PROCESS
+      case "process":
+        $class_name = "Processes";
+        $header = Process::generateHeader();
+        $output = Process::generateOutput($this->getList());
         break;
 
       default:

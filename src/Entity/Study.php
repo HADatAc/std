@@ -20,6 +20,7 @@ class Study {
       'element_n_roles' => t('# Roles'),
       'element_n_vcs' => t('# Virt.Columns'),
       'element_n_socs' => t('# SOCs'),
+      'element_actions' => t('Actions'),
     ];
 
   }
@@ -47,6 +48,110 @@ class Study {
       if ($element->title != NULL) {
         $title = $element->title;
       }
+
+      // Ações
+      $actions = [];
+
+      // Constrói URLs para os links
+      $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
+      $studyUriEncoded = base64_encode($element->uri);
+
+      // Link para Gerenciar Elementos
+      $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
+        'studyuri' => $studyUriEncoded,
+      ])->toString());
+
+      $manage_elements = Url::fromRoute('rep.back_url', [
+        'previousurl' => $previousUrl,
+        'currenturl' => $manage_elements_str,
+        'currentroute' => 'std.manage_study_elements',
+      ]);
+
+      // Link para Visualizar
+      $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
+        'elementuri' => $studyUriEncoded,
+      ])->toString());
+
+      $view_study = Url::fromRoute('rep.back_url', [
+        'previousurl' => $previousUrl,
+        'currenturl' => $view_study_str,
+        'currentroute' => 'rep.describe_element',
+      ]);
+
+      // Link para Editar
+      $edit_study_str = base64_encode(Url::fromRoute('std.edit_study', [
+        'studyuri' => $studyUriEncoded,
+      ])->toString());
+
+      $edit_study = Url::fromRoute('rep.back_url', [
+        'previousurl' => $previousUrl,
+        'currenturl' => $edit_study_str,
+        'currentroute' => 'std.edit_study',
+      ]);
+
+      // Link para Excluir
+      $delete_study = Url::fromRoute('rep.delete_element', [
+        'elementtype' => 'study',
+        'elementuri' => $studyUriEncoded,
+        'currenturl' => $previousUrl,
+      ]);
+
+      // Link para Gerenciar Elemento
+      $actions['manage_element'] = [
+        '#type' => 'link',
+        '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
+        '#url' => $manage_elements,
+        '#attributes' => [
+          'class' => ['btn', 'btn-primary', 'btn-sm'],
+        ],
+      ];
+
+      // Link para Visualizar
+      $actions['view'] = [
+        '#type' => 'link',
+        '#title' => Markup::create('<i class="fa-solid fa-eye"></i> View'),
+        '#url' => $view_study,
+        '#attributes' => [
+          'class' => ['btn', 'btn-primary', 'btn-sm', 'mx-1'],
+        ],
+      ];
+
+      // Link para Editar
+      // $actions['edit'] = [
+      //   '#type' => 'link',
+      //   '#title' => Markup::create('<i class="fa-solid fa-pen-to-square"></i> Edit'),
+      //   '#url' => $edit_study,
+      //   '#attributes' => [
+      //     'class' => ['btn', 'btn-warning', 'btn-sm'],
+      //   ],
+      // ];
+
+      // Link para Excluir
+      // $actions['delete'] = [
+      //   '#type' => 'link',
+      //   '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
+      //   '#url' => $delete_study,
+      //   '#attributes' => [
+      //     'class' => ['btn', 'btn-danger', 'btn-sm', 'delete-button', 'mx-1'],
+      //     'onclick' => 'if(!confirm("Are you sure you want to delete this item?")){return false;}',
+      //   ],
+      // ];
+
+      $actions_render_array = [
+        '#type' => 'container',
+        // Classes Bootstrap para exibir botões lado a lado, por exemplo:
+        '#attributes' => [
+          'class' => ['d-flex', 'flex-wrap', 'gap-1'],
+        ],
+        // Adicione cada link como sub-elemento:
+        'manage_element' => $actions['manage_element'],
+        'view' => $actions['view'],
+        'edit' => $actions['edit'],
+        'delete' => $actions['delete'],
+      ];
+
+      $rendered_actions = \Drupal::service('renderer')->renderPlain($actions_render_array);
+
       $root_url = \Drupal::request()->getBaseUrl();
       $encodedUri = rawurlencode(rawurlencode($element->uri));
       $output[$element->uri] = [
@@ -56,7 +161,10 @@ class Study {
         'element_n_roles' => $element->totalStudyRoles,
         'element_n_vcs' => $element->totalVirtualColumns,
         'element_n_socs' => $element->totalStudyObjectCollections,
-        ];
+        'element_actions' => [
+          'data' => Markup::create($rendered_actions),
+        ],
+      ];
     }
     return $output;
   }
@@ -152,7 +260,7 @@ class Study {
           'image_column' => [
             '#type' => 'container',
             '#attributes' => [
-              'class' => ['col-md-5', 'text-center', 'mb-0', 'align-middle'],
+              'class' => ['col-md-5', 'd-flex', 'justify-content-center', 'align-items-center'],
               'style' => 'margin-bottom:0!important;',
             ],
             'image' => [
@@ -160,8 +268,8 @@ class Study {
               '#uri' => $image_uri,
               '#alt' => t('Image for @name', ['@name' => $title]),
               '#attributes' => [
-                'class' => ['img-fluid', 'mb-0'],
-                'style' => 'width: 70%',
+                'class' => ['img-fluid', 'mb-0', 'border', 'border-5', 'rounded', 'rounded-5'],
+                // 'style' => 'width: 70%',
               ],
             ],
           ],
@@ -178,7 +286,7 @@ class Study {
                 <br><strong>URI:</strong> ' . $link .
                 ($pi ? '
                 <br><strong>PI:</strong> ' . $pi : '') .
-                ($pi ? '
+                ($ins ? '
                 <br><strong>Institution:</strong> ' . $ins : '') .
                 ($short_desc ? '
                 <br><strong>Description:</strong> ' . $short_desc . '...

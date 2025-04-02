@@ -6,3 +6,8 @@ services:
       - { name: access_check, applies_to: _custom_access_check }
   std_operations.ingest_operation:
     class: Drupal\std\IngestOperation
+  std.route_subscriber:
+    class: Drupal\std\EventSubscriber\RouteSubscriber
+    arguments: ['@config.factory']
+    tags:
+        - { name: event_subscriber }

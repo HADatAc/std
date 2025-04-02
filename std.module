@@ -38,3 +38,22 @@ function std_preprocess_block(&$variables) {
   // Add the rep/rep_js_css library.
   $attachments['#attached']['library'][] = 'rep/rep_js_css';
 }
+
+/**
+ * Implements hook_menu_links_discovered_alter().
+ */
+function std_menu_links_discovered_alter(&$links) {
+
+  //\Drupal::logger('std_notices')->notice('menu_links_discovered_alter function called.');
+
+  $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
+
+  if (isset($links['std.manage_process'])) {
+    $links['std.manage_process']['title'] = 'Manage ' . $preferred_process;
+    $links['std.manage_process']['weight'] = 22;
+  }
+  if (isset($links['std.manage_processstems'])) {
+    $links['std.manage_processstems']['title'] = 'Manage ' . $preferred_process . ' Stems';
+    $links['std.manage_processstems']['weight'] = 23;
+  }
+}
