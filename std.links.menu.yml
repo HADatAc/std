@@ -28,7 +28,7 @@ std.divider1:
 #    attributes:
 #      class:
 #        - 'menu-divider'
-  route_name: '<none>'
+  route_name: '<nolink>'
   requirements:
    _permission: 'access content'
    _role: 'authenticated'
@@ -111,7 +111,7 @@ std.divider1:
 # #    attributes:
 # #      class:
 # #        - 'menu-divider'
-#   route_name: '<none>'
+#   route_name: '<nolink>'
 #   requirements:
 #    _permission: 'access content'
 #    _role: 'authenticated'
