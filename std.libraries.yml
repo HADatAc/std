@@ -15,11 +15,7 @@ json_table:
     js/json_table.js: {}
   dependencies:
     - core/jquery
-pdfjs:
-  js:
-    js/pdf.min.js: {}
-  dependencies:
-    - core/jquery
+
 std_process:
   version: 1.x
   js:
