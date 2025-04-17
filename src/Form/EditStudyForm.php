@@ -397,24 +397,19 @@ class EditStudyForm extends FormBase {
 
   function backUrl($back_url = NULL) {
     if ($back_url) {
-      // Se uma URL específica for fornecida, usa essa para o redirecionamento
       $response = new RedirectResponse($back_url);
       $response->send();
       return;
     } else {
-      // Se não houver uma URL de retorno específica, usa a URL da página inicial com a página e o tamanho de página
       $uid = \Drupal::currentUser()->id();
       $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_study');
 
-      // Verifica se a URL retornada é uma URL de /load-more-data, em caso positivo, gera a URL correta da listagem
       if ($previousUrl && strpos($previousUrl, '/load-more-data') !== false) {
-        // Extrair o número da página da query string da URL
         parse_str(parse_url($previousUrl, PHP_URL_QUERY), $params);
         $page = isset($params['page']) ? $params['page'] : 1;
         $element_type = isset($params['element_type']) ? $params['element_type'] : 'study';
-        $pagesize = 9; // Utilize o valor padrão do tamanho da página
+        $pagesize = 9;
 
-        // Gera a URL correta da listagem usando a rota "std.select_study"
         $previousUrl = Url::fromRoute('std.select_study', [
           'elementtype' => $element_type,
           'page' => $page,
@@ -427,7 +422,6 @@ class EditStudyForm extends FormBase {
         $response->send();
         return;
       } else {
-        // Rota padrão caso nenhuma URL seja encontrada
         $default_url = Url::fromRoute('std.select_study', [
           'elementtype' => 'study',
           'page' => 1,

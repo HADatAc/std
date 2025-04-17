@@ -468,7 +468,7 @@ std.add_process:
     no_cache: 'TRUE'
 
 std.edit_process:
-  path: 'std/manage/editprocess/{state}/{processuri}'
+  path: 'std/manage/editprocess/{processuri}'
   defaults:
     _form: '\Drupal\std\Form\EditProcessForm'
   requirements:
@@ -549,7 +549,7 @@ std.add_task:
     no_cache: 'TRUE'
 
 std.edit_task:
-  path: 'std/manage/edittasl/{state}/{taskuri}'
+  path: 'std/manage/edittask/{state}/{taskuri}'
   defaults:
     _form: '\Drupal\std\Form\EditTaskForm'
   requirements:

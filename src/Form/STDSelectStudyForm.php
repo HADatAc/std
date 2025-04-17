@@ -65,37 +65,30 @@ class STDSelectStudyForm extends FormBase
 
     $form['#attached']['drupalSettings']['std_select_study_form']['ajaxUrl'] = Url::fromRoute('std.load_more_data')->toString();
 
-    $this->element_type = $elementtype ?? 'study'; // Valor padrão
+    $this->element_type = $elementtype ?? 'study';
     $form['#attached']['drupalSettings']['std_select_study_form']['elementType'] = $this->element_type;
 
 
-    // OBTÉM O EMAIL DO GERENTE
     $this->manager_email = \Drupal::currentUser()->getEmail();
     $uid = \Drupal::currentUser()->id();
     $user = \Drupal\user\Entity\User::load($uid);
     $this->manager_name = $user->getDisplayName();
 
-    // OBTÉM O TIPO DE ELEMENTO
     $this->element_type = $elementtype;
 
-    // Tamanho de página padrão se não for fornecido
     if ($pagesize === NULL) {
-      $pagesize = 9; // Carrega 9 itens por vez
+      $pagesize = 9;
     }
 
-    // Recupera o parâmetro 'items_loaded' da URL, se existir
     $items_loaded = \Drupal::request()->query->get('items_loaded') ?? 0;
     $form_state->set('items_loaded', $items_loaded);
 
-    // Recupera ou define o tipo de visualização padrão
     $session = \Drupal::request()->getSession();
     $view_type = $session->get('std_select_study_view_type', 'card');
     $form_state->set('view_type', $view_type);
 
-    // Armazena o tamanho da página no estado do formulário para uso em callbacks AJAX
     $form_state->set('page_size', $pagesize);
 
-    // Determina os nomes de classe com base no tipo de elemento
     $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
 
     $this->single_class_name = "";
@@ -385,6 +378,25 @@ class STDSelectStudyForm extends FormBase
       // Gerar o modal para mostrar a descrição completa
       $modal_id = Html::getId($title . '-description-modal');
 
+      // Check if URI is valid
+      if (is_string($uri) && !empty($uri)) {
+        // Create the URL object
+        $url = Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri));
+
+        // Add the target attribute to the link render array
+        $link_render_array = Link::fromTextAndUrl($uri, $url)
+          ->toRenderable();
+
+        $link_render_array['#attributes']['target'] = '_new'; // or _blank
+
+        // Render the link
+        $rendered_link = \Drupal::service('renderer')->renderPlain($link_render_array);
+
+        $outputUri = $rendered_link;
+      } else {
+        $outputUri = '';
+      }
+
       $card['card']['body'] = [
         '#type' => 'container',
         '#attributes' => [
@@ -422,7 +434,7 @@ class STDSelectStudyForm extends FormBase
             'text' => [
               '#markup' => '<p class="card-text">
                 <strong>Name:</strong> ' . $title . '
-                <br><strong>URI:</strong> ' . (is_string($uri) && !empty($uri) ? Link::fromTextAndUrl($uri, Url::fromUserInput(REPGUI::DESCRIBE_PAGE . base64_encode($uri)))->toString() : '') . '
+                <br><strong>URI:</strong> ' . $outputUri . '
                 <br><strong>PI: </strong>' . $pi . '
                 <br><strong>Institution: </strong>' . $ins . '
                 <br><strong>Description: </strong>' . $short_desc . '...
@@ -460,11 +472,11 @@ class STDSelectStudyForm extends FormBase
 
       if ($element->uri != NULL && $element->uri != "") {
         // Change URI
-        $studyUriEncoded = base64_encode($element->uri);
+        $elementUriEncoded = base64_encode($element->uri);
 
         // Management link
         $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
-          'studyuri' => $studyUriEncoded,
+          'studyuri' => $elementUriEncoded,
         ])->toString());
 
         $manage_elements = Url::fromRoute('rep.back_url', [
@@ -474,63 +486,66 @@ class STDSelectStudyForm extends FormBase
         ]);
 
         // View Link
-        $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
-          'elementuri' => $studyUriEncoded,
+        $view_element_str = base64_encode(Url::fromRoute('rep.describe_element', [
+          'elementuri' => $elementUriEncoded,
         ])->toString());
 
-        $view_study = Url::fromRoute('rep.back_url', [
+        $view_element = Url::fromRoute('rep.back_url', [
           'previousurl' => $previousUrl,
-          'currenturl' => $view_study_str,
+          'currenturl' => $view_element_str,
           'currentroute' => 'rep.describe_element',
         ]);
 
         // Edit link
-        $edit_study_str = base64_encode(Url::fromRoute('std.edit_study', [
-          'studyuri' => $studyUriEncoded,
+        $edit_element_str = base64_encode(Url::fromRoute('std.edit_'.$this->element_type, [
+          $this->element_type.'uri' => $elementUriEncoded,
         ])->toString());
 
-        $edit_study = Url::fromRoute('rep.back_url', [
+        $edit_element = Url::fromRoute('rep.back_url', [
           'previousurl' => $previousUrl,
-          'currenturl' => $edit_study_str,
-          'currentroute' => 'std.edit_study',
+          'currenturl' => $edit_element_str,
+          'currentroute' => 'std.edit_'.$this->element_type,
         ]);
 
         // Delete link
-        $delete_study = Url::fromRoute('rep.delete_element', [
-          'elementtype' => 'study',
-          'elementuri' => $studyUriEncoded,
+        $delete_element = Url::fromRoute('rep.delete_element', [
+          'elementtype' => $this->element_type,
+          'elementuri' => $elementUriEncoded,
           'currenturl' => $previousUrl,
         ]);
       }
 
       // Card footer
-      $card['card']['footer'] = [
-        '#type' => 'container',
-        '#attributes' => [
-          'style' => 'margin-bottom:0!important;',
-          'class' => ['card-footer', 'text-right', 'd-flex', 'justify-content-end'],
-        ],
-        'actions' => [
+      // Build the actions array with conditional entry
+      $actions = array_merge(
+        // Conditionally add 'link1' only if $elementtype === 'study'
+        ($this->element_type === 'study') ? [
           'link1' => [
             '#type' => 'link',
             '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
             '#url' => $manage_elements,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+              'target' => '_new',
+              'rel' => 'noopener noreferrer',
             ],
-          ],
+          ]
+        ] : [],
+        // Always include the other links
+        [
           'link2' => [
             '#type' => 'link',
             '#title' => Markup::create('<i class="fa-solid fa-eye"></i> View'),
-            '#url' => $view_study,
+            '#url' => $view_element,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+              'target' => '_new',
             ],
           ],
           'link3' => [
             '#type' => 'link',
             '#title' => Markup::create('<i class="fa-solid fa-pen-to-square"></i> Edit'),
-            '#url' => $edit_study,
+            '#url' => $edit_element,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
             ],
@@ -538,14 +553,25 @@ class STDSelectStudyForm extends FormBase
           'link4' => [
             '#type' => 'link',
             '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
-            '#url' => $delete_study,
+            '#url' => $delete_element,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-danger', 'mx-1'],
               'onclick' => 'if(!confirm("Really Delete?")){return false;}',
             ],
           ],
+        ]
+      );
+
+      // Then assign to the footer
+      $card['card']['footer'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'style' => 'margin-bottom:0!important;',
+          'class' => ['card-footer', 'text-right', 'd-flex', 'justify-content-end'],
         ],
+        'actions' => $actions,
       ];
+
 
       // TODO add derive option to CARDS
 
@@ -639,11 +665,11 @@ class STDSelectStudyForm extends FormBase
 
       // Constrói URLs para os links
       $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
-      $studyUriEncoded = base64_encode($element->uri);
+      $elementUriEncoded = base64_encode($element->uri);
 
       // Link para Gerenciar Elementos
       $manage_elements_str = base64_encode(Url::fromRoute('std.manage_study_elements', [
-        'studyuri' => $studyUriEncoded,
+        'studyuri' => $elementUriEncoded,
       ])->toString());
 
       $manage_elements = Url::fromRoute('rep.back_url', [
@@ -653,31 +679,31 @@ class STDSelectStudyForm extends FormBase
       ]);
 
       // Link para Visualizar
-      $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
-        'elementuri' => $studyUriEncoded,
+      $view_element_str = base64_encode(Url::fromRoute('rep.describe_element', [
+        'elementuri' => $elementUriEncoded,
       ])->toString());
 
-      $view_study = Url::fromRoute('rep.back_url', [
+      $view_element = Url::fromRoute('rep.back_url', [
         'previousurl' => $previousUrl,
-        'currenturl' => $view_study_str,
+        'currenturl' => $view_element_str,
         'currentroute' => 'rep.describe_element',
       ]);
 
       // Link para Editar
-      $edit_study_str = base64_encode(Url::fromRoute('std.edit_study', [
-        'studyuri' => $studyUriEncoded,
+      $edit_element_str = base64_encode(Url::fromRoute('std.edit_'.$this->element_type, [
+        $this->element_type.'uri' => $elementUriEncoded,
       ])->toString());
 
       $edit_study = Url::fromRoute('rep.back_url', [
         'previousurl' => $previousUrl,
-        'currenturl' => $edit_study_str,
-        'currentroute' => 'std.edit_study',
+        'currenturl' => $edit_element_str,
+        'currentroute' => 'std.edit_'.$this->element_type,
       ]);
 
       // Link para Excluir
-      $delete_study = Url::fromRoute('rep.delete_element', [
-        'elementtype' => 'study',
-        'elementuri' => $studyUriEncoded,
+      $delete_element = Url::fromRoute('rep.delete_element', [
+        'elementtype' => $this->element_type,
+        'elementuri' => $elementUriEncoded,
         'currenturl' => $previousUrl,
       ]);
 
@@ -695,7 +721,7 @@ class STDSelectStudyForm extends FormBase
       $actions['view'] = [
         '#type' => 'link',
         '#title' => Markup::create('<i class="fa-solid fa-eye"></i> View'),
-        '#url' => $view_study,
+        '#url' => $view_element,
         '#attributes' => [
           'class' => ['btn', 'btn-secondary', 'btn-sm', 'mx-1'],
         ],
@@ -715,7 +741,7 @@ class STDSelectStudyForm extends FormBase
       $actions['delete'] = [
         '#type' => 'link',
         '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
-        '#url' => $delete_study,
+        '#url' => $delete_element,
         '#attributes' => [
           'class' => ['btn', 'btn-danger', 'btn-sm', 'delete-button', 'mx-1'],
           'onclick' => 'if(!confirm("Are you sure you want to delete this item?")){return false;}',

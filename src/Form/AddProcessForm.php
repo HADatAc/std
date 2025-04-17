@@ -11,8 +11,19 @@ use Drupal\rep\Constant;
 use Drupal\rep\Utils;
 use Drupal\rep\Entity\Tables;
 use Drupal\rep\Vocabulary\VSTOI;
+use Drupal\file\Entity\File;
 
 class AddProcessForm extends FormBase {
+
+  protected $processUri;
+
+  public function setProcessUri() {
+    $this->processUri = Utils::uriGen('process');
+  }
+
+  public function getProcessUri() {
+    return $this->processUri;
+  }
 
   /**
    * {@inheritdoc}
@@ -25,6 +36,17 @@ class AddProcessForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
+
+    // Check if the process URI already exists in the form state.
+    // If not, generate a new URI and store it in the form state.
+    if (!$form_state->has('process_uri')) {
+      $this->setProcessUri();
+      $form_state->set('process_uri', $this->getProcessUri());
+    }
+    else {
+      // Retrieve the persisted URI from form state.
+      $this->processUri = $form_state->get('process_uri');
+    }
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
@@ -104,14 +126,105 @@ class AddProcessForm extends FormBase {
       '#title' => $this->t('Top Task'),
       '#autocomplete_route_name' => 'std.process_task_autocomplete',
     ];
-    $form['process_webdocument'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Web Document'),
+    // Add a hidden field to persist the process URI between form rebuilds.
+    $form['process_uri'] = [
+      '#type' => 'hidden',
+      '#value' => $this->processUri,
+    ];
+
+    // Add a select box to choose between URL and Upload.
+    $form['process_image_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Image Type'),
+      '#options' => [
+        '' => $this->t('Select Image Type'),
+        'url' => $this->t('URL'),
+        'upload' => $this->t('Upload'),
+      ],
       '#default_value' => '',
+    ];
+
+    // The textfield for entering a URL.
+    // It is only visible when the select box value is 'url'.
+    $form['process_image_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Image'),
       '#attributes' => [
         'placeholder' => 'http://',
-      ]
+      ],
+      '#states' => [
+        'visible' => [
+          ':input[name="process_image_type"]' => ['value' => 'url'],
+        ],
+      ],
     ];
+
+    // Because File Upload Path (use the persisted process URI for file uploads)
+    $modUri = (explode(":/", utils::namespaceUri($this->processUri)))[1];
+    $form['process_image_upload_wrapper'] = [
+      '#type' => 'container',
+      '#states' => [
+        'visible' => [
+          ':input[name="process_image_type"]' => ['value' => 'upload'],
+        ],
+      ],
+    ];
+    $form['process_image_upload_wrapper']['process_image_upload'] = [
+      '#type' => 'managed_file',
+      '#title' => $this->t('Upload Image'),
+      '#upload_location' => 'private://resources/' . $modUri . '/image',
+      '#upload_validators' => [
+        'file_validate_extensions' => ['png jpg jpeg'], // Adjust allowed extensions as needed.
+        'file_validate_size' => [2097152],
+      ],
+    ];
+
+    // Add a select box to choose between URL and Upload.
+    $form['process_webdocument_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Web Document Type'),
+      '#options' => [
+        '' => $this->t('Select Document Type'),
+        'url' => $this->t('URL'),
+        'upload' => $this->t('Upload'),
+      ],
+      '#default_value' => '',
+    ];
+
+    // The textfield for entering a URL.
+    // It is only visible when the select box value is 'url'.
+    $form['process_webdocument_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Web Document'),
+      '#attributes' => [
+        'placeholder' => 'http://',
+      ],
+      '#states' => [
+        'visible' => [
+          ':input[name="process_webdocument_type"]' => ['value' => 'url'],
+        ],
+      ],
+    ];
+
+    // Because File Upload Path (use the persisted process URI for file uploads)
+    $form['process_webdocument_upload_wrapper'] = [
+      '#type' => 'container',
+      '#states' => [
+        'visible' => [
+          ':input[name="process_webdocument_type"]' => ['value' => 'upload'],
+        ],
+      ],
+    ];
+    $form['process_webdocument_upload_wrapper']['process_webdocument_upload'] = [
+      '#type' => 'managed_file',
+      '#title' => $this->t('Upload Document'),
+      '#upload_location' => 'private://resources/' . $modUri . '/webdoc',
+      '#upload_validators' => [
+        'file_validate_extensions' => ['pdf doc docx txt xls xlsx'], // Adjust allowed extensions as needed.
+        'file_validate_size' => [2097152],
+      ],
+    ];
+
     $form['save_submit'] = [
       '#type' => 'submit',
       '#value' => $this->t('Save'),
@@ -142,7 +255,7 @@ class AddProcessForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
-    dpm($button_name) ;
+    // dpm($button_name) ;
     if ($button_name !== "back") {
       if(empty($form_state->getValue('process_processstem'))) {
         $form_state->setErrorByName('process_processstem', $this->t('Please select a valid Process Stem'));
@@ -174,8 +287,65 @@ class AddProcessForm extends FormBase {
 
     try{
       $useremail = \Drupal::currentUser()->getEmail();
+
+      // $newProcessUri = Utils::uriGen('process');
+      $newProcessUri = $form_state->getValue('process_uri');
+
+      // Determine the chosen image type.
+      $image_type = $form_state->getValue('process_image_type');
+      $process_image = '';
+
+      // If user selected URL, use the textfield value.
+      if ($image_type === 'url') {
+        $process_image = $form_state->getValue('process_image_url');
+      }
+      // If user selected Upload, load the file entity and get its filename.
+      elseif ($image_type === 'upload') {
+        // Get the file IDs from the managed_file element.
+        $fids = $form_state->getValue('process_image_upload');
+        if (!empty($fids)) {
+          // Load the first file (file ID is returned, e.g. "374").
+          $file = File::load(reset($fids));
+          if ($file) {
+            // Mark the file as permanent and save it.
+            $file->setPermanent();
+            $file->save();
+            // Optionally register file usage to prevent cleanup.
+            \Drupal::service('file.usage')->add($file, 'meugrafo', 'process', 1);
+            // Now get the filename from the file entity.
+            $process_image = $file->getFilename();
+          }
+        }
+      }
+
+      // Determine the chosen document type.
+      $doc_type = $form_state->getValue('process_webdocument_type');
+      $process_webdocument = '';
+
+      // If user selected URL, use the textfield value.
+      if ($doc_type === 'url') {
+        $process_webdocument = $form_state->getValue('process_webdocument_url');
+      }
+      // If user selected Upload, load the file entity and get its filename.
+      elseif ($doc_type === 'upload') {
+        // Get the file IDs from the managed_file element.
+        $fids = $form_state->getValue('process_webdocument_upload');
+        if (!empty($fids)) {
+          // Load the first file (file ID is returned, e.g. "374").
+          $file = File::load(reset($fids));
+          if ($file) {
+            // Mark the file as permanent and save it.
+            $file->setPermanent();
+            $file->save();
+            // Optionally register file usage to prevent cleanup.
+            \Drupal::service('file.usage')->add($file, 'sir', 'process', 1);
+            // Now get the filename from the file entity.
+            $process_webdocument = $file->getFilename();
+          }
+        }
+      }
+
       // Prepare data to be sent to the external service
-      $newProcessUri = Utils::uriGen('process');
       $processJSON = '{"uri":"' . $newProcessUri . '",'
         . '"typeUri":"' .Utils::uriFromAutocomplete($form_state->getValue('process_processstem')) . '",'
         . '"hascoTypeUri":"' . VSTOI::PROCESS . '",'
@@ -184,12 +354,33 @@ class AddProcessForm extends FormBase {
         . '"hasLanguage":"' . $form_state->getValue('process_language') . '",'
         . '"hasVersion":"' . $form_state->getValue('process_version') . '",'
         . '"comment":"' . $form_state->getValue('process_description') . '",'
-        . '"hasWebDocument":"'. $form_state->getValue('process_webdocument') .'",'
+        . '"hasWebDocument":"' . $process_webdocument . '",'
+        . '"hasImageUri":"' . $process_image . '",'
         // . '"hasTopTask":"'. $form_state->getValue('process_toptask') .'",'
         . '"hasSIRManagerEmail":"' . $useremail . '"}';
 
-      $api->elementAdd('process',$processJSON);
-      \Drupal::messenger()->addMessage(t("Process has been added successfully."));
+
+      $message = $api->elementAdd('process',$processJSON);
+      if ($message != null)
+        \Drupal::messenger()->addMessage(t("Process has been added successfully."));
+
+      // UPLOAD IMAGE AND WEBDOCUMENT TO API
+      if ($image_type === 'upload') {
+        $fids = $form_state->getValue('process_image_upload');
+        $msg = $api->parseObjectResponse($api->uploadFile($newProcessUri, reset($fids)), 'uploadFile');
+        if ($msg == NULL) {
+          \Drupal::messenger()->addError(t("The Uploaded Image FAILED to be submited to API."));
+        }
+      }
+
+      if ($doc_type === 'upload') {
+        $fids = $form_state->getValue('process_webdocument_upload');
+        $msg = $api->parseObjectResponse($api->uploadFile($newProcessUri, reset($fids)), 'uploadFile');
+        if ($msg == NULL) {
+          \Drupal::messenger()->addError(t("The Uploaded WebDocument FAILED to be submited to API."));
+        }
+      }
+
       self::backUrl();
       return;
 

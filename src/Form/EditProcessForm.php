@@ -313,13 +313,42 @@ class EditProcessForm extends FormBase {
     return NULL;
   }
 
-  function backUrl() {
-    $uid = \Drupal::currentUser()->id();
-    $previousUrl = Utils::trackingGetPreviousUrl($uid, \Drupal::request()->getRequestUri());
-    if ($previousUrl) {
-      $response = new RedirectResponse($previousUrl);
+  function backUrl($back_url = NULL) {
+    if ($back_url) {
+      $response = new RedirectResponse($back_url);
       $response->send();
       return;
+    } else {
+      $uid = \Drupal::currentUser()->id();
+      $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_process');
+
+      if ($previousUrl && strpos($previousUrl, '/load-more-data') !== false) {
+        parse_str(parse_url($previousUrl, PHP_URL_QUERY), $params);
+        $page = isset($params['page']) ? $params['page'] : 1;
+        $element_type = isset($params['element_type']) ? $params['element_type'] : 'process';
+        $pagesize = 9;
+
+        $previousUrl = Url::fromRoute('std.select_process', [
+          'elementtype' => $element_type,
+          'page' => $page,
+          'pagesize' => $pagesize,
+        ])->toString();
+      }
+
+      if ($previousUrl) {
+        $response = new RedirectResponse($previousUrl);
+        $response->send();
+        return;
+      } else {
+
+        $default_url = Url::fromRoute('std.select_process', [
+          'elementtype' => 'process',
+          'page' => 1,
+          'pagesize' => 9,
+        ])->toString();
+        $response = new RedirectResponse($default_url);
+        $response->send();
+      }
     }
   }
 
