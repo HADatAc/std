@@ -363,7 +363,7 @@ class EditTaskForm extends FormBase {
 
       $form['codes']['actions']['add_row'] = [
         '#type' => 'submit',
-        '#value' => $this->t('New Code'),
+        '#value' => $this->t('New Sub-Task'),
         '#name' => 'new_code',
         '#attributes' => array('class' => array('btn', 'btn-sm', 'add-element-button')),
       ];
