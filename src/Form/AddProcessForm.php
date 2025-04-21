@@ -361,7 +361,7 @@ class AddProcessForm extends FormBase {
       // CREATE A TOP TASK FIRST
       $newTaskUri = Utils::uriGen('task');
       $taskJSON = '{"uri":"' . $newTaskUri . '",'
-        . '"typeUri":"",'
+        . '"typeUri":"' . VSTOI::TASK . '",'
         . '"hascoTypeUri":"' . VSTOI::TASK . '",'
         . '"hasStatus":"' . VSTOI::DRAFT . '",'
         . '"label":"' . $form_state->getValue('process_top_task') . '",'
