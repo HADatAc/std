@@ -129,26 +129,11 @@ class AddProcessForm extends FormBase {
       '#required' => true,
     ];
 
-    // Build your “Add Top Task” button, passing both state and processUri:
-    $proc = $form_state->get('process_uri');
-    $add_task_url = Url::fromRoute('std.add_task', [
-      'state'      => 'basic',
-      'processuri' => base64_encode($proc),
-    ]);
-    $add_task = Link::fromTextAndUrl($this->t('Add Top Task'), $add_task_url)
-      ->toRenderable();
-    $add_task['#attributes'] = array_merge(
-      $add_task['#attributes'] ?? [],
-      [
-        'class'               => ['use-ajax', 'btn', 'btn-primary', 'mb-3'],
-        'data-dialog-type'    => 'modal',
-        'data-dialog-options' => Json::encode(['width' => 800]),
-      ]
-    );
-    $form['add_top_task'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['mb-3']],
-      'link' => $add_task,
+    $form['process_top_task'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Top Task Name'),
+      '#default_value' => '',
+      '#required' => true,
     ];
 
     // Add a hidden field to persist the process URI between form rebuilds.
@@ -291,6 +276,9 @@ class AddProcessForm extends FormBase {
       if(strlen($form_state->getValue('process_language')) < 1) {
         $form_state->setErrorByName('process_language', $this->t('Please enter a valid Language'));
       }
+      if(strlen($form_state->getValue('process_top_task')) < 1) {
+        $form_state->setErrorByName('process_top_task', $this->t('Please enter a valid Top Task Name'));
+      }
     } else {
       self::backUrl();
     }
@@ -370,6 +358,20 @@ class AddProcessForm extends FormBase {
         }
       }
 
+      // CREATE A TOP TASK FIRST
+      $newTaskUri = Utils::uriGen('task');
+      $taskJSON = '{"uri":"' . $newTaskUri . '",'
+        . '"typeUri":"",'
+        . '"hascoTypeUri":"' . VSTOI::TASK . '",'
+        . '"hasStatus":"' . VSTOI::DRAFT . '",'
+        . '"label":"' . $form_state->getValue('process_top_task') . '",'
+        . '"hasLanguage":"' . $form_state->getValue('process_language') . '",'
+        . '"hasVersion":"1",'
+        . '"comment":"",'
+        . '"hasWebDocument":"",'
+        . '"hasSIRManagerEmail":"' . $useremail . '"}';
+      $api->elementAdd('task',$taskJSON);
+
       // Prepare data to be sent to the external service
       $processJSON = '{"uri":"' . $newProcessUri . '",'
         . '"typeUri":"' .Utils::uriFromAutocomplete($form_state->getValue('process_processstem')) . '",'
@@ -381,9 +383,8 @@ class AddProcessForm extends FormBase {
         . '"comment":"' . $form_state->getValue('process_description') . '",'
         . '"hasWebDocument":"' . $process_webdocument . '",'
         . '"hasImageUri":"' . $process_image . '",'
-        // . '"hasTopTask":"'. $form_state->getValue('process_toptask') .'",'
+        . '"hasTopTaskUri":"'. $newTaskUri .'",'
         . '"hasSIRManagerEmail":"' . $useremail . '"}';
-
 
       $message = $api->elementAdd('process',$processJSON);
       if ($message != null)
