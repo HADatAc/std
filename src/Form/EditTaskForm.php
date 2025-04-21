@@ -77,13 +77,13 @@ class EditTaskForm extends FormBase {
       // POPULATE DATA STRUCTURES
       $basic = $this->populateBasic();
       $instruments = $this->populateInstruments();
-      //$codes = $this->populateCodes($namespaces);
+      // $tasks = $this->populateCodes($namespaces);
 
     } else {
 
       $basic = \Drupal::state()->get('my_form_basic');
       $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
-      //$codes = \Drupal::state()->get('my_form_codes') ?? [];
+      $tasks = \Drupal::state()->get('my_form_tasks') ?? [];
 
     }
 
@@ -116,8 +116,8 @@ class EditTaskForm extends FormBase {
     // Define pills as links with AJAX callback.
     $states = [
       'basic' => 'Basic task properties',
+      'tasks' => 'Sub-Tasks',
       'instrument' => 'Instruments and detectors',
-      //'codebook' => 'Codebook'
     ];
 
     foreach ($states as $key => $label) {
@@ -242,7 +242,7 @@ class EditTaskForm extends FormBase {
         '#type' => 'textarea',
         '#title' => $this->t('Description'),
         '#default_value' => $description,
-        '#required' => true
+        // '#required' => true
       ];
       $form['task_webdocument'] = [
         '#type' => 'textfield',
@@ -269,10 +269,10 @@ class EditTaskForm extends FormBase {
       *      INSTRUMENTS
       */
 
-      $form['instruments_title'] = [
-        '#type' => 'markup',
-        '#markup' => 'Instruments',
-      ];
+      // $form['instruments_title'] = [
+      //   '#type' => 'markup',
+      //   '#markup' => 'Instruments',
+      // ];
 
       $form['instruments'] = array(
         '#type' => 'container',
@@ -317,19 +317,18 @@ class EditTaskForm extends FormBase {
 
     }
 
-    /* ======================= CODEBOOK ======================= */
+    /* ======================= TASKS ======================= */
 
-    /*
-    if ($this->getState() == 'codebook') {
+    if ($this->getState() == 'tasks') {
 
-      *
-      *      CODES
-      *
+      // *
+      // *      CODES
+      // *
 
-      $form['codes_title'] = [
-        '#type' => 'markup',
-        '#markup' => 'Codes',
-      ];
+      // $form['codes_title'] = [
+      //   '#type' => 'markup',
+      //   '#markup' => 'Sub-Tasks',
+      // ];
 
       $form['codes'] = array(
         '#type' => 'container',
@@ -350,7 +349,7 @@ class EditTaskForm extends FormBase {
           '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
       );
 
-      $form['codes']['rows'] = $this->renderCodeRows($codes);
+      $form['codes']['rows'] = $this->renderCodeRows($tasks);
 
       $form['codes']['space_3'] = [
         '#type' => 'markup',
@@ -375,7 +374,6 @@ class EditTaskForm extends FormBase {
       );
 
     }
-    */
 
     /* ======================= COMMON BOTTOM ======================= */
 
@@ -396,6 +394,7 @@ class EditTaskForm extends FormBase {
       '#type' => 'submit',
       '#value' => $this->t('Cancel'),
       '#name' => 'back',
+      '#limit_validation_errors' => [],
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'cancel-button'],
       ],
@@ -421,9 +420,9 @@ class EditTaskForm extends FormBase {
     if ($currentState == 'instrument') {
       $this->updateInstruments($form_state);
     }
-    //if ($currentState == 'codebook') {
-    //  $this->updateCodes($form_state);
-    //}
+    if ($currentState == 'tasks') {
+     $this->updateCodes($form_state);
+    }
 
     // Need to retrieve $basic because it contains the task's URI
     $basic = \Drupal::state()->get('my_form_basic');
@@ -815,7 +814,7 @@ class EditTaskForm extends FormBase {
    *
    ******************************/
 
-   /*
+
    protected function renderCodeRows(array $codes) {
     $form_rows = [];
     $separator = '<div class="w-100"></div>';
@@ -913,7 +912,7 @@ class EditTaskForm extends FormBase {
   }
 
   protected function updateCodes(FormStateInterface $form_state) {
-    $codes = \Drupal::state()->get('my_form_codes');
+    $codes = \Drupal::state()->get('my_form_tasks');
     $input = $form_state->getUserInput();
     if (isset($input) && is_array($input) &&
         isset($codes) && is_array($codes)) {
@@ -926,7 +925,7 @@ class EditTaskForm extends FormBase {
           $codes[$code_id]['class']   = $input['code_class_' . $code_id] ?? '';
         }
       }
-      \Drupal::state()->set('my_form_codes', $codes);
+      \Drupal::state()->set('my_form_tasks', $codes);
     }
     return;
   }
@@ -946,7 +945,7 @@ class EditTaskForm extends FormBase {
       }
       ksort($codes);
     }
-    \Drupal::state()->set('my_form_codes', $codes);
+    \Drupal::state()->set('my_form_tasks', $codes);
     return $codes;
   }
 
@@ -1015,7 +1014,7 @@ class EditTaskForm extends FormBase {
   }
 
   public function addCodeRow() {
-    $codes = \Drupal::state()->get('my_form_codes') ?? [];
+    $codes = \Drupal::state()->get('my_form_tasks') ?? [];
 
     // Add a new row to the table.
     $codes[] = [
@@ -1024,7 +1023,7 @@ class EditTaskForm extends FormBase {
       'label' => '',
       'class' => '',
     ];
-    \Drupal::state()->set('my_form_codes', $codes);
+    \Drupal::state()->set('my_form_tasks', $codes);
 
     // Rebuild the table rows.
     $form['codes']['rows'] = $this->renderCodeRows($codes);
@@ -1032,7 +1031,7 @@ class EditTaskForm extends FormBase {
   }
 
   public function removeCodeRow($button_name) {
-    $codes = \Drupal::state()->get('my_form_codes') ?? [];
+    $codes = \Drupal::state()->get('my_form_tasks') ?? [];
 
     // from button name's value, determine which row to remove.
     $parts = explode('_', $button_name);
@@ -1041,11 +1040,10 @@ class EditTaskForm extends FormBase {
     if (isset($code_to_remove) && $code_to_remove > -1) {
       unset($codes[$code_to_remove]);
       $codes = array_values($codes);
-      \Drupal::state()->set('my_form_codes', $codes);
+      \Drupal::state()->set('my_form_tasks', $codes);
     }
     return;
   }
-  */
 
   /* ================================================================================ *
    *
@@ -1067,9 +1065,9 @@ class EditTaskForm extends FormBase {
       // Release values cached in the editor before leaving it
       \Drupal::state()->delete('my_form_basic');
       \Drupal::state()->delete('my_form_instruments');
-      //\Drupal::state()->delete('my_form_codes');
+      \Drupal::state()->delete('my_form_tasks');
       self::backUrl();
-      return true;
+      return false;
     }
 
     // If not leaving then UPDATE STATE OF VARIABLES, OBJECTS AND CODES
@@ -1082,16 +1080,16 @@ class EditTaskForm extends FormBase {
       $this->updateInstruments($form_state);
     }
 
-    #if ($this->getState() === 'codebook') {
-    #  $this->updateCodes($form_state);
-    #}
+    if ($this->getState() === 'tasks') {
+      $this->updateCodes($form_state);
+    }
 
     // Get the latest cached versions of values in the editor
 
     $basic = \Drupal::state()->get('my_form_basic');
     $this->updateInstruments($form_state);
     $instruments = \Drupal::state()->get('my_form_instruments');
-    #$codes = \Drupal::state()->get('my_form_codes');
+    $tasks = \Drupal::state()->get('my_form_tasks');
 
     if ($button_name === 'new_instrument') {
       $this->addInstrumentRow();
@@ -1103,15 +1101,15 @@ class EditTaskForm extends FormBase {
       return;
     }
 
-    #if ($button_name === 'new_code') {
-    #  $this->addCodeRow();
-    #  return;
-    #}
+    if ($button_name === 'new_code') {
+      $this->addCodeRow();
+      return;
+    }
 
-    #if (str_starts_with($button_name,'code_remove_')) {
-    #  $this->removeCodeRow($button_name);
-    #  return;
-    #}
+    if (str_starts_with($button_name,'code_remove_')) {
+      $this->removeCodeRow($button_name);
+      return;
+    }
 
     if ($button_name === 'save') {
 
@@ -1188,7 +1186,7 @@ class EditTaskForm extends FormBase {
           // Release values cached in the editor
           \Drupal::state()->delete('my_form_basic');
           \Drupal::state()->delete('my_form_instruments');
-          //\Drupal::state()->delete('my_form_codes');
+          \Drupal::state()->delete('my_form_tasks');
 
           \Drupal::messenger()->addMessage(t("Task has been updated successfully."));
           self::backUrl();
@@ -1203,6 +1201,24 @@ class EditTaskForm extends FormBase {
       }
     }
 
+  }
+
+  /**
+   * Override the validator so that the Cancel/Back button skips all validation.
+   */
+  public function validateForm(array &$form, FormStateInterface $form_state) {
+    $trigger = $form_state->getTriggeringElement();
+    if (!empty($trigger['#name']) && $trigger['#name'] === 'back') {
+      return;
+    }
+
+    // manual “required” check:
+    $desc = $form_state->getValue('task_description');
+    if (strlen(trim($desc)) === 0 && $trigger['#name'] === 'save') {
+      $form_state->setErrorByName('task_description', $this->t('Description is required.'));
+    }
+
+    // and any other manual checks you need…
   }
 
   /**

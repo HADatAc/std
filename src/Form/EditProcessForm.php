@@ -155,12 +155,54 @@ class EditProcessForm extends FormBase {
       '#default_value' => $this->getProcess()->comment,
       '#required' => true
     ];
-    $form['process_toptask'] = [
+    // $form['process_toptask'] = [
+    //   '#type' => 'textfield',
+    //   '#title' => $this->t('Top Task'),
+    //   '#default_value' => (isset($this->getProcess()->hasTopTaskUri) ? UTILS::fieldToAutocomplete($this->getProcess()->hasTopTaskUri, $this->getProcess()->hasTopTask->label) : ''),
+    //   // '#autocomplete_route_name' => 'std.process_task_autocomplete',
+    //   '#disabled' => TRUE
+    // ];
+    $form['process_toptask_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'style' => 'display: flex; align-items: center; gap: 1em;',
+        'class' => ['process-toptask-wrapper'],
+      ],
+    ];
+
+    // Render the Top Task textfield inside the wrapper
+    $form['process_toptask_wrapper']['process_toptask'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Top Task'),
-      '#default_value' => (isset($this->getProcess()->hasTopTask) ? UTILS::fieldToAutocomplete($this->getProcess()->hasTopTask, $this->getProcess()->typeLabel) : ''),
-      '#autocomplete_route_name' => 'std.process_task_autocomplete',
+      '#default_value' => isset($this->getProcess()->hasTopTaskUri)
+        ? UTILS::fieldToAutocomplete(
+            $this->getProcess()->hasTopTaskUri,
+            $this->getProcess()->hasTopTask->label
+          )
+        : '',
+      '#disabled' => TRUE,
+      '#attributes'  => [
+        // make it take up remaining space
+        'style' => 'flex: 1 1 0;',
+      ],
     ];
+
+    // Add the Edit Task button next to the Top Task element
+    $form['process_toptask_wrapper']['edit_task'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Edit Top Task'),
+      '#url' => Url::fromRoute('std.edit_task', [
+        'state' => 'init',
+        'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
+      ]),
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'edit-task-button', 'mt-2'],
+        'style' => 'margin-left: 1em;',
+      ],
+    ];
+
+    $form['process_toptask_wrapper']['process_toptask']['#size'] = 80;
+
 
     // **** IMAGE ****
     // Retrieve the current image value.
@@ -479,7 +521,7 @@ class EditProcessForm extends FormBase {
           . '"comment":"' . $form_state->getValue('process_description') . '",'
           . '"hasWebDocument":"",'
           . '"hasImageUri":"",'
-          // . '"hasTopTask":"'. $form_state->getValue('process_toptask') .'",'
+          . '"hasTopTaskUri":"'. $this->getProcess()->hasTopTaskUri .'",'
           . '"hasSIRManagerEmail":"' . $useremail .'",'
           . '"hasReviewNote":"'.($this->getProcess()->hasSatus !== null ? $this->getProcess()->hasReviewNote : '').'",'
           . '"hasEditorEmail":"'.($this->getProcess()->hasSatus !== null ? $this->getProcess()->hasEditorEmail : '').'"}';
@@ -518,7 +560,7 @@ class EditProcessForm extends FormBase {
           '"label":"'.$form_state->getValue('process_name').'",'.
           '"hasVersion":"'.$form_state->getValue('process_version').'",'.
           '"comment":"' . $form_state->getValue('process_description') . '",'.
-          // '"hasTopTask":"'. $form_state->getValue('process_toptask') .'",'.
+          '"hasTopTaskUri":"'. $this->getProcess()->hasTopTaskUri .'",'.
           '"hasWebDocument":"' . $process_webdocument . '",' .
           '"hasImageUri":"' . $process_image . '",' .
           '"hasReviewNote":"'.$this->getProcess()->hasReviewNote.'",'.
