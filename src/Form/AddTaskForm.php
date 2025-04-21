@@ -18,6 +18,7 @@ use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\AfterCommand;
 use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\Component\Serialization\Json;
 
 class AddTaskForm extends FormBase {
 
@@ -179,37 +180,81 @@ class AddTaskForm extends FormBase {
         $webDocument = $basic['webdocument'];
       }
 
+      // $form['task_taskstem'] = [
+      //   'top' => [
+      //     '#type' => 'markup',
+      //     '#markup' => '<div class="pt-3 col border border-white">',
+      //   ],
+      //   'main' => [
+      //     '#type' => 'textfield',
+      //     '#title' => $this->t('Task Stem'),
+      //     '#name' => 'task_taskstem',
+      //     '#default_value' => $taskstem,
+      //     '#id' => 'task_taskstem',
+      //     '#parents' => ['task_taskstem'],
+      //     '#required' => true,
+      //     '#attributes' => [
+      //       'class' => ['open-tree-modal'],
+      //       'data-dialog-type' => 'modal',
+      //       'data-dialog-options' => json_encode(['width' => 800]),
+      //       'data-url' => Url::fromRoute('rep.tree_form', [
+      //         'mode' => 'modal',
+      //         'elementtype' => 'taskstem',
+      //       ], ['query' => ['field_id' => 'task_taskstem']])->toString(),
+      //       'data-field-id' => 'task_taskstem',
+      //       'data-elementtype' => 'taskstem',
+      //       'autocomplete' => 'off',
+      //     ],
+      //   ],
+      //   'bottom' => [
+      //     '#type' => 'markup',
+      //     '#markup' => '</div>',
+      //   ],
+      // ];
+      // Wrap the entire textfield in a styled container.
       $form['task_taskstem'] = [
-        'top' => [
-          '#type' => 'markup',
-          '#markup' => '<div class="pt-3 col border border-white">',
-        ],
-        'main' => [
-          '#type' => 'textfield',
-          '#title' => $this->t('Task Stem'),
-          '#name' => 'task_taskstem',
-          '#default_value' => $taskstem,
-          '#id' => 'task_taskstem',
-          '#parents' => ['task_taskstem'],
-          '#required' => true,
-          '#attributes' => [
-            'class' => ['open-tree-modal'],
-            'data-dialog-type' => 'modal',
-            'data-dialog-options' => json_encode(['width' => 800]),
-            'data-url' => Url::fromRoute('rep.tree_form', [
-              'mode' => 'modal',
-              'elementtype' => 'taskstem',
-            ], ['query' => ['field_id' => 'task_taskstem']])->toString(),
-            'data-field-id' => 'task_taskstem',
-            'data-elementtype' => 'taskstem',
-            'autocomplete' => 'off',
-          ],
-        ],
-        'bottom' => [
-          '#type' => 'markup',
-          '#markup' => '</div>',
+        '#type' => 'textfield',
+        '#title' => $this->t('Task Stem'),
+        '#default_value' => $taskstem,
+        '#required' => TRUE,
+
+        // Use #prefix/#suffix to wrap in a Bootstrap‑style bordered column.
+        '#prefix' => '<div class="pt-3 col border border-white">',
+        '#suffix' => '</div>',
+
+        // Ensure this input opens the tree-selection modal.
+        '#attributes' => [
+          // Trigger our custom JS behavior.
+          'class' => ['open-tree-modal'],
+
+          // Tell Drupal AJAX to open a jQuery UI modal.
+          'data-dialog-type'    => 'modal',
+          'data-dialog-options' => Json::encode(['width' => 800]),
+
+          // URL of the tree form, with query to identify field ID.
+          'data-url' => Url::fromRoute(
+            'rep.tree_form',
+            [
+              'mode'        => 'modal',
+              'elementtype' => 'detectorstem',
+            ],
+            [
+              'query' => [
+                'field_id' => 'task_taskstem',
+                'caller'   => 'add_task_form',
+              ],
+            ]
+          )->toString(),
+
+          // Pass through field identifier and element type.
+          'data-field-id'    => 'task_taskstem',
+          'data-elementtype' => 'detectorstem',
+
+          // Disable native browser autocomplete.
+          'autocomplete' => 'off',
         ],
       ];
+
       $form['task_name'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Name'),
@@ -248,7 +293,7 @@ class AddTaskForm extends FormBase {
       ];
       $form['task_issupertask'] = [
         '#type' => 'checkbox',
-        '#title' => $this->t('Is this a Super Task?'),
+        '#title' => $this->t('Select if this is a Super Task?'),
         '#default_value' => 1,
         '#attributes' => [
           'class' => ['bootstrap-toggle'],
@@ -260,6 +305,9 @@ class AddTaskForm extends FormBase {
         '#autocomplete_route_name' => 'std.task_autocomplete',
         '#disabled' => TRUE,
         '#states' => [
+          'visible' => [
+            ':input[name="task_issupertask"]' => ['checked' => FALSE],
+          ],
           'enabled' => [
             ':input[name="task_issupertask"]' => ['checked' => FALSE],
           ],
@@ -520,35 +568,68 @@ class AddTaskForm extends FormBase {
     return;
   }
 
-  public function pills_card_callback(array &$form, FormStateInterface $form_state) {
+  // public function pills_card_callback(array &$form, FormStateInterface $form_state) {
 
-    // RETRIEVE CURRENT STATE AND SAVE IT ACCORDINGLY
-    $currentState = $form_state->getValue('state');
-    if ($currentState == 'basic') {
+  //   // RETRIEVE CURRENT STATE AND SAVE IT ACCORDINGLY
+  //   $currentState = $form_state->getValue('state');
+  //   if ($currentState == 'basic') {
+  //     $this->updateBasic($form_state);
+  //   }
+  //   if ($currentState == 'instrument') {
+  //     $this->updateInstruments($form_state);
+  //   }
+  //   //if ($currentState == 'codebook') {
+  //   //  $this->updateCodes($form_state);
+  //   //}
+
+  //   // RETRIEVE FUTURE STATE
+  //   $triggering_element = $form_state->getTriggeringElement();
+  //   $parts = explode('_', $triggering_element['#name']);
+  //   $state = (isset($parts) && is_array($parts)) ? end($parts) : null;
+
+  //   // BUILD NEW URL
+  //   $root_url = \Drupal::request()->getBaseUrl();
+  //   $newUrl = $root_url . REPGUI::ADD_TASK . $state;
+
+  //   // REDIRECT TO NEW URL
+  //   $response = new AjaxResponse();
+  //   $response->addCommand(new RedirectCommand($newUrl));
+
+  //   return $response;
+  // }
+  public function pills_card_callback(array &$form, FormStateInterface $form_state) {
+    // 1) save whichever pane we were on
+    $current = $form_state->getValue('state');
+    if ($current === 'basic') {
       $this->updateBasic($form_state);
     }
-    if ($currentState == 'instrument') {
+    else {
       $this->updateInstruments($form_state);
     }
-    //if ($currentState == 'codebook') {
-    //  $this->updateCodes($form_state);
-    //}
 
-    // RETRIEVE FUTURE STATE
-    $triggering_element = $form_state->getTriggeringElement();
-    $parts = explode('_', $triggering_element['#name']);
-    $state = (isset($parts) && is_array($parts)) ? end($parts) : null;
+    // 2) figure out which new state we want
+    $trigger = $form_state->getTriggeringElement();
+    $parts = explode('_', $trigger['#name']);
+    $new_state = end($parts);
 
-    // BUILD NEW URL
-    $root_url = \Drupal::request()->getBaseUrl();
-    $newUrl = $root_url . REPGUI::ADD_TASK . $state;
+    // persist new state
+    $form_state->set('state', $new_state);
 
-    // REDIRECT TO NEW URL
+    // 3) rebuild the form for that new state
+    //    pass along state + processUri from route
+    $processuri = $form_state->get('process_uri');
+    $new_form = $this->buildForm([], $form_state, $new_state, $processuri);
+
+    // 4) render just our wrapper
+    $renderer = \Drupal::service('renderer');
+    $html = $renderer->renderRoot($new_form['#prefix'] . $new_form['pills_card'] . $new_form['#suffix']);
+
+    // 5) send it back in an AJAX ReplaceCommand
     $response = new AjaxResponse();
-    $response->addCommand(new RedirectCommand($newUrl));
-
+    $response->addCommand(new ReplaceCommand('#add-task-modal-content', $html));
     return $response;
   }
+
 
   /******************************
    *

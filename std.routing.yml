@@ -539,7 +539,7 @@ std.manage_task:
     no_cache: 'TRUE'
 
 std.add_task:
-  path: 'std/manage/addtask/{state}'
+  path: 'std/manage/addtask/{state}/{processuri}'
   defaults:
     _form: '\Drupal\std\Form\AddTaskForm'
   requirements:

@@ -363,7 +363,7 @@ class EditStudyForm extends FormBase {
       // UPDATE BY DELETING AND CREATING
       $api = \Drupal::service('rep.api_connector');
       $api->elementDel('study',$this->getStudy()->uri);
-      $api->elementAdd('study',$studyJson);
+      $message = $api->elementAdd('study',$studyJson);
 
       // UPLOAD IMAGE TO API
       if ($image_type === 'upload' && $study_image !== $this->getStudy()->hasImageUri) {
@@ -383,7 +383,9 @@ class EditStudyForm extends FormBase {
         }
       }
 
-      \Drupal::messenger()->addMessage(t("Study has been updated successfully."));
+      if ($message != null)
+        \Drupal::messenger()->addMessage(t("Study has been updated successfully."));
+
       self::backUrl();
       return;
 

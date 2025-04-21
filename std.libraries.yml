@@ -23,6 +23,7 @@ std_process:
   dependencies:
     - core/jquery
     - core/drupal
+    - core/drupal.dialog
 
 std_processstem:
   version: 1.x

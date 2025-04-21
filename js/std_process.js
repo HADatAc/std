@@ -16,12 +16,21 @@
 
         ajaxInstance.execute()
           .done(function () {
-            console.log('AJAX concluído com sucesso.');
+            // console.log('AJAX concluído com sucesso.');
           })
           .fail(function (jqXHR, textStatus, errorThrown) {
-            console.error('Erro no AJAX:', textStatus, errorThrown);
+            console.error('AJAX Error:', textStatus, errorThrown);
           });
       });
     }
   };
+})(jQuery, Drupal);
+
+(function ($, Drupal) {
+  // As soon as any jQuery‑UI dialog opens, remove all ".button" classes inside it.
+  $(document).on('dialogopen', function (event) {
+    var $dialog = $(event.target).closest('.ui-dialog');
+    // Remove the extra “button” class from anything in this dialog.
+    $dialog.find('.button').removeClass('button');
+  });
 })(jQuery, Drupal);

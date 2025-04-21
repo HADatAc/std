@@ -12,6 +12,8 @@ use Drupal\rep\Utils;
 use Drupal\rep\Entity\Tables;
 use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\file\Entity\File;
+use Drupal\Core\Link;
+use Drupal\Component\Serialization\Json;
 
 class AddProcessForm extends FormBase {
 
@@ -50,6 +52,7 @@ class AddProcessForm extends FormBase {
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
+    $form['#attached']['library'][] = 'std/std_process';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
     $tables = new Tables;
@@ -61,6 +64,10 @@ class AddProcessForm extends FormBase {
       $languages = ['' => $this->t('Select language please')] + $languages;
     if ($informants)
       $informants = ['' => $this->t('Select Informant please')] + $informants;
+
+    // Wrap everything in a div we can AJAX‑replace.
+    $form['#prefix'] = '<div id="add-process-modal-content">';
+    $form['#suffix'] = '</div>';
 
     $form['process_processstem'] = [
       'top' => [
@@ -121,11 +128,29 @@ class AddProcessForm extends FormBase {
       '#default_value' => '',
       '#required' => true,
     ];
-    $form['process_toptask'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Top Task'),
-      '#autocomplete_route_name' => 'std.process_task_autocomplete',
+
+    // Build your “Add Top Task” button, passing both state and processUri:
+    $proc = $form_state->get('process_uri');
+    $add_task_url = Url::fromRoute('std.add_task', [
+      'state'      => 'basic',
+      'processuri' => base64_encode($proc),
+    ]);
+    $add_task = Link::fromTextAndUrl($this->t('Add Top Task'), $add_task_url)
+      ->toRenderable();
+    $add_task['#attributes'] = array_merge(
+      $add_task['#attributes'] ?? [],
+      [
+        'class'               => ['use-ajax', 'btn', 'btn-primary', 'mb-3'],
+        'data-dialog-type'    => 'modal',
+        'data-dialog-options' => Json::encode(['width' => 800]),
+      ]
+    );
+    $form['add_top_task'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['mb-3']],
+      'link' => $add_task,
     ];
+
     // Add a hidden field to persist the process URI between form rebuilds.
     $form['process_uri'] = [
       '#type' => 'hidden',
