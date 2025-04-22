@@ -19,16 +19,33 @@ use Drupal\Core\Ajax\AfterCommand;
 use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Component\Serialization\Json;
+use Drupal\std\Entity\Task;
 
 class AddTaskForm extends FormBase {
 
   protected $state;
+  protected $topTaskUri;
+  protected $topTask;
 
   public function getState() {
     return $this->state;
   }
   public function setState($state) {
     return $this->state = $state;
+  }
+
+  public function getTopTaskUri() {
+    return $this->topTaskUri;
+  }
+  public function setTopTaskUri($topTaskUri) {
+    return $this->topTaskUri = $topTaskUri;
+  }
+
+  public function getTopTask() {
+    return $this->topTask;
+  }
+  public function setTopTask($topTask) {
+    return $this->topTask = $topTask;
   }
 
   /**
@@ -49,7 +66,9 @@ class AddTaskForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $state=NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $state=NULL, $toptaskuri = NULL) {
+
+    $api = \Drupal::service('rep.api_connector');
 
     // FOUR groups of values are preserved in state: basic, instruments, objects and codes.
     // for each group, we have render*, update*, save*, add*, remove* (basic has no add* and remove*)
@@ -64,7 +83,7 @@ class AddTaskForm extends FormBase {
     if (isset($state) && $state === 'init') {
       \Drupal::state()->delete('my_form_basic');
       \Drupal::state()->delete('my_form_instruments');
-      //\Drupal::state()->delete('my_form_codes');
+      \Drupal::state()->delete('my_form_tasks');
       $basic = [
         'taskstem' => '',
         'name' => '',
@@ -74,14 +93,29 @@ class AddTaskForm extends FormBase {
         'webdocument' => '',
       ];
       $instruments = [];
+      $tasks = [];
       //$codes = [];
       $state = 'basic';
     } else {
       $basic = \Drupal::state()->get('my_form_basic') ?? [];
       $instruments = \Drupal::state()->get('my_form_instruments') ?? [];
+      $tasks = \Drupal::state()->get('my_form_tasks') ?? [];
       //$codes = \Drupal::state()->get('my_form_codes') ?? [];
     }
     $this->setState($state);
+
+    // SET TOP TASK AND HER VALUES
+    if ($toptaskuri === NULL) {
+      \Drupal::state()->delete('my_form_basic');
+      \Drupal::state()->delete('my_form_instruments');
+      \Drupal::state()->delete('my_form_tasks');
+      return;
+    }
+
+    $uri_decode=base64_decode($toptaskuri);
+    $toptask = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
+    $this->setTopTask($toptask);
+    $this->setTopTaskUri($uri_decode);
 
     // GET LANGUAGES
     $tables = new Tables;
@@ -122,8 +156,8 @@ class AddTaskForm extends FormBase {
     // Define pills as links with AJAX callback.
     $states = [
       'basic' => 'Basic task properties',
+      'tasks' => 'Sub Tasks',
       'instrument' => 'Instruments and Elements',
-      //'codebook' => 'Detector mappings'
     ];
 
     foreach ($states as $key => $label) {
@@ -149,6 +183,12 @@ class AddTaskForm extends FormBase {
     $form['state'] = [
       '#type' => 'hidden',
       '#value' => $state,
+    ];
+
+    // Add a hidden field to capture the toptaskuri.
+    $form['toptaskuri'] = [
+      '#type' => 'hidden',
+      '#value' => $this->getTopTaskUri(),
     ];
 
     /* ========================== BASIC ========================= */
@@ -294,22 +334,28 @@ class AddTaskForm extends FormBase {
       $form['task_issupertask'] = [
         '#type' => 'checkbox',
         '#title' => $this->t('Select if this is a Super Task?'),
-        '#default_value' => 1,
+        '#default_value' => $this->getTopTaskUri() !== NULL ? 0:1,
         '#attributes' => [
           'class' => ['bootstrap-toggle'],
         ],
+        '#disabled' => $this->getTopTaskUri() !== NULL ? 1:0,
       ];
       $form['task_supertask'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Select Super Task'),
         '#autocomplete_route_name' => 'std.task_autocomplete',
-        '#disabled' => TRUE,
+        '#default_value' => isset($this->getTopTask()->uri)
+        ? UTILS::fieldToAutocomplete(
+            $this->getTopTaskUri(),
+            $this->getTopTask()->label
+          )
+        : '',
         '#states' => [
           'visible' => [
             ':input[name="task_issupertask"]' => ['checked' => FALSE],
           ],
           'enabled' => [
-            ':input[name="task_issupertask"]' => ['checked' => FALSE],
+            ':input[name="task_issupertask"]' => ['checked' => $this->getTopTaskUri() !== NULL ? 0:1],
           ],
         ],
       ];
@@ -369,6 +415,76 @@ class AddTaskForm extends FormBase {
         '#markup' => '</div>' . $separator,
       );
 
+    }
+
+    /* ======================= TASKS ======================= */
+
+    if ($this->getState() == 'tasks') {
+
+      // *
+      // *      TASKS
+      // *
+
+      $form['subtasks'] = array(
+        '#type' => 'container',
+        '#title' => $this->t('Sub-Tasks'),
+        '#attributes' => array(
+          'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
+          'id' => 'custom-table-wrapper',
+        ),
+      );
+
+      $form['subtasks']['actions']['top'] = array(
+        '#type' => 'markup',
+        '#markup' => '<div class="p-3 col">',
+      );
+
+      $form['subtasks']['actions']['add_row'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('New Sub-Task'),
+        '#name' => 'new_code',
+        '#attributes' => array('class' => array('btn', 'btn-sm', 'add-element-button')),
+      ];
+
+      $form['subtasks']['actions']['bottom'] = array(
+        '#type' => 'markup',
+        '#markup' => '</div>' . $separator,
+      );
+
+      $form['subtasks']['element_table_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'element-table-wrapper'],
+      ];
+
+      $form['subtasks']['element_table_wrapper']['element_table'] = [
+          '#type' => 'table',
+          '#header' => TASK::generateHeader(),
+          '#empty' => $this->t('No records found'),
+          '#attributes' => ['class' => ['table', 'table-striped']],
+          '#js_select' => FALSE,
+      ];
+
+      $results = TASK::generateOutput($tasks);
+      $output = $results['output'];
+
+      foreach ($output as $key => $row) {
+        $row_status = strtolower($row['element_hasStatus']);
+
+        // Hide unnecessary columns
+        foreach ($row as $field_key => $field_value) {
+            if ($field_key !== 'element_hasStatus' && $field_key !== 'element_hasLanguage' && $field_key !== 'element_hasImageUri') {
+                $form['subtasks']['element_table_wrapper']['element_table'][$key][$field_key] = [
+                    '#markup' => $field_value,
+                ];
+            }
+        }
+
+        $form['subtasks']['space_3'] = [
+          '#type' => 'markup',
+          '#markup' => $separator,
+        ];
+
+      }
     }
 
     /* ======================= CODEBOOK ======================= */
@@ -490,6 +606,7 @@ class AddTaskForm extends FormBase {
     // For instance:
     \Drupal::state()->delete('my_form_basic');
     \Drupal::state()->delete('my_form_instruments');
+    \Drupal::state()->delete('my_form_tasks');
     $this->backUrl();
   }
 
@@ -603,8 +720,11 @@ class AddTaskForm extends FormBase {
     if ($current === 'basic') {
       $this->updateBasic($form_state);
     }
-    else {
+    elseif ($current === 'instruments') {
       $this->updateInstruments($form_state);
+    }
+    elseif ($current == 'tasks') {
+      $this->updateSubTasks($form_state);
     }
 
     // 2) figure out which new state we want
@@ -617,8 +737,8 @@ class AddTaskForm extends FormBase {
 
     // 3) rebuild the form for that new state
     //    pass along state + processUri from route
-    $processuri = $form_state->get('process_uri');
-    $new_form = $this->buildForm([], $form_state, $new_state, $processuri);
+    $toptaskuri = $form_state->get('toptaskuri');
+    $new_form = $this->buildForm([], $form_state, $new_state, $toptaskuri);
 
     // 4) render just our wrapper
     $renderer = \Drupal::service('renderer');
@@ -948,7 +1068,6 @@ class AddTaskForm extends FormBase {
     return;
   }
 
-
   public function addInstrumentRow() {
     $instruments = \Drupal::state()->get('my_form_instruments') ?? [];
 
@@ -997,7 +1116,27 @@ class AddTaskForm extends FormBase {
     $response->addCommand(new HtmlCommand('#' . $form['instruments']['#attributes']['id'], $form['instruments']));
 
     return $response;
-}
+  }
+
+  // TASKS
+  protected function updateSubTasks(FormStateInterface $form_state) {
+    $codes = \Drupal::state()->get('my_form_tasks');
+    $input = $form_state->getUserInput();
+    if (isset($input) && is_array($input) &&
+        isset($codes) && is_array($codes)) {
+
+      foreach ($codes as $code_id => $code) {
+        if (isset($code_id) && isset($code)) {
+          $codes[$code_id]['column']  = $input['code_column_' . $code_id] ?? '';
+          $codes[$code_id]['code']    = $input['code_code_' . $code_id] ?? '';
+          $codes[$code_id]['label']   = $input['code_label_' . $code_id] ?? '';
+          $codes[$code_id]['class']   = $input['code_class_' . $code_id] ?? '';
+        }
+      }
+      \Drupal::state()->set('my_form_tasks', $codes);
+    }
+    return;
+  }
 
   /******************************
    *
@@ -1239,6 +1378,7 @@ class AddTaskForm extends FormBase {
     if ($button_name === 'back') {
       \Drupal::state()->delete('my_form_basic');
       \Drupal::state()->delete('my_form_instruments');
+      \Drupal::state()->delete('my_form_tasks');
       self::backUrl();
       return;
     }
@@ -1253,6 +1393,10 @@ class AddTaskForm extends FormBase {
       $this->updateInstruments($form_state);
     }
 
+    if ($this->getState() === 'tasks') {
+      $this->updateSubTasks($form_state);
+    }
+
     //if ($this->getState() === 'codebook') {
     //  $this->updateCodes($form_state);
     //}
@@ -1260,6 +1404,7 @@ class AddTaskForm extends FormBase {
     // Get the latest cached versions of values in the editor
     $basic = \Drupal::state()->get('my_form_basic');
     $instruments = \Drupal::state()->get('my_form_instruments');
+    $tasks = \Drupal::state()->get('my_form_tasks');
     //$codes = \Drupal::state()->get('my_form_codes');
 
     if ($button_name === 'new_instrument') {

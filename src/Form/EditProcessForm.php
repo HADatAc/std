@@ -192,7 +192,7 @@ class EditProcessForm extends FormBase {
       '#type' => 'link',
       '#title' => $this->t('Edit Top Task'),
       '#url' => Url::fromRoute('std.edit_task', [
-        'state' => 'init',
+        'state' => 'tasks',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
       ]),
       '#attributes' => [

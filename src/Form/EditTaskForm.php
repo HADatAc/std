@@ -16,6 +16,9 @@ use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\AfterCommand;
 use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\std\Entity\Task;
+use Drupal\rep\ListKeywordTypePage;
+
 
 class EditTaskForm extends FormBase {
 
@@ -57,20 +60,20 @@ class EditTaskForm extends FormBase {
     $form['#attached']['library'][] = 'rep/rep_modal'; // Biblioteca personalizada do módulo
     $form['#attached']['library'][] = 'core/drupal.dialog'; // Biblioteca do modal do Drupal
 
-    if ($state === 'init') {
-      // READ TASK
-      $api = \Drupal::service('rep.api_connector');
-      $uri_decode=base64_decode($taskuri);
-      $task = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
-      if ($task == NULL) {
-        \Drupal::messenger()->addMessage(t("Failed to retrieve Task."));
-        self::backUrl();
-        return;
-      } else {
-        $this->setTask($task);
-        //dpm($this->getTask());
-      }
+    // READ TASK
+    $api = \Drupal::service('rep.api_connector');
+    $uri_decode=base64_decode($taskuri);
+    $task = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
+    if ($task == NULL) {
+      \Drupal::messenger()->addMessage(t("Failed to retrieve Task."));
+      self::backUrl();
+      return;
+    } else {
+      $this->setTask($task);
+      //dpm($this->getTask());
+    }
 
+    if ($state === 'init') {
       // RESET STATE TO BASIC
       $state = 'basic';
 
@@ -83,6 +86,10 @@ class EditTaskForm extends FormBase {
 
       $basic = \Drupal::state()->get('my_form_basic');
       $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
+      // Recupera os elementos para a página atual
+
+      // TO-DO
+      // OBTER LISTA DE TAREFAS PASSANDO O URI
       $tasks = \Drupal::state()->get('my_form_tasks') ?? [];
 
     }
@@ -325,48 +332,57 @@ class EditTaskForm extends FormBase {
       // *      TASKS
       // *
 
-      $form['subtasks'] = array(
+      $form['subtasks'] = [
         '#type' => 'container',
-        '#title' => $this->t('Sub-Tasks'),
-        '#attributes' => array(
-          'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
-          'id' => 'custom-table-wrapper',
-        ),
-      );
+        '#attributes' => [
+          'id' => 'subtasks-wrapper',
+          'class' => ['p-3','bg-light','rounded','row'],
+        ],
+      ];
 
-      $form['subtasks']['actions']['top'] = array(
-        '#type' => 'markup',
-        '#markup' => '<div class="p-3 col">',
-      );
+      $form['subtasks']['header'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['d-flex','justify-content-between','align-items-center','mb-3']],
+      ];
+      $form['subtasks']['header']['title'] = [
+        '#markup' => '<h5>Sub‑tasks Of <strong>'. $this->getTask()->label .'</strong></h5>',
+      ];
 
-      $form['subtasks']['actions']['add_row'] = [
+      $form['subtasks']['new_subtask_form'] = [
+        '#type' => 'container',
+        // '#weight' => -10,
+      ];
+
+      $form['subtasks']['new_subtask_form']['name'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('New Sub‑Task Name'),
+        '#required' => TRUE,
+        '#attributes' => [
+          'class' => ['w-15']
+        ]
+      ];
+
+      $form['subtasks']['new_subtask_form']['actions']['create_subtask'] = [
         '#type' => 'submit',
-        '#value' => $this->t('New Sub-Task'),
-        '#name' => 'new_code',
-        '#attributes' => array('class' => array('btn', 'btn-sm', 'add-element-button')),
+        '#value' => $this->t('Create'),
+        '#name' => 'create_subtask',
+        '#limit_validation_errors' => [],          // skip validating other tabs
+        '#submit' => ['::createSubtaskSubmit'],    // our submit handler
+        '#ajax' => [
+          'callback' => '::ajaxSubtasksCallback',  // render callback
+          'wrapper'  => 'subtasks-wrapper',
+          'effect'   => 'fade',
+        ],
       ];
 
-      $form['subtasks']['actions']['bottom'] = array(
-        '#type' => 'markup',
-        '#markup' => '</div>' . $separator,
-      );
-
-      $form['subtasks']['header'] = array(
-        '#type' => 'markup',
-        '#markup' =>
-          '<div class="p-2 col bg-secondary text-white border border-white">Name</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Type</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Top Task</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Instruments</div>' .
-          '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Actions</div>' . $separator,
-      );
-
-      $form['subtasks']['rows'] = $this->renderSubTasks($tasks);
-
-      $form['codes']['space_3'] = [
-        '#type' => 'markup',
-        '#markup' => $separator,
+      $form['subtasks']['table'] = [
+        '#type' => 'table',
+        '#header' => Task::generateHeader(),
+        '#rows'   => TASK::generateOutput($tasks)['output_rows'],
+        '#empty'  => $this->t('No records found'),
+        '#attributes' => ['class'=>['table','table-striped']],
       ];
+
 
     }
 
@@ -437,7 +453,7 @@ class EditTaskForm extends FormBase {
 
     $form['save_submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Save'),
+      '#value' => $this->t('Save and go back to Parent'),
       '#name' => 'save',
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'save-button'],
@@ -868,7 +884,8 @@ class EditTaskForm extends FormBase {
    ******************************/
 
   protected function renderSubTasks(array $subtasks) {
-    $form_rows = [];
+    $form_rows = TASK::generateOutput($subtasks);
+
     return $form_rows;
   }
 
@@ -1407,6 +1424,43 @@ class EditTaskForm extends FormBase {
         '#empty' => $this->t('No detectors found.'),
       ],
     ];
+  }
+
+  public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
+    // 1) Pull the new task name
+    $name = $form_state->getValue(['subtasks','new_subtask_form','name']);
+
+    $api = \Drupal::service('rep.api_connector');
+    $parentUri = $this->getTask()->uri;
+    $useremail = \Drupal::currentUser()->getEmail();
+    $newTaskUri = Utils::uriGen('task');
+    $taskJSON = json_encode([
+      'uri'               => $newTaskUri,
+      'typeUri'           => VSTOI::TASK,
+      'hascoTypeUri'      => VSTOI::TASK,
+      'hasStatus'         => VSTOI::DRAFT,
+      'label'             => $name,
+      'hasLanguage'       => $this->getTask()->hasLanguage,
+      'hasSupertaskUri'   => $parentUri,
+      'hasVersion'        => "1",
+      'comment'           => "",
+      'hasWebDocument'    => "",
+      'hasSIRManagerEmail'=> $useremail,
+    ]);
+    $message = $api->elementAdd('task', $taskJSON);
+    \Drupal::logger('std')->debug('<pre>@r</pre>', ['@r' => print_r($message, TRUE)]);
+
+    // $task = $api->getSubTasks($parentUri);
+    // \Drupal::state()->set('my_form_tasks', $tasks);
+
+    // 3) Feedback + rebuild
+    \Drupal::messenger()->addStatus($this->t('Sub‑Task “@name” created.', ['@name' => $name]));
+    $form_state->setRebuild(TRUE);
+  }
+
+  public function ajaxSubtasksCallback(array &$form, FormStateInterface $form_state) {
+    // Return only that container to replace it on the page
+    return $form['subtasks'];
   }
 
 }
