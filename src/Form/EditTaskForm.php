@@ -322,58 +322,111 @@ class EditTaskForm extends FormBase {
     if ($this->getState() == 'tasks') {
 
       // *
-      // *      CODES
+      // *      TASKS
       // *
 
-      // $form['codes_title'] = [
-      //   '#type' => 'markup',
-      //   '#markup' => 'Sub-Tasks',
-      // ];
-
-      $form['codes'] = array(
+      $form['subtasks'] = array(
         '#type' => 'container',
-        '#title' => $this->t('codes'),
+        '#title' => $this->t('Sub-Tasks'),
         '#attributes' => array(
           'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
           'id' => 'custom-table-wrapper',
         ),
       );
 
-      $form['codes']['header'] = array(
-        '#type' => 'markup',
-        '#markup' =>
-          '<div class="p-2 col bg-secondary text-white border border-white">Column</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Code</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Label</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Class</div>' .
-          '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
-      );
-
-      $form['codes']['rows'] = $this->renderCodeRows($tasks);
-
-      $form['codes']['space_3'] = [
-        '#type' => 'markup',
-        '#markup' => $separator,
-      ];
-
-      $form['codes']['actions']['top'] = array(
+      $form['subtasks']['actions']['top'] = array(
         '#type' => 'markup',
         '#markup' => '<div class="p-3 col">',
       );
 
-      $form['codes']['actions']['add_row'] = [
+      $form['subtasks']['actions']['add_row'] = [
         '#type' => 'submit',
         '#value' => $this->t('New Sub-Task'),
         '#name' => 'new_code',
         '#attributes' => array('class' => array('btn', 'btn-sm', 'add-element-button')),
       ];
 
-      $form['codes']['actions']['bottom'] = array(
+      $form['subtasks']['actions']['bottom'] = array(
         '#type' => 'markup',
         '#markup' => '</div>' . $separator,
       );
 
+      $form['subtasks']['header'] = array(
+        '#type' => 'markup',
+        '#markup' =>
+          '<div class="p-2 col bg-secondary text-white border border-white">Name</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">Type</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">Top Task</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">Instruments</div>' .
+          '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Actions</div>' . $separator,
+      );
+
+      $form['subtasks']['rows'] = $this->renderSubTasks($tasks);
+
+      $form['codes']['space_3'] = [
+        '#type' => 'markup',
+        '#markup' => $separator,
+      ];
+
     }
+
+    /* ======================= CODES ======================= */
+
+    // if ($this->getState() == 'codes') {
+
+    //   // *
+    //   // *      CODES
+    //   // *
+
+    //   // $form['codes_title'] = [
+    //   //   '#type' => 'markup',
+    //   //   '#markup' => 'Sub-Tasks',
+    //   // ];
+
+    //   $form['codes'] = array(
+    //     '#type' => 'container',
+    //     '#title' => $this->t('codes'),
+    //     '#attributes' => array(
+    //       'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
+    //       'id' => 'custom-table-wrapper',
+    //     ),
+    //   );
+
+    //   $form['codes']['header'] = array(
+    //     '#type' => 'markup',
+    //     '#markup' =>
+    //       '<div class="p-2 col bg-secondary text-white border border-white">Column</div>' .
+    //       '<div class="p-2 col bg-secondary text-white border border-white">Code</div>' .
+    //       '<div class="p-2 col bg-secondary text-white border border-white">Label</div>' .
+    //       '<div class="p-2 col bg-secondary text-white border border-white">Class</div>' .
+    //       '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
+    //   );
+
+    //   $form['codes']['rows'] = $this->renderCodeRows($tasks);
+
+    //   $form['codes']['space_3'] = [
+    //     '#type' => 'markup',
+    //     '#markup' => $separator,
+    //   ];
+
+    //   $form['codes']['actions']['top'] = array(
+    //     '#type' => 'markup',
+    //     '#markup' => '<div class="p-3 col">',
+    //   );
+
+    //   $form['codes']['actions']['add_row'] = [
+    //     '#type' => 'submit',
+    //     '#value' => $this->t('New Sub-Task'),
+    //     '#name' => 'new_code',
+    //     '#attributes' => array('class' => array('btn', 'btn-sm', 'add-element-button')),
+    //   ];
+
+    //   $form['codes']['actions']['bottom'] = array(
+    //     '#type' => 'markup',
+    //     '#markup' => '</div>' . $separator,
+    //   );
+
+    // }
 
     /* ======================= COMMON BOTTOM ======================= */
 
@@ -806,6 +859,17 @@ class EditTaskForm extends FormBase {
       \Drupal::state()->set('my_form_instruments', $instruments);
     }
     return;
+  }
+
+  /******************************
+   *
+   *    SUBTASK'S FUNCTIONS
+   *
+   ******************************/
+
+  protected function renderSubTasks(array $subtasks) {
+    $form_rows = [];
+    return $form_rows;
   }
 
   /******************************
