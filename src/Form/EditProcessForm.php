@@ -189,12 +189,9 @@ class EditProcessForm extends FormBase {
 
     // Add the Edit Task button next to the Top Task element
     $form['process_toptask_wrapper']['edit_task'] = [
-      '#type' => 'link',
-      '#title' => $this->t('Edit Top Task'),
-      '#url' => Url::fromRoute('std.edit_task', [
-        'state' => 'tasks',
-        'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
-      ]),
+      '#type' => 'submit',
+      '#value' => $this->t('Edit Top Task'),
+      '#submit' => ['::setBackUrl'],
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'edit-task-button', 'mt-2'],
         'style' => 'margin-left: 1em;',
@@ -631,6 +628,24 @@ class EditProcessForm extends FormBase {
         $response->send();
       }
     }
+  }
+
+  /**
+   * Submit handler for editing an element in card view.
+   */
+  public function setBackUrl(array &$form, FormStateInterface $form_state) {
+    $uid = \Drupal::currentUser()->id();
+    $previousUrl = \Drupal::request()->getRequestUri();
+
+    $url = Url::fromRoute('std.edit_task', [
+        'processuri' => base64_encode($this->getProcessUri()),
+        'state' => 'tasks',
+        'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
+    ]);
+
+    // Definir redirecionamento explícito
+    Utils::trackingStoreUrls($uid,$previousUrl,$url->toString());
+    $form_state->setRedirectUrl($url);
   }
 
 }

@@ -549,7 +549,7 @@ std.add_task:
     no_cache: 'TRUE'
 
 std.edit_task:
-  path: 'std/manage/edittask/{state}/{taskuri}'
+  path: 'std/manage/edittask/{processuri}/{state}/{taskuri}'
   defaults:
     _form: '\Drupal\std\Form\EditTaskForm'
   requirements:

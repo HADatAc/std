@@ -73,7 +73,10 @@ class Task {
           $status = parse_url($element->hasStatus, PHP_URL_FRAGMENT);
         }
       }
-      $totInst = count($element->hasRequiredInstrumentationUris);
+      $totInst = 0;
+      if ($element->hasRequiredInstrumentationUris !== null && is_array($element->hasRequiredInstrumentationUris)) {
+        $totInst = count($element->hasRequiredInstrumentationUris);
+      }
       $totDet = 0;
 
       if (isset($element->requiredInstrumentation) && is_array($element->requiredInstrumentation)) {
