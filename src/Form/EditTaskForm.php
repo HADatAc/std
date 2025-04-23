@@ -353,9 +353,10 @@ class EditTaskForm extends FormBase {
         // '#weight' => -10,
       ];
 
-      $form['subtasks']['new_subtask_form']['name'] = [
+      $form['subtasks']['new_subtask_form']['subtask_name'] = [
         '#type' => 'textfield',
         '#title' => $this->t('New Sub‑Task Name'),
+        '#name' => 'subtask_name',
         '#required' => TRUE,
         '#attributes' => [
           'class' => ['w-15']
@@ -1406,43 +1407,13 @@ class EditTaskForm extends FormBase {
   }
 
   public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
-    // 1) Pull the new task name
-    $name = $form_state->getValue(['subtasks','new_subtask_form','name']);
+    // Pull the new task name
+    $name = $form_state->getValue('subtask_name');
 
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
     $useremail = \Drupal::currentUser()->getEmail();
 
-    // // NEW SUBTASK
-    // $newTaskUri = Utils::uriGen('task');
-    // $taskJSON = [
-    //   'uri'               => $newTaskUri,
-    //   'typeUri'           => VSTOI::TASK,
-    //   'hascoTypeUri'      => VSTOI::TASK,
-    //   'hasStatus'         => VSTOI::DRAFT,
-    //   'label'             => $name,
-    //   'hasLanguage'       => $this->getTask()->hasLanguage,
-    //   'hasSupertaskUri'   => $parentUri,
-    //   'hasVersion'        => "1",
-    //   'comment'           => "",
-    //   'hasWebDocument'    => "",
-    //   'hasSIRManagerEmail'=> $useremail,
-    // ];
-    // $message = $api->elementAdd('task', json_encode($taskJSON));
-    // \Drupal::logger('std')->debug('<pre>@r</pre>', ['@r' => print_r($message, TRUE)]);
-
-    // // UPDATE PARENT WITH SUBTASK URI
-    // $task = $api->parseObjectResponse($api->getUri($this->getTask()->uri), 'getUri');
-    // $cloned_task = unserialize(serialize($task));
-    // if (! isset($cloned_task->subtasks) || ! is_array($cloned_task->subtasks)) {
-    //   $cloned_task->subtasks = [];
-    // }
-    // $cloned_task->subtasks[] = $taskJSON;
-
-    // $message = $api->elementAdd('task', json_encode($cloned_task));
-    // \Drupal::logger('std')->debug('<pre>@r</pre>', ['@r' => print_r($message, TRUE)]);
-
-    // 1) Cria o sub-task
     $newTaskUri = Utils::uriGen('task');
     $newSubtask = [
       'uri'               => $newTaskUri,
@@ -1457,32 +1428,41 @@ class EditTaskForm extends FormBase {
       'hasWebDocument'    => "",
       'hasSIRManagerEmail'=> $useremail,
     ];
-    $api->elementAdd('task', json_encode($newSubtask));
-    \Drupal::logger('std')->debug('Created subtask: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
+    $subMessage = $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
+    \Drupal::logger('std')->debug('Created subtask message: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
 
-    // 2) Recupera o pai atualizado lá do servidor
+    // 1) Obténs o pai original da API
     $parent = $api->parseObjectResponse($api->getUri($parentUri), 'getUri');
 
-    // 3) Deep clone
-    $clone = unserialize(serialize($parent));
+    // 2) Convertes para array (deep clone)
+    $clone = json_decode(json_encode($parent), TRUE);
 
-    // 4) Garante o array
-    if (!isset($clone->subtasks) || !is_array($clone->subtasks)) {
-      $clone->subtasks = [];
+    // 3) Garante que existe a chave 'subtask' como array
+    if (! isset($clone['subtask']) || ! is_array($clone['subtask'])) {
+      $clone['subtask'] = [];
     }
-    // 5) Adiciona só o URI (ou todo o JSON) do novo sub-task
-    $clone->subtasks[] = [$newSubtask];
 
-    // 6) Regrava o pai com o array atualizado
-    $api->elementAdd('task', json_encode($clone));
-    \Drupal::logger('std')->debug('Updated parent subtasks: <pre>@r</pre>', ['@r' => print_r($clone->subtasks, TRUE)]);
+    // 4) Acrescenta o novo sub-task (só um nível de array)
+    $clone['subtask'][] = $newSubtask;
 
+    unset(
+      $clone['uriNamespace'],
+      $clone['typeLabel'],
+      $clone['typeNamespace'],
+      $clone['hascoTypeLabel']
+    );
 
+    \Drupal::logger('std')->debug('Clone: <pre>@r</pre>', ['@r' => print_r($clone, TRUE)]);
+
+    $delMessage = $api->parseObjectResponse($api->elementDel('task', $parentUri), 'getUri');
+    \Drupal::logger('std')->debug('Del message: <pre>@r</pre>', ['@r' => print_r($delMessage, TRUE)]);
+    $addMessage = $api->parseObjectResponse($api->elementAdd('task', json_encode($clone)), 'getUri');
+    \Drupal::logger('std')->debug('Add message: <pre>@r</pre>', ['@r' => print_r($addMessage, TRUE)]);
 
     // $task = $api->getSubTasks($parentUri);
     // \Drupal::state()->set('my_form_tasks', $tasks);
 
-    // 3) Feedback + rebuild
+    // Feedback + rebuild
     \Drupal::messenger()->addStatus($this->t('Sub‑Task “@name” created.', ['@name' => $name]));
     $form_state->setRebuild(TRUE);
   }
