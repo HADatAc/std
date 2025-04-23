@@ -1302,27 +1302,6 @@ class EditTaskForm extends FormBase {
     // and any other manual checks you need…
   }
 
-  /**
-   * Callback para abrir o modal com o formulário.
-   */
-  // public function openTreeModalCallback(array &$form, FormStateInterface $form_state) {
-  //   $response = new AjaxResponse();
-
-  //   // Obtenha a URL para carregar o modal (usando data-url do campo).
-  //   $triggering_element = $form_state->getTriggeringElement();
-  //   $url = $triggering_element['#attributes']['data-url'];
-
-  //   // Adicione o comando para abrir o modal com o formulário.
-  //   $response->addCommand(new OpenModalDialogCommand(
-  //     $this->t('Tree Form'),
-  //     '<iframe src="' . $url . '" style="width: 100%; height: 400px; border: none;"></iframe>',
-  //     ['width' => '800']
-  //   ));
-
-  //   return $response;
-  // }
-
-
   function backUrl() {
     $root_url = \Drupal::request()->getBaseUrl();
     $response = new RedirectResponse($root_url . '/std/select/task/1/9');
@@ -1433,8 +1412,39 @@ class EditTaskForm extends FormBase {
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
     $useremail = \Drupal::currentUser()->getEmail();
+
+    // // NEW SUBTASK
+    // $newTaskUri = Utils::uriGen('task');
+    // $taskJSON = [
+    //   'uri'               => $newTaskUri,
+    //   'typeUri'           => VSTOI::TASK,
+    //   'hascoTypeUri'      => VSTOI::TASK,
+    //   'hasStatus'         => VSTOI::DRAFT,
+    //   'label'             => $name,
+    //   'hasLanguage'       => $this->getTask()->hasLanguage,
+    //   'hasSupertaskUri'   => $parentUri,
+    //   'hasVersion'        => "1",
+    //   'comment'           => "",
+    //   'hasWebDocument'    => "",
+    //   'hasSIRManagerEmail'=> $useremail,
+    // ];
+    // $message = $api->elementAdd('task', json_encode($taskJSON));
+    // \Drupal::logger('std')->debug('<pre>@r</pre>', ['@r' => print_r($message, TRUE)]);
+
+    // // UPDATE PARENT WITH SUBTASK URI
+    // $task = $api->parseObjectResponse($api->getUri($this->getTask()->uri), 'getUri');
+    // $cloned_task = unserialize(serialize($task));
+    // if (! isset($cloned_task->subtasks) || ! is_array($cloned_task->subtasks)) {
+    //   $cloned_task->subtasks = [];
+    // }
+    // $cloned_task->subtasks[] = $taskJSON;
+
+    // $message = $api->elementAdd('task', json_encode($cloned_task));
+    // \Drupal::logger('std')->debug('<pre>@r</pre>', ['@r' => print_r($message, TRUE)]);
+
+    // 1) Cria o sub-task
     $newTaskUri = Utils::uriGen('task');
-    $taskJSON = json_encode([
+    $newSubtask = [
       'uri'               => $newTaskUri,
       'typeUri'           => VSTOI::TASK,
       'hascoTypeUri'      => VSTOI::TASK,
@@ -1446,9 +1456,28 @@ class EditTaskForm extends FormBase {
       'comment'           => "",
       'hasWebDocument'    => "",
       'hasSIRManagerEmail'=> $useremail,
-    ]);
-    $message = $api->elementAdd('task', $taskJSON);
-    \Drupal::logger('std')->debug('<pre>@r</pre>', ['@r' => print_r($message, TRUE)]);
+    ];
+    $api->elementAdd('task', json_encode($newSubtask));
+    \Drupal::logger('std')->debug('Created subtask: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
+
+    // 2) Recupera o pai atualizado lá do servidor
+    $parent = $api->parseObjectResponse($api->getUri($parentUri), 'getUri');
+
+    // 3) Deep clone
+    $clone = unserialize(serialize($parent));
+
+    // 4) Garante o array
+    if (!isset($clone->subtasks) || !is_array($clone->subtasks)) {
+      $clone->subtasks = [];
+    }
+    // 5) Adiciona só o URI (ou todo o JSON) do novo sub-task
+    $clone->subtasks[] = [$newSubtask];
+
+    // 6) Regrava o pai com o array atualizado
+    $api->elementAdd('task', json_encode($clone));
+    \Drupal::logger('std')->debug('Updated parent subtasks: <pre>@r</pre>', ['@r' => print_r($clone->subtasks, TRUE)]);
+
+
 
     // $task = $api->getSubTasks($parentUri);
     // \Drupal::state()->set('my_form_tasks', $tasks);
