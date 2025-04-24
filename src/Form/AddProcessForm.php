@@ -324,7 +324,7 @@ class AddProcessForm extends FormBase {
             $file->setPermanent();
             $file->save();
             // Optionally register file usage to prevent cleanup.
-            \Drupal::service('file.usage')->add($file, 'meugrafo', 'process', 1);
+            \Drupal::service('file.usage')->add($file, 'socialm', 'process', 1);
             // Now get the filename from the file entity.
             $process_image = $file->getFilename();
           }
