@@ -18,7 +18,6 @@ use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\std\Entity\Task;
 use Drupal\Core\Ajax\HtmlCommand;
-use Drupal\Core\Render\RendererInterface;
 
 class EditTaskForm extends FormBase {
 
@@ -61,6 +60,7 @@ class EditTaskForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $processuri=NULL, $state=NULL, $taskuri=NULL) {
 
+
     // INITIALIZE NS TABLE
     $tables = new Tables;
     $languages = $tables->getLanguages();
@@ -90,17 +90,13 @@ class EditTaskForm extends FormBase {
       // POPULATE DATA STRUCTURES
       $basic = $this->populateBasic();
       $instruments = $this->populateInstruments();
-      // $tasks = $this->populateCodes($namespaces);
+      $tasks = $this->getTask()->subtask;
 
     } else {
 
-      $basic = \Drupal::state()->get('my_form_basic');
+      $basic = \Drupal::state()->get('my_form_basic') ?? $this->populateBasic();;
       $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
-      // Recupera os elementos para a página atual
-
-      // TO-DO
-      // OBTER LISTA DE TAREFAS PASSANDO O URI
-      $tasks = \Drupal::state()->get('my_form_tasks') ?? [];
+      $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
 
     }
 
@@ -109,6 +105,11 @@ class EditTaskForm extends FormBase {
 
     // SET SEPARATOR
     $separator = '<div class="w-100"></div>';
+
+    $form['status_messages'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'subtask-messages'],
+    ];
 
     $form['task_title'] = [
       '#type' => 'markup',
@@ -357,27 +358,9 @@ class EditTaskForm extends FormBase {
         '#attributes' => ['class' => ['d-flex','justify-content-between','align-items-center','mb-3']],
       ];
 
-      // GET PROCESS DATA
-      $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
-
-      // Build Breadcrumb
-      $breadcrumb = $process->label;
-      if ($this->getTask()->hasSupertaskUri !== null) {
-        $parent = $api->parseObjectResponse(
-          $api->getUri($this->getTask()->hasSupertaskUri),
-          'getUri'
-        );
-        // use a <span> and inline style instead of <font>
-        $breadcrumb .= ' &gt; <span style="color:blue;"><strong>'
-          . $parent->label .
-          '</strong></span>';
-      }
-      $breadcrumb .= ' &gt; ' . $this->getTask()->label;
-
       // Tell Drupal “this string is already safe HTML”
       $form['subtasks']['header']['title'] = [
-        '#type' => 'label',
-        '#title' => '<h5>Sub-tasks of: ' . $breadcrumb . '</h5>',
+        '#markup' => $this->buildBreadcrumb(),
       ];
 
       // 2) Same for o mini-form
@@ -412,78 +395,18 @@ class EditTaskForm extends FormBase {
           'effect'   => 'fade',
         ],
         '#attributes' => [
-          'class' => ['mt-2', 'ms-2']
+          'class' => ['mt-2', 'ms-2', 'add-element-button']
         ],
       ];
 
       $form['subtasks']['table'] = [
         '#type' => 'table',
         '#header' => Task::generateHeader(),
-        '#rows'   => TASK::generateOutput($tasks)['output_rows'],
+        '#rows'   => Task::generateOutput($tasks)['output'],
         '#empty'  => $this->t('No records found'),
         '#attributes' => ['class'=>['table','table-striped']],
       ];
-
-
     }
-
-    /* ======================= CODES ======================= */
-
-    // if ($this->getState() == 'codes') {
-
-    //   // *
-    //   // *      CODES
-    //   // *
-
-    //   // $form['codes_title'] = [
-    //   //   '#type' => 'markup',
-    //   //   '#markup' => 'Sub-Tasks',
-    //   // ];
-
-    //   $form['codes'] = array(
-    //     '#type' => 'container',
-    //     '#title' => $this->t('codes'),
-    //     '#attributes' => array(
-    //       'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
-    //       'id' => 'custom-table-wrapper',
-    //     ),
-    //   );
-
-    //   $form['codes']['header'] = array(
-    //     '#type' => 'markup',
-    //     '#markup' =>
-    //       '<div class="p-2 col bg-secondary text-white border border-white">Column</div>' .
-    //       '<div class="p-2 col bg-secondary text-white border border-white">Code</div>' .
-    //       '<div class="p-2 col bg-secondary text-white border border-white">Label</div>' .
-    //       '<div class="p-2 col bg-secondary text-white border border-white">Class</div>' .
-    //       '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
-    //   );
-
-    //   $form['codes']['rows'] = $this->renderCodeRows($tasks);
-
-    //   $form['codes']['space_3'] = [
-    //     '#type' => 'markup',
-    //     '#markup' => $separator,
-    //   ];
-
-    //   $form['codes']['actions']['top'] = array(
-    //     '#type' => 'markup',
-    //     '#markup' => '<div class="p-3 col">',
-    //   );
-
-    //   $form['codes']['actions']['add_row'] = [
-    //     '#type' => 'submit',
-    //     '#value' => $this->t('New Sub-Task'),
-    //     '#name' => 'new_code',
-    //     '#attributes' => array('class' => array('btn', 'btn-sm', 'add-element-button')),
-    //   ];
-
-    //   $form['codes']['actions']['bottom'] = array(
-    //     '#type' => 'markup',
-    //     '#markup' => '</div>' . $separator,
-    //   );
-
-    // }
 
     /* ======================= COMMON BOTTOM ======================= */
 
@@ -494,7 +417,7 @@ class EditTaskForm extends FormBase {
 
     $form['save_submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Save and go back to Parent'),
+      '#value' => $this->t('Save and Go to ' . ($this->getTask()->hasSupertaskUri === null ? 'Process':' Parent Task')),
       '#name' => 'save',
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'save-button'],
@@ -523,6 +446,7 @@ class EditTaskForm extends FormBase {
 
     // RETRIEVE CURRENT STATE AND SAVE IT ACCORDINGLY
     $currentState = $form_state->getValue('state');
+    $process = base64_encode($this->getProcessUri());
 
     if ($currentState == 'basic') {
       $this->updateBasic($form_state);
@@ -545,7 +469,7 @@ class EditTaskForm extends FormBase {
 
     // BUILD NEW URL
     $root_url = \Drupal::request()->getBaseUrl();
-    $newUrl = $root_url . REPGUI::EDIT_TASK . $state . '/' . base64_encode($basic['uri']);
+    $newUrl = $root_url . REPGUI::EDIT_TASK . '/' . $process . '/' . $state . '/' . base64_encode($this->getTask()->uri);
 
     // REDIRECT TO NEW URL
     $response = new AjaxResponse();
@@ -851,7 +775,7 @@ class EditTaskForm extends FormBase {
         return;
     }
     if (empty($instruments)) {
-        \Drupal::messenger()->addWarning(t("Task has no instrument to be saved."));
+        // \Drupal::messenger()->addWarning(t("Task has no instrument to be saved."));
         return;
     }
 
@@ -1242,7 +1166,7 @@ class EditTaskForm extends FormBase {
 
       if (!empty($basic)) {
 
-        if(strlen($basic['name']) < 1 || strlen($basic['taskstem']) < 1 || strlen($basic['description']) < 1) {
+        if(strlen($basic['name']) < 1 || strlen($basic['taskstem']) < 1 ) {
           $errors = true;
           \Drupal::messenger()->addError(t("Mandatory fields are required to be filled! Check 'Basic Task Porperties Tab'"));
         }
@@ -1341,29 +1265,6 @@ class EditTaskForm extends FormBase {
     // }
 
     // and any other manual checks you need…
-  }
-
-  function backUrl() {
-    // $root_url = \Drupal::request()->getBaseUrl();
-    // $response = new RedirectResponse($root_url . '/std/select/task/1/9');
-    // $response->send();
-    // return;
-
-    if ($this->getTask()->hasSupertaskUri !== null) {
-      $default_url = Url::fromRoute('std.edit_task', [
-        'processuri' => base64_encode($this->getProcessUri()),
-        'state' => 'tasks',
-        'taskuri' => base64_encode($this->getTask()->hasSupertaskUri),
-      ])->toString();
-    } else {
-      $default_url = Url::fromRoute('std.edit_process', [
-        'processuri' => base64_encode($this->getProcessUri()),
-      ])->toString();
-    }
-
-    $response = new RedirectResponse($default_url);
-    $response->send();
-
   }
 
   public function getComponents($instrumentUri) {
@@ -1476,7 +1377,6 @@ class EditTaskForm extends FormBase {
     }
   }
 
-
   public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
     // Pull the new task name
     $name = $form_state->getValue(['subtasks','new_subtask_form','subtask_name']);
@@ -1559,9 +1459,79 @@ class EditTaskForm extends FormBase {
     ];
     $html = $renderer->renderRoot($messages);
     // adjust the selector to match where your theme prints messages.
-    $response->addCommand(new HtmlCommand('.messages', $html));
+    $response->addCommand(new HtmlCommand(
+      '#subtask-messages',
+      $html
+    ));
 
     return $response;
+  }
+
+  /**
+   * Build an array of labels from the top process down to the current task.
+   *
+   * @return string
+   *   A safe HTML string of the full breadcrumb trail.
+   */
+  protected function buildBreadcrumb(): string {
+    $api = \Drupal::service('rep.api_connector');
+    $labels = [];
+
+    // 1) Start with the top‐level process.
+    $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
+    $labels[] = $process->label;
+
+    // 2) Then walk down the supertask chain.
+    $currentTask = $this->getTask();
+    $stack = [];
+    while ($currentTask->hasSupertaskUri) {
+      // Fetch the parent.
+      $parent = $api->parseObjectResponse(
+        $api->getUri($currentTask->hasSupertaskUri),
+        'getUri'
+      );
+      // Prepend to our stack (we’ll reverse later).
+      array_unshift($stack, $parent->label);
+      // Continue up one level:
+      $currentTask = $parent;
+    }
+
+    // 3) Now our $stack is [ topParent, ..., directParent ]. Append them:
+    foreach ($stack as $parentLabel) {
+      $labels[] = '<span style="color:blue"><strong>' . $parentLabel . '</strong></span>';
+    }
+
+    // 4) Finally the current task itself:
+    $labels[] = $this->getTask()->label;
+
+    // 5) Join with “ > ”
+    $html = implode(' &gt; ', $labels);
+    // Wrap it in your heading tag:
+    return '<h5>Sub-tasks of: ' . $html . '</h5>';
+  }
+
+
+  function backUrl() {
+    // $root_url = \Drupal::request()->getBaseUrl();
+    // $response = new RedirectResponse($root_url . '/std/select/task/1/9');
+    // $response->send();
+    // return;
+
+    if ($this->getTask()->hasSupertaskUri !== null) {
+      $default_url = Url::fromRoute('std.edit_task', [
+        'processuri' => base64_encode($this->getProcessUri()),
+        'state' => 'tasks',
+        'taskuri' => base64_encode($this->getTask()->hasSupertaskUri),
+      ])->toString();
+    } else {
+      $default_url = Url::fromRoute('std.edit_process', [
+        'processuri' => base64_encode($this->getProcessUri()),
+      ])->toString();
+    }
+
+    $response = new RedirectResponse($default_url);
+    $response->send();
+
   }
 
 }
