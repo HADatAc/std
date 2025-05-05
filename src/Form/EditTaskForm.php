@@ -1399,34 +1399,8 @@ class EditTaskForm extends FormBase {
       'hasWebDocument'    => "",
       'hasSIRManagerEmail'=> $useremail,
     ];
-    $subMessage = $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
+    $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
     \Drupal::logger('std')->debug('Created subtask message: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
-
-    $parent = $api->parseObjectResponse($api->getUri($parentUri), 'getUri');
-
-    $clone = json_decode(json_encode($parent), TRUE);
-
-    if (! isset($clone['subtask']) || ! is_array($clone['subtask'])) {
-      $clone['subtask'] = [];
-    }
-
-    $clone['subtask'][] = $newSubtask;
-
-    unset(
-      $clone['uriNamespace'],
-      $clone['typeLabel'],
-      $clone['typeNamespace'],
-      $clone['hascoTypeLabel']
-    );
-
-    \Drupal::logger('std')->debug('Clone: <pre>@r</pre>', ['@r' => print_r(json_encode($clone), TRUE)]);
-
-    $delMessage = $api->parseObjectResponse($api->elementDel('task', $parentUri), 'getUri');
-    \Drupal::logger('std')->debug('Del message: <pre>@r</pre>', ['@r' => print_r($delMessage, TRUE)]);
-    $addMessage = $api->parseObjectResponse($api->elementAdd('task', json_encode($clone)), 'getUri');
-    \Drupal::logger('std')->debug('Add message: <pre>@r</pre>', ['@r' => print_r($addMessage, TRUE)]);
-
-    \Drupal::state()->set('my_form_tasks', $clone['subtask']);
 
     $form_state->setValue(['subtasks','new_subtask_form','subtask_name'], '');
 
