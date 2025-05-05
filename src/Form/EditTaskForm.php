@@ -402,7 +402,7 @@ class EditTaskForm extends FormBase {
       $form['subtasks']['table'] = [
         '#type' => 'table',
         '#header' => Task::generateHeader(),
-        '#rows'   => Task::generateOutput($tasks)['output'],
+        '#rows'   => Task::generateOutput($tasks,base64_encode($this->getProcessUri()))['output'],
         '#empty'  => $this->t('No records found'),
         '#attributes' => ['class'=>['table','table-striped']],
       ];
@@ -849,7 +849,7 @@ class EditTaskForm extends FormBase {
    ******************************/
 
   protected function renderSubTasks(array $subtasks) {
-    $form_rows = TASK::generateOutput($subtasks);
+    $form_rows = TASK::generateOutput($subtasks, base64_encode($this->getProcessUri()));
 
     return $form_rows;
   }

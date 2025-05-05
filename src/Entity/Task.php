@@ -24,11 +24,17 @@ class Task {
     ];
   }
 
-  public static function generateOutput($list) {
+  public static function generateOutput($list, $processuri) {
 
     if (empty($list)) {
       return [];
     }
+
+    // Se vêm stdClass, transformá-los em arrays
+    $list = array_map(function($item) {
+      // Rasa: basta fazer (array)$item
+      return is_object($item) ? (array) $item : $item;
+    }, $list);
 
     // ROOT URL
     $root_url = \Drupal::request()->getBaseUrl();
@@ -96,7 +102,7 @@ class Task {
 
       // 1) Prepare the edit-link URL, re‐using the same route your form uses.
       $edit_url = Url::fromRoute('std.edit_task', [
-        'processuri' => base64_encode(\Drupal::request()->get('processuri')),
+        'processuri' => $processuri,
         'state'      => 'tasks',
         'taskuri'    => base64_encode($element['uri']),
       ])->toString();
