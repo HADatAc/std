@@ -90,13 +90,16 @@ class EditTaskForm extends FormBase {
       // POPULATE DATA STRUCTURES
       $basic = $this->populateBasic();
       $instruments = $this->populateInstruments();
-      $tasks = $this->getTask()->subtask;
+      $tasks = $this->getTask()->hasSubtaskUris;
 
     } else {
 
-      $basic = \Drupal::state()->get('my_form_basic') ?? $this->populateBasic();;
-      $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
-      $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
+      // $basic = \Drupal::state()->get('my_form_basic') ?? $this->populateBasic();;
+      // $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
+      // $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
+      $basic = $this->populateBasic();;
+      $instruments = $this->populateInstruments();
+      $tasks = $this->getTask()->hasSubtaskUris;
 
     }
 
@@ -245,6 +248,7 @@ class EditTaskForm extends FormBase {
         '#title' => $this->t('Language'),
         '#options' => $languages,
         '#default_value' => $language,
+        '#disabled' => true,
       ];
       $form['task_version_hid'] = [
         '#type' => 'textfield',
@@ -1126,9 +1130,9 @@ class EditTaskForm extends FormBase {
       $this->updateInstruments($form_state);
     }
 
-    if ($this->getState() === 'tasks') {
-      $this->updateCodes($form_state);
-    }
+    // if ($this->getState() === 'tasks') {
+    //   $this->updateCodes($form_state);
+    // }
 
     // Get the latest cached versions of values in the editor
 
@@ -1147,15 +1151,15 @@ class EditTaskForm extends FormBase {
       return;
     }
 
-    if ($button_name === 'new_code') {
-      $this->addCodeRow();
-      return;
-    }
+    // if ($button_name === 'new_code') {
+    //   $this->addCodeRow();
+    //   return;
+    // }
 
-    if (str_starts_with($button_name,'code_remove_')) {
-      $this->removeCodeRow($button_name);
-      return;
-    }
+    // if (str_starts_with($button_name,'code_remove_')) {
+    //   $this->removeCodeRow($button_name);
+    //   return;
+    // }
 
     if ($button_name === 'save') {
 
@@ -1200,22 +1204,29 @@ class EditTaskForm extends FormBase {
         try {
           $useremail = \Drupal::currentUser()->getEmail();
 
-          $taskJSON = '{"uri":"' . $basic['uri'] . '",'
-            . '"typeUri":"' . UTILS::uriFromAutocomplete($basic['taskstem']) . '",'
-            . '"hascoTypeUri":"' . VSTOI::TASK . '",'
-            . '"hasStatus":"' . $basic['status'] . '",'
-            . '"label":"' . $basic['name'] . '",'
-            . '"hasLanguage":"' . $basic['language'] . '",'
-            . '"hasVersion":"' . $basic['version'] . '",'
-            . '"comment":"' . $basic['description'] . '",'
-            . '"hasWebDocument":"'. $basic['webdocument'] .'",'
-            . '"hasSIRManagerEmail":"' . $useremail . '"}';
+          $taskData = [
+            'uri'               => $this->getTask()->uri,
+            'typeUri'           => UTILS::uriFromAutocomplete($basic['taskstem']),
+            'hascoTypeUri'      => VSTOI::TASK,
+            'hasStatus'         => $this->getTask()->hasStatus,
+            'label'             => $basic['name'],
+            'hasLanguage'       => $this->getTask()->language,
+            'hasVersion'        => $this->getTask()->hasVersion,
+            'hasSupertaskUri'   => $this->getTask()->hasSupertaskUri,
+            'comment'           => $basic['description'],
+            'hasWebDocument'    => $basic['webdocument'],
+            // 'hasSubtaskUris'    => $this->getTask()->hasSubtaskUris,
+            'hasSIRManagerEmail'=> $useremail,
+          ];
+
+          $taskJSON = json_encode($taskData);
 
           $api = \Drupal::service('rep.api_connector');
-
-          // The DELETE of the task will also delete the
-          // instruments, objects and codes of the dictionary
-          $api->elementDel('task',$basic['uri']);
+          // Delete the task before updating it
+          // This is necessary because the task is not updated
+          // dpm($taskJSON);
+          // dpm($basic['name']);return false;
+          $api->elementDel('task',$this->getTask()->uri);
 
           // In order to update the task it is necessary to
           // add the following to the task: the task itself, its
@@ -1223,11 +1234,8 @@ class EditTaskForm extends FormBase {
           $api->elementAdd('task',$taskJSON);
 
           if (isset($instruments)) {
-            $this->saveInstruments($basic['uri'],$instruments);
+            $this->saveInstruments($this->getTask()->uri,$instruments);
           }
-          // if (isset($codes)) {
-          //   $this->saveCodes($basic['uri'],$codes);
-          // }
 
           // Release values cached in the editor
           \Drupal::state()->delete('my_form_basic');
@@ -1400,12 +1408,13 @@ class EditTaskForm extends FormBase {
       'hasSIRManagerEmail'=> $useremail,
     ];
     $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
-    \Drupal::logger('std')->debug('Created subtask message: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
+    // \Drupal::logger('std')->debug('Created subtask message: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
 
     $form_state->setValue(['subtasks','new_subtask_form','subtask_name'], '');
 
     // Feedback + rebuild
-    \Drupal::messenger()->addStatus($this->t('Sub‑Task “@name” created.', ['@name' => $name]));
+    // \Drupal::messenger()->addStatus($this->t('Sub‑Task “@name” created.', ['@name' => $name]));
+
     $form_state->setRebuild(TRUE);
     // return $form['subtasks'];
   }
