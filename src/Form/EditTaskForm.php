@@ -1215,9 +1215,11 @@ class EditTaskForm extends FormBase {
             'hasSupertaskUri'   => $this->getTask()->hasSupertaskUri,
             'comment'           => $basic['description'],
             'hasWebDocument'    => $basic['webdocument'],
-            // 'hasSubtaskUris'    => $this->getTask()->hasSubtaskUris,
+            'hasSubtaskUris'    => $this->getTask()->hasSubtaskUris,
             'hasSIRManagerEmail'=> $useremail,
           ];
+
+          // dpm(json_encode($taskData)); return false;
 
           $taskJSON = json_encode($taskData);
 
