@@ -1210,7 +1210,7 @@ class EditTaskForm extends FormBase {
             'hascoTypeUri'      => VSTOI::TASK,
             'hasStatus'         => $this->getTask()->hasStatus,
             'label'             => $basic['name'],
-            'hasLanguage'       => $this->getTask()->language,
+            'hasLanguage'       => $this->getTask()->hasLanguage,
             'hasVersion'        => $this->getTask()->hasVersion,
             'hasSupertaskUri'   => $this->getTask()->hasSupertaskUri,
             'comment'           => $basic['description'],
