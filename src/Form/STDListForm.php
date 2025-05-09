@@ -145,7 +145,7 @@ class STDListForm extends FormBase {
         $current_pagesize = $pagesize;
       }
       else {
-        $current_pagesize *= 2;
+        $current_pagesize += 9;
       }
       $pagesize = $current_pagesize;
       $form_state->set('pagesize', $current_pagesize);
