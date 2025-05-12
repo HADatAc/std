@@ -10,11 +10,11 @@ use Drupal\file\Entity\File;
 use Drupal\rep\ListPropertyPage;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\SCHEMA;
-use Drupal\meugrafo\Entity\KGR;
-use Drupal\meugrafo\Entity\Place;
-use Drupal\meugrafo\Entity\Organization;
-use Drupal\meugrafo\Entity\Person;
-use Drupal\meugrafo\Entity\PostalAddress;
+use Drupal\social\Entity\KGR;
+use Drupal\social\Entity\Place;
+use Drupal\social\Entity\Organization;
+use Drupal\social\Entity\Person;
+use Drupal\social\Entity\PostalAddress;
 
 class STDPropertyForm extends FormBase {
 

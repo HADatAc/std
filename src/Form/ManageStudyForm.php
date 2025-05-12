@@ -52,6 +52,9 @@ class ManageStudyForm extends FormBase
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL)
   {
 
+    // Owner of the record
+    $useremail = \Drupal::currentUser()->getEmail();
+
     //if ($studyuri == NULL || $studyuri == "") {
     //  \Drupal::messenger()->addMessage(t("A STUDY URI is required to manage a study."));
     //  $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
@@ -73,7 +76,7 @@ class ManageStudyForm extends FormBase
 
     // get totals for current study
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
-    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));    
+    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
     $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
@@ -271,7 +274,7 @@ class ManageStudyForm extends FormBase
     //  '#attributes' => array('class' => array('col-md-3')),
     //  'card' => array(
     //    '#type' => 'markup',
-    //    '#markup' => '<div class="card">' . 
+    //    '#markup' => '<div class="card">' .
     //      '<div class="card-header text-center">' . $cards[5]['value'] . '</div>' .
     //      '<div class="card-body">' . 'Foo' . '</div>' .
     //      '</div>',
@@ -299,21 +302,81 @@ class ManageStudyForm extends FormBase
     );
 
     //Row 2, Outter card 1
-    $form['row2']['card1'] = array(
+    // $form['row2']['card1'] = array(
+    //   '#type' => 'container',
+    //   '#attributes' => array('class' => array('col-md-12')),
+    //   'card' => array(
+    //     '#type' => 'markup',
+    //     '#markup' => '<div class="card">' .
+    //       '<div class="card drop-area" id="drop-card">' .
+    //       '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
+    //       '<div class="info-card">You can drag&drop files directly into this card</div>' .
+    //       '</div>' .
+    //       \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
+    //       //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' .
+    //       '</div>' .
+    //       '</div>',
+    //   ),
+    //   '#attached' => [
+    //     'library' => [
+    //       'std/json_table',
+    //       'core/drupal.autocomplete',
+    //     ],
+    //     'drupalSettings' => [
+    //       'std' => [
+    //         'studyuri' => base64_encode($this->getStudy()->uri),
+    //         'elementtype' => 'da',
+    //         'mode' => 'compact',
+    //         'page' => $da_page_from_session,
+    //         'pagesize' => 5,
+    //       ],
+    //       'pub' => [
+    //         'studyuri' => base64_encode($this->getStudy()->uri),
+    //         'elementtype' => 'publications',
+    //         'page' => $pub_page_from_session,
+    //         'pagesize' => 5,
+    //       ],
+    //       'media' => [
+    //         'studyuri' => base64_encode($this->getStudy()->uri),
+    //         'elementtype' => 'media',
+    //         'page' => $media_page_from_session,
+    //         'pagesize' => 5,
+    //       ],
+    //       'addNewDA' => [
+    //         'url' => Url::fromRoute('std.render_add_da_form', [
+    //           'elementtype' => 'da',
+    //           'studyuri' => base64_encode($this->getStudy()->uri),
+    //         ])->toString(),
+    //       ],
+    //     ],
+    //   ],
+    // );
+
+    // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
+    if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
+      // User is the owner: enable drag & drop functionality.
+      $markup = '<div class="card drop-area" id="drop-card">' .
+                '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
+                '<div class="info-card">You can drag&drop files directly into this card</div></div>' .
+                \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
+                '</div>';
+    }
+    else {
+      // User is not the owner: disable drag & drop functionality.
+      $markup = '<div class="card" id="drop-card-disabled">' .
+                '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
+                '<div class="info-card">Only the owner can drag&drop files</div></div>' .
+                \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
+                '</div>';
+    }
+
+    $form['row2']['card1'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-12')),
-      'card' => array(
+      '#attributes' => ['class' => ['col-md-12']],
+      'card' => [
         '#type' => 'markup',
-        '#markup' => '<div class="card">' .
-          '<div class="card drop-area" id="drop-card">' .
-          '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-          '<div class="info-card">You can drag&drop files directly into this card</div>' .
-          '</div>' .
-          \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-          //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' . 
-          '</div>' .
-          '</div>',
-      ),
+        '#markup' => $markup,
+      ],
       '#attached' => [
         'library' => [
           'std/json_table',
@@ -345,9 +408,13 @@ class ManageStudyForm extends FormBase
               'studyuri' => base64_encode($this->getStudy()->uri),
             ])->toString(),
           ],
+          'user' => [
+            'logged' => ($this->getStudy()->hasSIRManagerEmail === $useremail ? TRUE:FALSE),
+          ],
         ],
       ],
-    );
+    ];
+
 
     // Third row with 5 cards (card 6 to card 10)
     $form['row3'] = array(
@@ -428,12 +495,22 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('row')),
     );
 
-    $form['row6']['back_submit'] = [
+    // $form['row6']['back_submit'] = [
+    //   '#type' => 'submit',
+    //   '#value' => $this->t('Back to Manage Studies'),
+    //   '#name' => 'back',
+    //   '#attributes' => [
+    //     'class' => ['col-md-2', 'btn', 'btn-primary', 'back-button'],
+    //   ],
+    // ];
+    $form['back_link'] = [
       '#type' => 'submit',
       '#value' => $this->t('Back to Manage Studies'),
+      '#url' => Url::fromUri('internal:/'),
       '#name' => 'back',
       '#attributes' => [
-        'class' => ['col-md-2', 'btn', 'btn-primary', 'back-button'],
+        'class' => ['col-md-1', 'btn', 'btn-primary', 'back-button'],
+        'onclick' => 'window.history.back(); return false;',
       ],
     ];
 
@@ -493,7 +570,7 @@ class ManageStudyForm extends FormBase
   function backUrl()
   {
     $uid = \Drupal::currentUser()->id();
-    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.manage_study_elements');
+    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.list_element');
     if ($previousUrl) {
       $response = new RedirectResponse($previousUrl);
       $response->send();

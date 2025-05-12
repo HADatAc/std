@@ -209,65 +209,69 @@ class STDSelectByStudyForm extends FormBase {
       '#type' => 'item',
       '#title' => $this->t('<h4>' . $this->plural_class_name . ' maintained by <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
     ];
-    $form['add_element'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Add new ' . $this->single_class_name),
-      '#name' => 'add_element',
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'add-element-button'],
-      ],
-    ];
-    if ($this->getMode() == 'table') {
-      $form['edit_selected_element'] = [
+
+    // ONLY SHOW ACTION BUTTONS IF THE LOGGED USER IS THE OWNER OF THE STUDY
+    if ($this->manager_email === $this->getStudy()->hasSIRManagerEmail) {
+      $form['add_element'] = [
         '#type' => 'submit',
-        '#value' => $this->t('Edit selected ' . $this->single_class_name),
-        '#name' => 'edit_element',
+        '#value' => $this->t('Add new ' . $this->single_class_name),
+        '#name' => 'add_element',
         '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'edit-element-button'],
+          'class' => ['btn', 'btn-primary', 'add-element-button'],
         ],
       ];
-      $form['delete_selected_element'] = [
-        '#type' => 'submit',
-        '#value' => $this->t('Delete selected ' . $this->plural_class_name),
-        '#name' => 'delete_element',
-        '#attributes' => [
-          'onclick' => 'if(!confirm("Really Delete?")){return false;}',
-          'class' => ['btn', 'btn-primary', 'delete-element-button'],
-        ],
-      ];
-      if ($this->element_type == 'studyobjectcollection') {
-        $form['manage_study_objects'] = [
+      if ($this->getMode() == 'table') {
+        $form['edit_selected_element'] = [
           '#type' => 'submit',
-          '#value' => $this->t('Manage objects of selected Study Object Collection'),
-          '#name' => 'manage_studyobject',
+          '#value' => $this->t('Edit selected ' . $this->single_class_name),
+          '#name' => 'edit_element',
           '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'manage_codebookslots-button'],
+            'class' => ['btn', 'btn-primary', 'edit-element-button'],
           ],
+        ];
+        $form['delete_selected_element'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Delete selected ' . $this->plural_class_name),
+          '#name' => 'delete_element',
+          '#attributes' => [
+            'onclick' => 'if(!confirm("Really Delete?")){return false;}',
+            'class' => ['btn', 'btn-primary', 'delete-element-button'],
+          ],
+        ];
+        if ($this->element_type == 'studyobjectcollection') {
+          $form['manage_study_objects'] = [
+            '#type' => 'submit',
+            '#value' => $this->t('Manage objects of selected Study Object Collection'),
+            '#name' => 'manage_studyobject',
+            '#attributes' => [
+              'class' => ['btn', 'btn-primary', 'manage_codebookslots-button'],
+            ],
+          ];
+        }
+        if ($this->element_type == 'str') {
+          $form['ingest_mt'] = [
+            '#type' => 'submit',
+            '#value' => $this->t('Ingest ' . $this->single_class_name . ' Selected'),
+            '#name' => 'ingest_mt',
+            '#attributes' => [
+              'class' => ['btn', 'btn-primary', 'ingest_mt-button'],
+            ],
+          ];
+          $form['uningest_mt'] = [
+            '#type' => 'submit',
+            '#value' => $this->t('Uningest ' . $this->plural_class_name . ' Selected'),
+            '#name' => 'uningest_mt',
+            '#attributes' => [
+              'class' => ['btn', 'btn-primary', 'uningest_mt-element-button'],
+            ],
+          ];
+        }
+      } else {
+        $form['space_top'] = [
+          '#type' => 'item',
+          '#value' => $this->t('<br><br>'),
         ];
       }
-      if ($this->element_type == 'str') {
-        $form['ingest_mt'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Ingest ' . $this->single_class_name . ' Selected'),
-          '#name' => 'ingest_mt',
-          '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'ingest_mt-button'],
-          ],
-        ];
-        $form['uningest_mt'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Uningest ' . $this->plural_class_name . ' Selected'),
-          '#name' => 'uningest_mt',
-          '#attributes' => [
-            'class' => ['btn', 'btn-primary', 'uningest_mt-element-button'],
-          ],
-        ];
-      }
-    } else {
-      $form['space_top'] = [
-        '#type' => 'item',
-        '#value' => $this->t('<br><br>'),
-      ];
     }
 
     if ($this->element_type == 'da' && $this->getMode() == 'card') {

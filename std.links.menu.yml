@@ -18,20 +18,16 @@ std.search_option:
   #requirements:
    #_permission: 'access content'
 
-std.divider1:
-  title: '_________________________________'
+std.manage_top_level:
+  title: Manage Elements
+  description: Manage STD Elements
+  route_name: '<nolink>'
   parent: std.top_level
   menu_name: main
-  weight: 9
-#  class: 'menu-divider'
-#  options:
-#    attributes:
-#      class:
-#        - 'menu-divider'
-  route_name: '<none>'
+  weight: 3
   requirements:
-   _permission: 'access content'
-   _role: 'authenticated'
+    _permission: 'access content'
+    _role: 'authenticated'
 
 #std.manage_da_files:
 #  title: Manage DA Files
@@ -111,7 +107,7 @@ std.divider1:
 # #    attributes:
 # #      class:
 # #        - 'menu-divider'
-#   route_name: '<none>'
+#   route_name: '<nolink>'
 #   requirements:
 #    _permission: 'access content'
 #    _role: 'authenticated'
@@ -124,9 +120,39 @@ std.manage_studies:
     elementtype: 'study'
     page: '1'
     pagesize: '9'
-  parent: std.top_level
+  parent: std.manage_top_level
   menu_name: main
   weight: 21
+  requirements:
+    _permission: 'access content'
+    _role: 'authenticated'
+
+std.manage_processstems :
+  title: Manage Process Stems
+  description: Manage Process Stems
+  route_name: std.select_study
+  route_parameters:
+    elementtype: 'processstem'
+    page: '1'
+    pagesize: '9'
+  parent: std.manage_top_level
+  menu_name: main
+  weight: 22
+  requirements:
+    _permission: 'access content'
+    _role: 'authenticated'
+
+std.manage_process :
+  title: Manage Processes
+  description: Manage Processes
+  route_name: std.select_study
+  route_parameters:
+    elementtype: 'process'
+    page: '1'
+    pagesize: '9'
+  parent: std.manage_top_level
+  menu_name: main
+  weight: 23
   requirements:
     _permission: 'access content'
     _role: 'authenticated'

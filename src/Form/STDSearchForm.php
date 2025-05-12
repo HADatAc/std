@@ -71,7 +71,8 @@ class STDSearchForm extends FormBase {
     $this->setElementType('entity');
     $this->setKeyword('');
     $this->setPage(1);
-    $this->setPageSize(12);
+    $this->setPageSize(9);
+    // dpm($pathElements);
     if (sizeof($pathElements) >= 7) {
 
       // ELEMENT TYPE
@@ -89,6 +90,8 @@ class STDSearchForm extends FormBase {
 
       // PAGESIZE
       $this->setPageSize((int)$pathElements[6]);
+    } else {
+      $this->setElementType('study');
     }
 
     $form['search_element_type'] = [
@@ -105,6 +108,8 @@ class STDSearchForm extends FormBase {
         'virtualcolumn' => $this->t('Virtual Columns'),
         'studyobjectcollection' => $this->t('Study Object Collections'),
         'studyobject' => $this->t('Study Objects'),
+        'processstem' => $this->t('Process Stems'),
+        'process' => $this->t('Processes'),
       ],
       '#default_value' => $this->getElementType(),
       '#ajax' => [
