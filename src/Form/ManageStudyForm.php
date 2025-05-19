@@ -186,7 +186,7 @@ class ManageStudyForm extends FormBase
         '#type' => 'markup',
         '#markup' => '<br><div class="card"><div class="card-body">' .
           $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
-          $this->t('<b>URI</b>: ') . ' ' . $this->getStudy()->uri . '<br>' .
+          $this->t('<b>URI</b>: ' . $this->getStudy()->uri . '<br>') .
           $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .
           $this->t('<b>PI</b>: ') . ' ' . $piName . '<br>' .
           $this->t('<b>Institution</b>: ') . ' ' . $institutionName . '<br>' .
@@ -241,7 +241,7 @@ class ManageStudyForm extends FormBase
         '#markup' => '<div class="card">' .
           '<div class="card-header text-center"><h3 id="publication_files_count">' . $cards[3]['value'] . '</h3></div>' .
           '<div class="card-body">
-             <div id="publication-table-container"></div>
+             <div id="publication-table-container">Loading...</div>
            </div>
            <div class="card-footer">
              <div id="publication-table-pager" class="pagination"></div>
@@ -259,7 +259,7 @@ class ManageStudyForm extends FormBase
         '#markup' => '<div class="card">' .
           '<div class="card-header text-center"><h3 id="media_files_count">' . $cards[4]['value'] . '</h3></div>' .
           '<div class="card-body">
-             <div id="media-table-container"></div>
+             <div id="media-table-container">Loading...</div>
            </div>
            <div class="card-footer">
              <div id="media-table-pager" class="pagination"></div>
