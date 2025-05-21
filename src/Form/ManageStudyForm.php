@@ -90,7 +90,8 @@ class ManageStudyForm extends FormBase
         'value' => 'Study Content (0)',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
-      2 => array('value' => 'Data Files (' . $totalDAs . ')'),
+      2 => array('value' => 'Data File Stream (' . $totalDAs . ')'),
+      11 => array('value' => 'Message Stream (' . $totalDAs . ')'),
       3 => array('value' => 'Publications (0)'),
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
@@ -232,10 +233,27 @@ class ManageStudyForm extends FormBase
       ),
     );
 
+    $form['row2']['card1']['inner_row2']['card11'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">
+          <div class="card-header text-center"><h3 id="data_files_count">' . $cards[11]['value'] . '</h3></div>' .
+          '<div class="card-body">' .
+          '<div id="json-table-container">Loading...</div>' .
+          '</div>' .
+          '<div class="card-footer">' .
+          '<div id="json-table-pager" class="pagination"></div>' .
+          '</div>
+          </div>',
+      ),
+    );
+
     // Row 2, Card 3, Publication content
     $form['row2']['card1']['inner_row2']['card3'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
@@ -253,7 +271,7 @@ class ManageStudyForm extends FormBase
     // Row 2, Card 4, Media content
     $form['row2']['card1']['inner_row2']['card4'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
