@@ -292,6 +292,7 @@ class AddStudyForm extends FormBase {
           '"label":"'.$form_state->getValue('study_short_name').'",'.
           '"title":"'.$form_state->getValue('study_name').'",'.
           '"comment":"'.$form_state->getValue('study_description').'",'.
+          // '"pi":"'.$form_state->getValue('study_pi').'",'.
           '"hasWebDocument":"' . $study_webdocument . '",' .
           '"hasImageUri":"' . $study_image . '",' .
           '"hasSIRManagerEmail":"'.$useremail.'"}';

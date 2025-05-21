@@ -177,25 +177,21 @@ class ManageStudyForm extends FormBase
     ];
 
     // First row with a single card
-    $form['row1']['card0'] = array(
-      //'#type' => 'container',
-      //'#attributes' => array('class' => array('row')),
-      //'card1' => array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-12')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<br><div class="card"><div class="card-body">' .
-          $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
-          $this->t('<b>URI</b>: ' . $this->getStudy()->uri . '<br>') .
-          $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .
-          $this->t('<b>PI</b>: ') . ' ' . $piName . '<br>' .
-          $this->t('<b>Institution</b>: ') . ' ' . $institutionName . '<br>' .
-          $this->t('<b>Description</b>: ') . ' ' . $this->getStudy()->comment . '<br>' .
-          '</div></div>',
-      ),
-      //),
-    );
+    $form['row1']['card0']['card'] = [
+      '#type'       => 'markup',
+      '#markup'     => Markup::create('
+        <div class="card"><div class="card-body" style="justify-content:normal!important;">
+          <h3 class="mb-5 mt-3">' . $this->getStudy()->label . '</h3>
+          <dl class="row">
+            <dt class="col-sm-1">' . $this->t('URI')        . ':</dt><dd class="col-sm-11">' . $this->getStudy()->uri     . '</dd>
+            <dt class="col-sm-1">' . $this->t('Name')       . ':</dt><dd class="col-sm-11">' . $title                       . '</dd>
+            <dt class="col-sm-1">' . $this->t('PI')         . ':</dt><dd class="col-sm-11">' . $piName                      . '</dd>
+            <dt class="col-sm-1">' . $this->t('Institution'). ':</dt><dd class="col-sm-11">' . $institutionName             . '</dd>
+            <dt class="col-sm-1">' . $this->t('Description'). ':</dt><dd class="col-sm-11">' . $this->getStudy()->comment   . '</dd>
+          </dl>
+        </div></div>
+      '),
+    ];
 
     // Obtenha o valor da sessão para fallback
     $session = \Drupal::service('session');
@@ -239,7 +235,7 @@ class ManageStudyForm extends FormBase
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">
-          <div class="card-header text-center"><h3 id="data_files_count">' . $cards[11]['value'] . '</h3></div>' .
+          <div class="card-header text-center"><h3 id="message_streams_count">' . $cards[11]['value'] . '</h3></div>' .
           '<div class="card-body">' .
           '<div id="json-table-container">Loading...</div>' .
           '</div>' .
