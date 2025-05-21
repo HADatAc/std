@@ -444,7 +444,7 @@ class ManageStudyForm extends FormBase
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
           '<div class="card-footer text-center">' .
-          '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> Manage Streams</a>' .
+          '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> View Streams</a>' .
           '</div></div>',
       ),
     );
