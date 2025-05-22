@@ -367,6 +367,7 @@ class JsonDataController extends ControllerBase
                 '"label":"' . $filename . '",' .
                 '"filename":"' . $filename . '",' .
                 '"id":"' . $fileId . '",' .
+                '"studyUri":"'.base64_decode($studyuri).'",'.
                 '"fileStatus":"' . Constant::FILE_STATUS_UNPROCESSED . '",' .
                 '"hasSIRManagerEmail":"' . $useremail . '"}';
 
