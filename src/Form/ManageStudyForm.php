@@ -90,7 +90,8 @@ class ManageStudyForm extends FormBase
         'value' => 'Study Content (0)',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
-      2 => array('value' => 'Data Files (' . $totalDAs . ')'),
+      2 => array('value' => 'Data File Stream (' . $totalDAs . ')'),
+      11 => array('value' => 'Message Stream (' . $totalDAs . ')'),
       3 => array('value' => 'Publications (0)'),
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
@@ -176,25 +177,21 @@ class ManageStudyForm extends FormBase
     ];
 
     // First row with a single card
-    $form['row1']['card0'] = array(
-      //'#type' => 'container',
-      //'#attributes' => array('class' => array('row')),
-      //'card1' => array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-12')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<br><div class="card"><div class="card-body">' .
-          $this->t('<h3>') . ' ' . $this->getStudy()->label . '</h3><br>' .
-          $this->t('<b>URI</b>: ') . ' ' . $this->getStudy()->uri . '<br>' .
-          $this->t('<b>Name</b>: ') . ' ' . $title . '<br>' .
-          $this->t('<b>PI</b>: ') . ' ' . $piName . '<br>' .
-          $this->t('<b>Institution</b>: ') . ' ' . $institutionName . '<br>' .
-          $this->t('<b>Description</b>: ') . ' ' . $this->getStudy()->comment . '<br>' .
-          '</div></div>',
-      ),
-      //),
-    );
+    $form['row1']['card0']['card'] = [
+      '#type'       => 'markup',
+      '#markup'     => Markup::create('
+        <div class="card"><div class="card-body" style="justify-content:normal!important;">
+          <h3 class="mb-5 mt-3">' . $this->getStudy()->label . '</h3>
+          <dl class="row">
+            <dt class="col-sm-1">' . $this->t('URI')        . ':</dt><dd class="col-sm-11">' . $this->getStudy()->uri     . '</dd>
+            <dt class="col-sm-1">' . $this->t('Name')       . ':</dt><dd class="col-sm-11">' . $title                       . '</dd>
+            <dt class="col-sm-1">' . $this->t('PI')         . ':</dt><dd class="col-sm-11">' . $piName                      . '</dd>
+            <dt class="col-sm-1">' . $this->t('Institution'). ':</dt><dd class="col-sm-11">' . $institutionName             . '</dd>
+            <dt class="col-sm-1">' . $this->t('Description'). ':</dt><dd class="col-sm-11">' . $this->getStudy()->comment   . '</dd>
+          </dl>
+        </div></div>
+      '),
+    ];
 
     // Obtenha o valor da sessão para fallback
     $session = \Drupal::service('session');
@@ -232,16 +229,33 @@ class ManageStudyForm extends FormBase
       ),
     );
 
+    $form['row2']['card1']['inner_row2']['card11'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">
+          <div class="card-header text-center"><h3 id="message_streams_count">' . $cards[11]['value'] . '</h3></div>' .
+          '<div class="card-body">' .
+          '<div id="json-table-container">Loading...</div>' .
+          '</div>' .
+          '<div class="card-footer">' .
+          '<div id="json-table-pager" class="pagination"></div>' .
+          '</div>
+          </div>',
+      ),
+    );
+
     // Row 2, Card 3, Publication content
     $form['row2']['card1']['inner_row2']['card3'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
           '<div class="card-header text-center"><h3 id="publication_files_count">' . $cards[3]['value'] . '</h3></div>' .
           '<div class="card-body">
-             <div id="publication-table-container"></div>
+             <div id="publication-table-container">Loading...</div>
            </div>
            <div class="card-footer">
              <div id="publication-table-pager" class="pagination"></div>
@@ -253,13 +267,13 @@ class ManageStudyForm extends FormBase
     // Row 2, Card 4, Media content
     $form['row2']['card1']['inner_row2']['card4'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-3')),
+      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card">' .
           '<div class="card-header text-center"><h3 id="media_files_count">' . $cards[4]['value'] . '</h3></div>' .
           '<div class="card-body">
-             <div id="media-table-container"></div>
+             <div id="media-table-container">Loading...</div>
            </div>
            <div class="card-footer">
              <div id="media-table-pager" class="pagination"></div>
@@ -430,7 +444,7 @@ class ManageStudyForm extends FormBase
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
           '<div class="card-footer text-center">' .
-          '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> Manage Streams</a>' .
+          '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> View Streams</a>' .
           '</div></div>',
       ),
     );
