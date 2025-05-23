@@ -7,6 +7,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
+use Drupal\rep\Entity\Stream;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\std\Controller\JsonDataController;
 use Drupal\Core\Render\Markup;
@@ -72,12 +73,14 @@ class ManageStudyForm extends FormBase
       $this->setStudy($study);
     }
 
-    //dpr($this->getStudy()->uri);
+    dpm(
+      $api->parseObjectResponse(
+        $api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0), 'getTotalStudySTRs'));return false;
 
     // get totals for current study
     $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
     //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
-    $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->getTotalStudySTRs($this->getStudy()->uri), 'getTotalStudySTRs'));
+    $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri), 'getTotalStudySTRs'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
@@ -96,6 +99,7 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
+        'head' => 'Stream Files',
         'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
@@ -210,6 +214,28 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => array('class' => array('row', 'm-3')),
     );
+
+    $header = Stream::generateHeaderState($apiState);
+    $output = Stream::generateOutputState($apiState, $this->getList());
+
+    // Row 3, Card 6
+    $form['row2']['card1']['inner_row2']['card6'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-12', 'mb-4')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">
+          <div class="card-header text-center"><h3 id="stream_files_count">' . $cards[6]['head'] . '</h3></div>' .
+          '<div class="card-body">' .
+            '<div id="json-table-stream-container"></div>' .
+          '</div>' .
+          '<div class="card-footer text-center">' .
+          ' <div id="json-table-pager" class="pagination"></div>' .
+          '</div>
+          </div>',
+      ),
+    );
+    // <a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> View Streams</a>
 
     //DA TABLE JQUERY
     $form['row2']['card1']['inner_row2']['card2'] = array(
@@ -436,23 +462,10 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('row row-cols-5')),
     );
 
-    // Row 3, Card 6
-    $form['row3']['card6'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[6]['value'] . '</div>' .
-          '<div class="card-footer text-center">' .
-          '<a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> View Streams</a>' .
-          '</div></div>',
-      ),
-    );
-
     // Row 3, Card 7
     $form['row3']['card7'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col')),
+      '#attributes' => array('class' => array('col-3')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
@@ -465,7 +478,7 @@ class ManageStudyForm extends FormBase
     // Row 3, Card 8
     $form['row3']['card8'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col')),
+      '#attributes' => array('class' => array('col-3')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
@@ -476,7 +489,7 @@ class ManageStudyForm extends FormBase
     // Row 3, Card 9
     $form['row3']['card9'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col')),
+      '#attributes' => array('class' => array('col-3')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
@@ -487,7 +500,7 @@ class ManageStudyForm extends FormBase
     // Row 3, Card 10
     $form['row3']['card10'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('col')),
+      '#attributes' => array('class' => array('col-3')),
       'card' => array(
         '#type' => 'markup',
         '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[10]['value'] . '</div>' .
@@ -524,13 +537,15 @@ class ManageStudyForm extends FormBase
       '#name' => 'back',
       '#attributes' => [
         'class' => ['col-md-1', 'btn', 'btn-primary', 'back-button'],
+        'style' => 'min-width: 220px;',
         'onclick' => 'window.history.back(); return false;',
       ],
     ];
 
     $form['row7']['space'] = [
-      '#type' => 'item',
-      '#value' => $this->t('<br><br><br><br>'),
+      '#type' => 'markup',
+      '#attributes' => array('class' => array('col-md-1')),
+      '#markup' => '<br><br><br><br>',
     ];
 
     return $form;
