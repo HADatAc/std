@@ -73,20 +73,24 @@ class ManageStudyForm extends FormBase
       $this->setStudy($study);
     }
 
-    dpm(
-      $api->parseObjectResponse(
-        $api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0), 'getTotalStudySTRs'));return false;
-
     // get totals for current study
-    $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
-    //$totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
-    $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri), 'getTotalStudySTRs'));
+    //Dá erro 404, $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
+    // $totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
+    $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->streamSizeByStudyState($this->getStudy()->uri, HASCO::ACTIVE), 'streamSizeByStudyState'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
 
+    // kint([
+    //   'studyUri' => $this->getStudy()->uri,
+    //   'stateUri' => HASCO::ALL_STATUSES,
+    //   'resultAPI' => $api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0),
+    // ]);
+
+    $message = $api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0);
+    dpm($message);
     // Example data for cards
     $cards = array(
       1 => array(
@@ -99,7 +103,7 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
-        'head' => 'Stream Files',
+        'head' => 'Streams (' . $totalSTREAMs . ')',
         'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
@@ -215,8 +219,8 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('row', 'm-3')),
     );
 
-    $header = Stream::generateHeaderState($apiState);
-    $output = Stream::generateOutputState($apiState, $this->getList());
+    // $header = Stream::generateHeaderState($apiState);
+    // $output = Stream::generateOutputState($apiState, $this->getList());
 
     // Row 3, Card 6
     $form['row2']['card1']['inner_row2']['card6'] = array(
