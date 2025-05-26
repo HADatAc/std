@@ -12,12 +12,25 @@ use Drupal\rep\Vocabulary\HASCO;
 use Drupal\std\Controller\JsonDataController;
 use Drupal\Core\Render\Markup;
 
+use function Termwind\style;
+
 class ManageStudyForm extends FormBase
 {
 
   protected $studyUri;
 
   protected $study;
+
+  protected $streamList;
+
+  public function getStreamList()
+  {
+    return $this->streamList;
+  }
+  public function setStreamList($list)
+  {
+    return $this->streamList = $list;
+  }
 
   public function getStudyUri()
   {
@@ -83,22 +96,23 @@ class ManageStudyForm extends FormBase
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
 
+    // DEBBUG
     // kint([
     //   'studyUri' => $this->getStudy()->uri,
     //   'stateUri' => HASCO::ALL_STATUSES,
-    //   'resultAPI' => $api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0),
+    //   'resultAPI' => $api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0), 'streamByStudyState'),
+    //   'totalSTREAMs' => $totalSTREAMs,
     // ]);
+    $this->setStreamList($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ACTIVE,9999,0), 'streamByStudyState'));
 
-    $message = $api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0);
-    dpm($message);
     // Example data for cards
     $cards = array(
       1 => array(
         'value' => 'Study Content (0)',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
-      2 => array('value' => 'Data File Stream (' . $totalDAs . ')'),
-      11 => array('value' => 'Message Stream (' . $totalDAs . ')'),
+      2 => array('value' => 'Data File Stream (' . ($totalDAs ?? 0) . ')'),
+      11 => array('value' => 'Message Stream (' . $totalSTREAMs . ')'),
       3 => array('value' => 'Publications (0)'),
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
@@ -207,124 +221,6 @@ class ManageStudyForm extends FormBase
     $pub_page_from_session = $session->get('pub_current_page', 1);
     $media_page_from_session = $session->get('media_current_page', 1);
 
-    // Second row with 1 outter card (card 1)
-    $form['row2'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('row')),
-    );
-
-    // Inner row of second row with 4 cards (cards 2 to 5)
-    $form['row2']['card1']['inner_row2'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('row', 'm-3')),
-    );
-
-    // $header = Stream::generateHeaderState($apiState);
-    // $output = Stream::generateOutputState($apiState, $this->getList());
-
-    // Row 3, Card 6
-    $form['row2']['card1']['inner_row2']['card6'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-12', 'mb-4')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">
-          <div class="card-header text-center"><h3 id="stream_files_count">' . $cards[6]['head'] . '</h3></div>' .
-          '<div class="card-body">' .
-            '<div id="json-table-stream-container"></div>' .
-          '</div>' .
-          '<div class="card-footer text-center">' .
-          ' <div id="json-table-pager" class="pagination"></div>' .
-          '</div>
-          </div>',
-      ),
-    );
-    // <a href="' . $cards[6]['link'] . '" class="btn btn-secondary me-2"><i class="fa-solid fa-list-check"></i> View Streams</a>
-
-    //DA TABLE JQUERY
-    $form['row2']['card1']['inner_row2']['card2'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">
-          <div class="card-header text-center"><h3 id="data_files_count">' . $cards[2]['value'] . '</h3></div>' .
-          '<div class="card-body">' .
-          '<div id="json-table-container">Loading...</div>' .
-          '</div>' .
-          '<div class="card-footer">' .
-          '<div id="json-table-pager" class="pagination"></div>' .
-          '</div>
-          </div>',
-      ),
-    );
-
-    $form['row2']['card1']['inner_row2']['card11'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">
-          <div class="card-header text-center"><h3 id="message_streams_count">' . $cards[11]['value'] . '</h3></div>' .
-          '<div class="card-body">' .
-          '<div id="json-table-container">Loading...</div>' .
-          '</div>' .
-          '<div class="card-footer">' .
-          '<div id="json-table-pager" class="pagination"></div>' .
-          '</div>
-          </div>',
-      ),
-    );
-
-    // Row 2, Card 3, Publication content
-    $form['row2']['card1']['inner_row2']['card3'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">' .
-          '<div class="card-header text-center"><h3 id="publication_files_count">' . $cards[3]['value'] . '</h3></div>' .
-          '<div class="card-body">
-             <div id="publication-table-container">Loading...</div>
-           </div>
-           <div class="card-footer">
-             <div id="publication-table-pager" class="pagination"></div>
-           </div>' .
-          '</div>',
-      ),
-    );
-
-    // Row 2, Card 4, Media content
-    $form['row2']['card1']['inner_row2']['card4'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">' .
-          '<div class="card-header text-center"><h3 id="media_files_count">' . $cards[4]['value'] . '</h3></div>' .
-          '<div class="card-body">
-             <div id="media-table-container">Loading...</div>
-           </div>
-           <div class="card-footer">
-             <div id="media-table-pager" class="pagination"></div>
-           </div>' .
-          '</div>',
-      ),
-    );
-
-    // Row 2, Card 5, Other contents
-    //$form['row2']['card1']['inner_row2']['card5'] = array(
-    //  '#type' => 'container',
-    //  '#attributes' => array('class' => array('col-md-3')),
-    //  'card' => array(
-    //    '#type' => 'markup',
-    //    '#markup' => '<div class="card">' .
-    //      '<div class="card-header text-center">' . $cards[5]['value'] . '</div>' .
-    //      '<div class="card-body">' . 'Foo' . '</div>' .
-    //      '</div>',
-    //  ),
-    //);
-
     $uid = \Drupal::currentUser()->id();
 
     $previousUrl = Url::fromRoute('std.manage_study_elements', [
@@ -345,74 +241,28 @@ class ManageStudyForm extends FormBase
       '#markup' => '<div id="toast-container"></div>',
     );
 
-    //Row 2, Outter card 1
-    // $form['row2']['card1'] = array(
-    //   '#type' => 'container',
-    //   '#attributes' => array('class' => array('col-md-12')),
-    //   'card' => array(
-    //     '#type' => 'markup',
-    //     '#markup' => '<div class="card">' .
-    //       '<div class="card drop-area" id="drop-card">' .
-    //       '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-    //       '<div class="info-card">You can drag&drop files directly into this card</div>' .
-    //       '</div>' .
-    //       \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-    //       //'<div class="card-footer text-center"><a href="' . $url . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i>Add new content</a></div>' .
-    //       '</div>' .
-    //       '</div>',
-    //   ),
-    //   '#attached' => [
-    //     'library' => [
-    //       'std/json_table',
-    //       'core/drupal.autocomplete',
-    //     ],
-    //     'drupalSettings' => [
-    //       'std' => [
-    //         'studyuri' => base64_encode($this->getStudy()->uri),
-    //         'elementtype' => 'da',
-    //         'mode' => 'compact',
-    //         'page' => $da_page_from_session,
-    //         'pagesize' => 5,
-    //       ],
-    //       'pub' => [
-    //         'studyuri' => base64_encode($this->getStudy()->uri),
-    //         'elementtype' => 'publications',
-    //         'page' => $pub_page_from_session,
-    //         'pagesize' => 5,
-    //       ],
-    //       'media' => [
-    //         'studyuri' => base64_encode($this->getStudy()->uri),
-    //         'elementtype' => 'media',
-    //         'page' => $media_page_from_session,
-    //         'pagesize' => 5,
-    //       ],
-    //       'addNewDA' => [
-    //         'url' => Url::fromRoute('std.render_add_da_form', [
-    //           'elementtype' => 'da',
-    //           'studyuri' => base64_encode($this->getStudy()->uri),
-    //         ])->toString(),
-    //       ],
-    //     ],
-    //   ],
-    // );
-
     // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
     if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
       // User is the owner: enable drag & drop functionality.
       $markup = '<div class="card drop-area" id="drop-card">' .
-                '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-                '<div class="info-card">You can drag&drop files directly into this card</div></div>' .
-                \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-                '</div>';
+                ' <div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
+                '   <div class="info-card">You can drag&drop files directly into this card</div>
+                  </div>' .
+                  \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
     }
     else {
       // User is not the owner: disable drag & drop functionality.
       $markup = '<div class="card" id="drop-card-disabled">' .
                 '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
                 '<div class="info-card">Only the owner can drag&drop files</div></div>' .
-                \Drupal::service('renderer')->render($form['row2']['card1']['inner_row2']) .
-                '</div>';
+                \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
     }
+
+    // Second row with 1 outter card (card 1)
+    $form['row2'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('row', 'mb-3')),
+    );
 
     $form['row2']['card1'] = [
       '#type' => 'container',
@@ -458,6 +308,137 @@ class ManageStudyForm extends FormBase
         ],
       ],
     ];
+
+    // Inner row of second row with 4 cards (cards 2 to 5)
+    $form['row2']['card1']['inner_row'] = array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('row', 'm-3'),
+        'style' => 'margin-bottom:25px!important;',
+      ),
+    );
+
+    // Row 3, Card 6
+
+    $header = Stream::generateHeaderStudy();
+    $output = Stream::generateOutputStudy($this->getStreamList());
+
+    $form['row2']['card1']['inner_row']['card6'] = [
+      '#type'       => 'container',
+      '#attributes' => [
+        'class' => ['col-md-12', 'mb-4'],
+        'style' => 'margin-bottom:25px!important;',
+      ],
+      // '#prefix'     => '<div class="card">',
+      // '#suffix'     => '</div>',
+    ];
+
+    $form['row2']['card1']['inner_row']['card6']['card'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['col-md-12', 'mb-4']],
+      '#prefix'     => '<div class="card">',
+      '#suffix'     => '</div>',
+    ];
+
+    // 3) Header
+    $form['row2']['card1']['inner_row']['card6']['card']['card_header'] = [
+      '#type'   => 'markup',
+      '#markup' => '<div class="card-header text-center">'
+        . '<h3 id="stream_files_count">' . $cards[6]['head'] . '</h3>'
+        . '</div>',
+    ];
+
+    // 4) Body + tabela
+    $form['row2']['card1']['inner_row']['card6']['card']['card_body'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['card-body', 'p-']],
+    ];
+    $form['row2']['card1']['inner_row']['card6']['card']['card_body']['element_table'] = [
+      '#type'          => 'table',
+      '#header'        => $header,
+      '#rows'          => $output,
+      // '#default_value' => [],
+      '#empty'         => t('No stream has been found'),
+    ];
+
+    // 5) Footer
+    $form['row2']['card1']['inner_row']['card6']['card']['card_footer'] = [
+      '#type'   => 'markup',
+      '#markup' => '<div class="card-footer text-center">'
+        . '<div id="json-table-pager" class="pagination"></div>'
+        . '</div>',
+    ];
+
+    //DA TABLE JQUERY
+    $form['row2']['card1']['inner_row']['card2'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">
+          <div class="card-header text-center"><h3 id="data_files_count">' . $cards[2]['value'] . '</h3></div>' .
+          '<div class="card-body">' .
+          '<div id="json-table-container">Loading...</div>' .
+          '</div>' .
+          '<div class="card-footer">' .
+          '<div id="json-table-pager" class="pagination"></div>' .
+          '</div>
+          </div>',
+      ),
+    );
+
+    $form['row2']['card1']['inner_row']['card11'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">
+          <div class="card-header text-center"><h3 id="message_streams_count">' . $cards[11]['value'] . '</h3></div>' .
+          '<div class="card-body">' .
+          '<div id="json-table-container">Loading...</div>' .
+          '</div>' .
+          '<div class="card-footer">' .
+          '<div id="json-table-pager" class="pagination"></div>' .
+          '</div>
+          </div>',
+      ),
+    );
+
+    // Row 2, Card 3, Publication content
+    $form['row2']['card1']['inner_row']['card3'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">' .
+          '<div class="card-header text-center"><h3 id="publication_files_count">' . $cards[3]['value'] . '</h3></div>' .
+          '<div class="card-body">
+             <div id="publication-table-container">Loading...</div>
+           </div>
+           <div class="card-footer">
+             <div id="publication-table-pager" class="pagination"></div>
+           </div>' .
+          '</div>',
+      ),
+    );
+
+    // Row 2, Card 4, Media content
+    $form['row2']['card1']['inner_row']['card4'] = array(
+      '#type' => 'container',
+      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
+      'card' => array(
+        '#type' => 'markup',
+        '#markup' => '<div class="card">' .
+          '<div class="card-header text-center"><h3 id="media_files_count">' . $cards[4]['value'] . '</h3></div>' .
+          '<div class="card-body">
+             <div id="media-table-container">Loading...</div>
+           </div>
+           <div class="card-footer">
+             <div id="media-table-pager" class="pagination"></div>
+           </div>' .
+          '</div>',
+      ),
+    );
 
 
     // Third row with 5 cards (card 6 to card 10)

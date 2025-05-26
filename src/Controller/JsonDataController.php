@@ -348,59 +348,209 @@ class JsonDataController extends ControllerBase
         }
     }
 
+    // private function processDAFile(File $file, string $filename, $studyuri)
+    // {
+    //     try {
+    //         // Add `FusekiAPIConnector` service.
+    //         $api = \Drupal::service('rep.api_connector');
+
+    //         $useremail = \Drupal::currentUser()->getEmail();
+
+    //         // File Data
+    //         $fileId = $file->id();
+
+    //         // FIND STREAM URI BY PATTERN
+    //         $streamList = $api->parseObjectResponse(
+    //             $api->streamByStudyState(
+    //                 base64_decode($studyuri),
+    //                 HASCO::ACTIVE,
+    //                 99999,
+    //                 0
+    //             ),
+    //             'streamByStudyState'
+    //         );
+
+    //         $streamUri = null;
+    //         if (!empty($streamList)) {
+    //             foreach ($streamList as $stream) {
+    //                 // certifica-te de que datasetPattern existe e não é vazio
+    //                 if (!empty($stream->datasetPattern)) {
+    //                     // verifica se $filename começa pelo padrão
+    //                     if (strpos($filename, $stream->datasetPattern) === 0) {
+    //                         $streamUri = $stream->uri;
+    //                         break;
+    //                     }
+    //                 }
+    //             }
+    //         }
+
+    //         // DATAFILE JSON
+    //         $newDataFileUri = Utils::uriGen('datafile');
+    //         $datafileJSON = '{"uri":"' . $newDataFileUri . '",' .
+    //             '"typeUri":"' . HASCO::DATAFILE . '",' .
+    //             '"hascoTypeUri":"' . HASCO::DATAFILE . '",' .
+    //             '"label":"' . $filename . '",' .
+    //             '"filename":"' . $filename . '",' .
+    //             '"id":"' . $fileId . '",' .
+    //             '"studyUri":"'.base64_decode($studyuri).'",'.
+    //             '"streamUri":"' . $streamUri ?? null . '",' .
+    //             '"fileStatus":"' . Constant::FILE_STATUS_UNPROCESSED . '",' .
+    //             '"hasSIRManagerEmail":"' . $useremail . '"}';
+
+    //         // MT JSON
+    //         $newMTUri = str_replace("DFL", Utils::elementPrefix('da'), $newDataFileUri);
+    //         $mtJSON = '{"uri":"' . $newMTUri . '",' .
+    //             '"typeUri":"' . HASCO::DATA_ACQUISITION . '",' .
+    //             '"hascoTypeUri":"' . HASCO::DATA_ACQUISITION . '",' .
+    //             '"isMemberOfUri":"' . base64_decode($studyuri) . '",' .
+    //             '"label":"' . $filename . '",' .
+    //             '"hasDataFileUri":"' . $newDataFileUri . '",' .
+    //             '"hasVersion":"",' .
+    //             '"comment":"",' .
+    //             '"hasSIRManagerEmail":"' . $useremail . '"}';
+
+    //         // dpm($datafileJSON);
+    //         // dpm($mtJSON);
+
+    //         // Adiciona o `DataFile`.
+    //         $msg1 = $api->parseObjectResponse($api->datafileAdd($datafileJSON), 'datafileAdd');
+
+    //         // ADD MT
+    //         $msg2 = $api->parseObjectResponse($api->elementAdd('da', $mtJSON), 'elementAdd');
+
+    //         if ($msg1 && $msg2) {
+    //             \Drupal::logger('std')->info('DA file processed successfully.');
+    //         } else {
+    //             \Drupal::logger('std')->error('Error processing DA file.');
+    //         }
+    //     } catch (\Exception $e) {
+    //         \Drupal::logger('std')->error('Error processing DA file: @message', ['@message' => $e->getMessage()]);
+    //     }
+    // }
     private function processDAFile(File $file, string $filename, $studyuri)
     {
         try {
+            $api       = \Drupal::service('rep.api_connector');
             $useremail = \Drupal::currentUser()->getEmail();
+            $fileId    = $file->id();
 
-            // Dados do arquivo.
-            $fileId = $file->id();
+            // 1) buscar streams activos
+            $streamList = $api->parseObjectResponse(
+                $api->streamByStudyState(
+                    base64_decode($studyuri),
+                    HASCO::ACTIVE,
+                    99999,
+                    0
+                ),
+                'streamByStudyState'
+            );
 
-            // Adiciona o serviço `FusekiAPIConnector`.
-            $api = \Drupal::service('rep.api_connector');
+            \Drupal::logger('debug')->debug('processDAFile: encontrados @count streams', [
+                '@count' => count($streamList),
+            ]);
 
-            // DATAFILE JSON
+            $streamUri = null;
+            foreach ($streamList as $stream) {
+                $rawPattern = $stream->datasetPattern;
+                if (empty($rawPattern)) {
+                    continue;
+                }
+
+                // 1) Preparar o corpo do regex: remover possíveis delimiters
+                $body = trim($rawPattern, '/');
+
+                // 2) Garantir que casa só no início (âncora ^)
+                if (strpos($body, '^') !== 0) {
+                    $body = '^' . $body;
+                }
+
+                // 3) Construir o regex com delimiters e, opcionalmente, flags (aqui sem flags)
+                $regex = '/' . $body . '/';
+
+                // 4) Tentar casar; se for inválido, preg_match devolve false
+                $res = @preg_match($regex, $filename);
+
+                if ($res === false) {
+                    \Drupal::logger('std')
+                        ->warning("Pattern inválido “{$rawPattern}”: regex “{$regex}”");
+                    continue;
+                }
+
+                if ($res === 1) {
+                    \Drupal::logger('std')
+                        ->info("Filename “{$filename}” casou com regex “{$regex}”");
+                    $streamUri = $stream->uri;
+                    break;
+                }
+            }
+
+            if ($streamUri === null) {
+                \Drupal::logger('std')
+                    ->warning("Nenhum stream pattern casou com “{$filename}”");
+            }
+
+
+            // 3) montar o JSON com json_encode (evita bugs de precedência no ??)
             $newDataFileUri = Utils::uriGen('datafile');
-            $datafileJSON = '{"uri":"' . $newDataFileUri . '",' .
-                '"typeUri":"' . HASCO::DATAFILE . '",' .
-                '"hascoTypeUri":"' . HASCO::DATAFILE . '",' .
-                '"label":"' . $filename . '",' .
-                '"filename":"' . $filename . '",' .
-                '"id":"' . $fileId . '",' .
-                '"studyUri":"'.base64_decode($studyuri).'",'.
-                '"fileStatus":"' . Constant::FILE_STATUS_UNPROCESSED . '",' .
-                '"hasSIRManagerEmail":"' . $useremail . '"}';
+            $datafileArr = [
+                'uri'               => $newDataFileUri,
+                'typeUri'           => HASCO::DATAFILE,
+                'hascoTypeUri'      => HASCO::DATAFILE,
+                'label'             => $filename,
+                'filename'          => $filename,
+                'id'                => $fileId,
+                'studyUri'          => base64_decode($studyuri),
+                'streamUri'         => $streamUri,        // será null se nenhum match
+                'fileStatus'        => Constant::FILE_STATUS_UNPROCESSED,
+                'hasSIRManagerEmail'=> $useremail,
+            ];
+            $datafileJSON = json_encode($datafileArr);
+            \Drupal::logger('debug')->debug('DATAFILE JSON: @json', ['@json' => $datafileJSON]);
 
-            // MT JSON
+            // Montar o MT JSON
             $newMTUri = str_replace("DFL", Utils::elementPrefix('da'), $newDataFileUri);
-            $mtJSON = '{"uri":"' . $newMTUri . '",' .
-                '"typeUri":"' . HASCO::DATA_ACQUISITION . '",' .
-                '"hascoTypeUri":"' . HASCO::DATA_ACQUISITION . '",' .
-                '"isMemberOfUri":"' . base64_decode($studyuri) . '",' .
-                '"label":"' . $filename . '",' .
-                '"hasDataFileUri":"' . $newDataFileUri . '",' .
-                '"hasVersion":"",' .
-                '"comment":"",' .
-                '"hasSIRManagerEmail":"' . $useremail . '"}';
+            $mtArr = [
+                'uri'             => $newMTUri,
+                'typeUri'         => HASCO::DATA_ACQUISITION,
+                'hascoTypeUri'    => HASCO::DATA_ACQUISITION,
+                'isMemberOfUri'   => base64_decode($studyuri),
+                'label'           => $filename,
+                'hasDataFileUri'  => $newDataFileUri,
+                'hasVersion'      => '',
+                'comment'         => '',
+                'hasSIRManagerEmail'=> $useremail,
+            ];
+            $mtJSON = json_encode($mtArr);
+            \Drupal::logger('debug')->debug('MT JSON: @json', ['@json' => $mtJSON]);
 
-            // dpm($datafileJSON);
-            // dpm($mtJSON);
-
-            // Adiciona o `DataFile`.
+            // 4) chamar a API e logar as respostas
             $msg1 = $api->parseObjectResponse($api->datafileAdd($datafileJSON), 'datafileAdd');
+            \Drupal::logger('debug')->debug('Resposta datafileAdd: @resp', [
+                '@resp' => print_r($msg1, TRUE),
+            ]);
 
-            // ADD MT
             $msg2 = $api->parseObjectResponse($api->elementAdd('da', $mtJSON), 'elementAdd');
+            \Drupal::logger('debug')->debug('Resposta elementAdd: @resp', [
+                '@resp' => print_r($msg2, TRUE),
+            ]);
 
             if ($msg1 && $msg2) {
                 \Drupal::logger('std')->info('DA file processed successfully.');
             } else {
-                \Drupal::logger('std')->error('Error processing DA file.');
+                \Drupal::logger('std')->error(
+                    'Error processing DA file: datafileAdd=@d1, elementAdd=@d2',
+                    ['@d1' => var_export($msg1, TRUE), '@d2' => var_export($msg2, TRUE)]
+                );
             }
+
         } catch (\Exception $e) {
-            \Drupal::logger('std')->error('Error processing DA file: @message', ['@message' => $e->getMessage()]);
+            \Drupal::logger('std')->error(
+                'Exception processing DA file: @message',
+                ['@message' => $e->getMessage()]
+            );
         }
     }
+
 
     public function checkFileName($studyuri, $fileNameWithoutExtension)
     {
