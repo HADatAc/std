@@ -40,6 +40,32 @@
       url: url,
       type: "GET",
       success: function (response) {
+
+        if (Array.isArray(response.headers) && Array.isArray(response.output) && response.output.length === 0) {
+          // build an “empty” table with header + one row
+          let colCount = response.headers.length;
+          let table  = '<table class="table table-striped table-bordered">';
+          // header
+          table += '<thead><tr>';
+          response.headers.forEach(h => {
+            table += `<th>${h}</th>`;
+          });
+          table += '</tr></thead>';
+          // body with one “no results” row
+          table += '<tbody>';
+          table += `<tr><td colspan="${colCount}" class="text-center text-muted">No results found.</td></tr>`;
+          table += '</tbody></table>';
+          // inject
+          $("#json-table-container").html(table);
+
+          // reset count + pagination
+          $("#data_files_count").text("Study Data Files (0)");
+          totals.daFiles = 0;
+          updateTotal();
+          $("#json-table-pager").empty();
+          return;
+        }
+
         if (response.headers && response.output) {
           // Render table
           let table = '<table class="table table-striped table-bordered">';
@@ -63,7 +89,7 @@
           // Atualiza o número total de elementos
           if (response.pagination && response.pagination.items) {
             $("#data_files_count").text(
-              "Data Files (" + response.pagination.items + ")"
+              "Study Data Files (" + response.pagination.items + ")"
             );
 
             totals.daFiles = parseInt(response.pagination.items, 10) || 0;
@@ -698,7 +724,7 @@
       }
 
       pdfjsLib.GlobalWorkerOptions.workerSrc =
-        drupalSettings.path.baseUrl + "modules/custom/std/js/pdf.worker.min.js";
+        drupalSettings.path.baseUrl + "modules/custom/rep/js/pdf.worker.min.js";
 
       const renderImage = (modalUrl) => {
         const newContent = `<img src="${modalUrl}" alt="Imagem" style="max-width:100%; height:auto;">`;
@@ -716,7 +742,7 @@
             container.style.display = "flex";
             container.style.flexDirection = "column";
             container.style.gap = "20px";
-            container.style.overflowY = "auto";
+            container.style.overflowY = "visible";
             container.style.maxHeight = "90vh";
 
             for (let i = 1; i <= pdf.numPages; i++) {

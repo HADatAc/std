@@ -111,8 +111,7 @@ class ManageStudyForm extends FormBase
         'value' => 'Study Content (0)',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
-      2 => array('value' => 'Data File Stream (' . ($totalDAs ?? 0) . ')'),
-      11 => array('value' => 'Message Stream (' . $totalSTREAMs . ')'),
+      2 => array('value' => 'Stream Data Files (' . ($totalDAs ?? 0) . ')'),
       3 => array('value' => 'Publications (0)'),
       4 => array('value' => 'Media (0)'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
@@ -137,6 +136,8 @@ class ManageStudyForm extends FormBase
         'value' => '<h1>' . $totalSOCs . '</h1><h3>Object Collections</h3><h4>(' . $totalSOs . ' Objects)</h4>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyobjectcollection')
       ),
+      11 => array('value' => 'Message Stream (0)'),
+      12 => array('value' => 'Unassociated Data Files (0)'),
       //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
       //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
     );
@@ -147,11 +148,12 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('row')),
     );
 
-    // Define each card individually
-    //$form['row1']['filler'] = array(
-    //  '#type' => 'container',
-    //  '#attributes' => array('class' => array('col-md-1')),
-    //);
+    //Toas Message
+    $form['toast'] = array(
+      '#type' => 'markup',
+      '#attributes' => array('style="position: fixed; top: 10px; right: 10px; z-index: 1050;"'),
+      '#markup' => '<div id="toast-container"></div>',
+    );
 
     $piName = ' ';
     if (
@@ -180,22 +182,30 @@ class ManageStudyForm extends FormBase
     }
 
     //Libraries
-    $form['#attached']['library'][] = 'core/drupal.autocomplete';
-    $form['#attached']['library'][] = 'std/pdfjs';
+    // $form['#attached']['library'][] = 'core/drupal.autocomplete';
+    $form['#attached']['library'][] = 'rep/pdfjs';
+
+    // Attach our JS behavior + settings.
+    $form['#attached']['library'][] = 'dpl/stream_selection';
+    $form['#attached']['drupalSettings']['dpl'] = [
+      'studyUri' => base64_encode($this->studyUri),
+      'ajaxUrl'  => Url::fromRoute('dpl.stream_data_ajax')->toString(),
+    ];
 
     //MODAL
-    $form['row0']['modal'] = [
+    $form['modal'] = [
       '#type' => 'markup',
       '#markup' => Markup::create('
-        <div id="modal-container" class="modal-media hidden">
-          <div class="modal-content">
+        <div id="modal-container" class="modal-media hidden" style="position:absolute; top:50px; left:0; width:100%; height:100%;">
+          <div class="modal-content" style="z-index:99999 !important;">
             <button class="close-btn" type="button">&times;</button>
             <div id="pdf-scroll-container"></div>
-            <div id="modal-content"></div>
+            <div id="modal-content" style="height:100vh;"></div>
           </div>
           <div class="modal-backdrop"></div>
         </div>
       '),
+      '#weight' => '-99999',
     ];
 
     // First row with a single card
@@ -227,19 +237,6 @@ class ManageStudyForm extends FormBase
       'studyuri' => base64_encode($this->getStudy()->uri),
     ])->toString();
     Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
-
-    $url = Url::fromRoute('rep.add_mt', [
-      'elementtype' => 'da',
-      'studyuri' => base64_encode($this->getStudy()->uri),
-      'fixstd' => 'T',
-    ])->toString();
-
-    //Toas Message
-    $form['row1']['toast'] = array(
-      '#type' => 'markup',
-      '#attributes' => array('style="position: fixed; top: 10px; right: 10px; z-index: 1050;"'),
-      '#markup' => '<div id="toast-container"></div>',
-    );
 
     // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
     if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
@@ -326,8 +323,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['card6'] = [
       '#type'       => 'container',
       '#attributes' => [
-        'class' => ['col-md-12', 'mb-4'],
-        'style' => 'margin-bottom:25px!important;',
+        'class' => ['col-md-12'],
       ],
       // '#prefix'     => '<div class="card">',
       // '#suffix'     => '</div>',
@@ -354,11 +350,16 @@ class ManageStudyForm extends FormBase
       '#attributes' => ['class' => ['card-body', 'p-']],
     ];
     $form['row2']['card1']['inner_row']['card6']['card']['card_body']['element_table'] = [
-      '#type'          => 'table',
+      '#type'          => 'tableselect',
       '#header'        => $header,
-      '#rows'          => $output,
+      '#options'          => $output,
       // '#default_value' => [],
       '#empty'         => t('No stream has been found'),
+      '#attributes' => [
+        'id' => 'dpl-streams-table',
+      ],
+      // forca seleção única (radio) — ajuste se quiser usar checkbox:
+      '#multiple'   => FALSE,
     ];
 
     // 5) Footer
@@ -370,128 +371,270 @@ class ManageStudyForm extends FormBase
     ];
 
     //DA TABLE JQUERY
-    $form['row2']['card1']['inner_row']['card2'] = array(
+    /**
+      * 1) AJAX-loaded cards (Stream Data Files + Message Stream)
+      *    → Full-width (col-md-12), then an inner row with two col-md-6 cards.
+      */
+    $form['row2']['card1']['inner_row']['ajax_cards_container'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6')),
-      'card' => array(
+      '#attributes' => [
+        'class' => ['col-md-12', 'mb-4'],  // span entire width, with bottom margin
+      ],
+    ];
+    // inner row for the two AJAX cards
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['row'],
+      ],
+    ];
+    // Stream Data Files card (left half)
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-6'],        // half width of the parent row
+        'id'    => 'stream-data-files-container',
+        'style' => 'display:none;',     // hidden until AJAX kicks in
+      ],
+      'card' => [
         '#type' => 'markup',
-        '#markup' => '<div class="card">
-          <div class="card-header text-center"><h3 id="data_files_count">' . $cards[2]['value'] . '</h3></div>' .
-          '<div class="card-body">' .
-          '<div id="json-table-container">Loading...</div>' .
-          '</div>' .
-          '<div class="card-footer">' .
-          '<div id="json-table-pager" class="pagination"></div>' .
-          '</div>
-          </div>',
-      ),
-    );
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3 id="data-files-count">Stream Data Files</h3>
+            </div>
+            <div class="card-body">
+              <div id="data-files-table">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="data-files-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+    // Message Stream card (right half)
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-6'],        // half width of the parent row
+        'id'    => 'message-stream-container',
+        'style' => 'display:none;',
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3 id="message-stream-count">Message Stream</h3>
+            </div>
+            <div class="card-body">
+              <div id="message-stream-table">No messages for this stream.</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="message-stream-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
 
-    $form['row2']['card1']['inner_row']['card11'] = array(
+    /**
+      * 2) Fixed cards (Study Data Files, Publications, Media)
+      *    → Another full-width wrapper, then an inner row with three col-md-4 cards.
+      */
+    $form['row2']['card1']['inner_row']['fixed_cards_container'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">
-          <div class="card-header text-center"><h3 id="message_streams_count">' . $cards[11]['value'] . '</h3></div>' .
-          '<div class="card-body">' .
-          '<div id="json-table-container">Loading...</div>' .
-          '</div>' .
-          '<div class="card-footer">' .
-          '<div id="json-table-pager" class="pagination"></div>' .
-          '</div>
-          </div>',
-      ),
-    );
-
-    // Row 2, Card 3, Publication content
-    $form['row2']['card1']['inner_row']['card3'] = array(
+      '#attributes' => [
+        'class' => ['col-md-12', 'mt-3'],
+        'style' => 'border-top: 5px dashed rgb(168, 168, 168)', // spacing below
+      ],
+    ];
+    // inner row for the three fixed cards
+    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card">' .
-          '<div class="card-header text-center"><h3 id="publication_files_count">' . $cards[3]['value'] . '</h3></div>' .
-          '<div class="card-body">
-             <div id="publication-table-container">Loading...</div>
-           </div>
-           <div class="card-footer">
-             <div id="publication-table-pager" class="pagination"></div>
-           </div>' .
-          '</div>',
-      ),
-    );
-
-    // Row 2, Card 4, Media content
-    $form['row2']['card1']['inner_row']['card4'] = array(
+      '#attributes' => [
+        'class' => ['row','align-items-start'],
+      ],
+    ];
+    // Study Data Files (one-third width)
+    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row']['study_data_files'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-md-6', 'mt-4')),
-      'card' => array(
+      '#attributes' => [
+        'class' => ['col-md-4'],
+      ],
+      'card' => [
         '#type' => 'markup',
-        '#markup' => '<div class="card">' .
-          '<div class="card-header text-center"><h3 id="media_files_count">' . $cards[4]['value'] . '</h3></div>' .
-          '<div class="card-body">
-             <div id="media-table-container">Loading...</div>
-           </div>
-           <div class="card-footer">
-             <div id="media-table-pager" class="pagination"></div>
-           </div>' .
-          '</div>',
-      ),
-    );
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3>' . $cards[12]['value'] . '</h3>
+            </div>
+            <div class="card-body">
+              <div id="json-table-container">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="json-table-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+    // Publications (one-third width)
+    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row']['publications'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-4'], // one-third + spacing above
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3>' . $cards[3]['value'] . '</h3>
+            </div>
+            <div class="card-body">
+              <div id="publication-table-container">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="publication-table-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+    // Media (one-third width)
+    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row']['media'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-4'], // one-third + spacing above
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3>' . $cards[4]['value']. '</h3>
+            </div>
+            <div class="card-body">
+              <div id="media-table-container">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="media-table-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
 
 
     // Third row with 5 cards (card 6 to card 10)
-    $form['row3'] = array(
+    $form['row3']['row3_wrapper'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('row row-cols-5')),
-    );
+      '#attributes' => [
+        'class' => ['col-md-12'],  // spans the same 12-col width
+      ],
+    ];
 
-    // Row 3, Card 7
-    $form['row3']['card7'] = array(
+    // 2) Inside that wrapper we open the real Bootstrap row—now its gutters line up
+    $form['row3']['row3_wrapper']['row3'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-3')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[7]['value'] . '</div>' .
-          '<div class="card-footer text-center">' .
-          '<a href="' . $cards[7]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage STRs</a>' .
-          '</div></div>',
-      ),
-    );
+      '#attributes' => [
+        'class' => ['row', 'row-cols-4', 'g-3'],
+        // row-cols-4: 4 equal columns
+        // g-3: standard gutter spacing
+      ],
+    ];
 
-    // Row 3, Card 8
-    $form['row3']['card8'] = array(
-      '#type' => 'container',
-      '#attributes' => array('class' => array('col-3')),
-      'card' => array(
-        '#type' => 'markup',
-        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[8]['value'] . '</div>' .
-          '<div class="card-footer text-center"><a href="' . $cards[8]['link'] . '" class="btn btn-secondary disabled"><i class="fa-solid fa-list-check"></i> Manage Roles</a></div></div>',
-      ),
-    );
+    // 3) Now each card is just one of those 4 columns:
 
-    // Row 3, Card 9
-    $form['row3']['card9'] = array(
+    // Card 7: STR
+    $form['row3']['row3_wrapper']['row3']['card7'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-3')),
-      'card' => array(
+      '#attributes' => ['class' => ['col']],     // `col` is fine inside row-cols-4
+      'card' => [
         '#type' => 'markup',
-        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[9]['value'] . '</div>' .
-          '<div class="card-footer text-center"><a href="' . $cards[9]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Virtual Columns</a></div></div>',
-      ),
-    );
+        '#markup' => '
+          <div class="card h-100 text-center">
+            <div class="card-body">
+              <h1>' . $cards[7]['value'] . '</h1>
+              <p>STR</p>
+            </div>
+            <div class="card-footer">
+              <a href="' . $cards[7]['link'] . '" class="btn btn-primary">
+                <i class="fa-solid fa-list-check"></i> Manage STRs
+              </a>
+            </div>
+          </div>
+        ',
+      ],
+    ];
 
-    // Row 3, Card 10
-    $form['row3']['card10'] = array(
+    // Card 8: Roles
+    $form['row3']['row3_wrapper']['row3']['card8'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('col-3')),
-      'card' => array(
+      '#attributes' => ['class' => ['col']],
+      'card' => [
         '#type' => 'markup',
-        '#markup' => '<div class="card"><div class="card-body text-center">' . $cards[10]['value'] . '</div>' .
-          '<div class="card-footer text-center"><a href="' . $cards[10]['link'] . '" class="btn btn-secondary"><i class="fa-solid fa-list-check"></i> Manage Object Collections</a></div></div>',
-      ),
-    );
+        '#markup' => '
+          <div class="card h-100 text-center">
+            <div class="card-body">
+              <h1>' . $cards[8]['value'] . '</h1>
+              <p>Roles</p>
+            </div>
+            <div class="card-footer">
+              <a href="' . $cards[8]['link'] . '" class="btn btn-secondary disabled">
+                <i class="fa-solid fa-list-check"></i> Manage Roles
+              </a>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
+    // Card 9: Virtual Columns
+    $form['row3']['row3_wrapper']['row3']['card9'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['col']],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card h-100 text-center">
+            <div class="card-body">
+              <h1>' . $cards[9]['value'] . '</h1>
+              <p>Virtual Columns<br><small>(Entities)</small></p>
+            </div>
+            <div class="card-footer">
+              <a href="' . $cards[9]['link'] . '" class="btn btn-primary">
+                <i class="fa-solid fa-list-check"></i> Manage Virtual Columns
+              </a>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
+    // Card 10: Object Collections
+    $form['row3']['row3_wrapper']['row3']['card10'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['col']],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card h-100 text-center">
+            <div class="card-body">
+              <h1>' . $cards[10]['value'] . '</h1>
+              <p>Object Collections<br><small>(' . ($cards[10]['value_objects'] ?? '0') . ' Objects)</small></p>
+            </div>
+            <div class="card-footer">
+              <a href="' . $cards[10]['link'] . '" class="btn btn-primary">
+                <i class="fa-solid fa-list-check"></i> Manage Object Collections
+              </a>
+            </div>
+          </div>
+        ',
+      ],
+    ];
 
     // Bottom part of the form
     $form['row4'] = array(
@@ -507,14 +650,6 @@ class ManageStudyForm extends FormBase
       '#attributes' => array('class' => array('row')),
     );
 
-    // $form['row6']['back_submit'] = [
-    //   '#type' => 'submit',
-    //   '#value' => $this->t('Back to Manage Studies'),
-    //   '#name' => 'back',
-    //   '#attributes' => [
-    //     'class' => ['col-md-2', 'btn', 'btn-primary', 'back-button'],
-    //   ],
-    // ];
     $form['back_link'] = [
       '#type' => 'submit',
       '#value' => $this->t('Back to Manage Studies'),
@@ -522,7 +657,7 @@ class ManageStudyForm extends FormBase
       '#name' => 'back',
       '#attributes' => [
         'class' => ['col-md-1', 'btn', 'btn-primary', 'back-button'],
-        'style' => 'min-width: 220px;',
+        'style' => 'min-width: 220px;max-height:38px!important;',
         'onclick' => 'window.history.back(); return false;',
       ],
     ];
