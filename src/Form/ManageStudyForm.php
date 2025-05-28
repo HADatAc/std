@@ -108,12 +108,12 @@ class ManageStudyForm extends FormBase
     // Example data for cards
     $cards = array(
       1 => array(
-        'value' => 'Study Content (0)',
+        'value' => 'Study Content',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
       2 => array('value' => 'Stream Data Files (' . ($totalDAs ?? 0) . ')'),
-      3 => array('value' => 'Publications (0)'),
-      4 => array('value' => 'Media (0)'),
+      3 => array('value' => 'Publications'),
+      4 => array('value' => 'Media'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
         'head' => 'Streams (' . $totalSTREAMs . ')',
@@ -136,8 +136,8 @@ class ManageStudyForm extends FormBase
         'value' => '<h1>' . $totalSOCs . '</h1><h3>Object Collections</h3><h4>(' . $totalSOs . ' Objects)</h4>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyobjectcollection')
       ),
-      11 => array('value' => 'Message Stream (0)'),
-      12 => array('value' => 'Unassociated Data Files (0)'),
+      11 => array('value' => 'Message Stream'),
+      12 => array('value' => 'Unassociated Data Files'),
       //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
       //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
     );
@@ -146,13 +146,6 @@ class ManageStudyForm extends FormBase
     $form['row1'] = array(
       '#type' => 'container',
       '#attributes' => array('class' => array('row')),
-    );
-
-    //Toas Message
-    $form['toast'] = array(
-      '#type' => 'markup',
-      '#attributes' => array('style="position: fixed; top: 10px; right: 10px; z-index: 1050;"'),
-      '#markup' => '<div id="toast-container"></div>',
     );
 
     $piName = ' ';
@@ -184,12 +177,18 @@ class ManageStudyForm extends FormBase
     //Libraries
     // $form['#attached']['library'][] = 'core/drupal.autocomplete';
     $form['#attached']['library'][] = 'rep/pdfjs';
+    $form['#attached']['library'][] = 'rep/webdoc_modal';
+    $base_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl();
+    $form['#attached']['drupalSettings']['webdoc_modal'] = [
+      'baseUrl' => $base_url,
+    ];
+
 
     // Attach our JS behavior + settings.
     $form['#attached']['library'][] = 'dpl/stream_selection';
     $form['#attached']['drupalSettings']['dpl'] = [
       'studyUri' => base64_encode($this->studyUri),
-      'ajaxUrl'  => Url::fromRoute('dpl.stream_data_ajax')->toString(),
+      'ajaxUrl'  => Url::fromRoute('std.stream_data_ajax')->toString(),
     ];
 
     //MODAL
@@ -241,18 +240,30 @@ class ManageStudyForm extends FormBase
     // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
     if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
       // User is the owner: enable drag & drop functionality.
-      $markup = '<div class="card drop-area" id="drop-card">' .
-                ' <div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-                '   <div class="info-card">You can drag&drop files directly into this card</div>
-                  </div>' .
-                  \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
+      // $markup = '<div class="card drop-area" id="drop-card">' .
+      //           ' <div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
+      //           '   <div class="info-card">You can drag&drop files directly into this card</div>
+      //             </div>' .
+      //             \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
+      $markup = '<div class="card drop-area" id="drop-card" style="position: relative;">'
+        . '  <div class="card-header text-center" style="position: relative;">'
+        . '    <h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>'
+        . '    <div class="info-card">You can drag&drop files directly into this card</div>'
+        . '    <div id="toast-container" '
+        . '         style="position: absolute; top: 0.5rem; right: 1rem; z-index: 1050;">'
+        . '    </div>'
+        .     \Drupal::service('renderer')->render($form['row2']['card1']['inner_row'])
+        . '</div>';
     }
     else {
       // User is not the owner: disable drag & drop functionality.
       $markup = '<div class="card" id="drop-card-disabled">' .
                 '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-                '<div class="info-card">Only the owner can drag&drop files</div></div>' .
-                \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
+                '<div class="info-card">Only the owner can drag&drop files</div></div>'
+                . '    <div id="toast-container" '
+                . '         style="position: absolute; top: 0.5rem; right: 1rem; z-index: 1050;">'
+                . '    </div>'
+                .     \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
     }
 
     // Second row with 1 outter card (card 1)

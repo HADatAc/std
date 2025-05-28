@@ -280,6 +280,13 @@ std.edit_stream:
   options:
     no_cache: 'TRUE'
 
+std.stream_data_ajax:
+  path: '/std/stream-data-ajax'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::streamDataAjax'
+  requirements:
+    _permission: 'access content'
+
 # AUTOCOMPLETE
 
 std.study_autocomplete:

@@ -9,7 +9,8 @@
   const updateTotal = function () {
     const total = totals.daFiles + totals.publications + totals.media;
     if ($("#total_elements_count").length) {
-      $("#total_elements_count").text("Study Content (" + total + ")");
+      // $("#total_elements_count").text("Study Content (" + total + ")");
+      $("#total_elements_count").text("Study Content");
     } else {
       showToast("#total_elements_count not found on DOM.", "danger");
     }
@@ -277,6 +278,164 @@
     });
   };
 
+  // const attachDragAndDropEvents = function () {
+  //   const dropCard = document.querySelector("#drop-card");
+
+  //   if (!dropCard) {
+  //     showToast("Drop area not found.", "danger");
+  //     return;
+  //   }
+
+  //   const preventDefault = (e) => {
+  //     e.preventDefault();
+  //     e.stopPropagation();
+  //   };
+
+  //   // Eventos de arrastar
+  //   dropCard.addEventListener("dragenter", preventDefault);
+  //   dropCard.addEventListener("dragover", (e) => {
+  //     preventDefault(e);
+  //     dropCard.classList.add("drag-over");
+  //   });
+  //   dropCard.addEventListener("dragleave", (e) => {
+  //     preventDefault(e);
+  //     dropCard.classList.remove("drag-over");
+  //   });
+  //   dropCard.addEventListener("drop", async (e) => {
+  //     preventDefault(e);
+  //     dropCard.classList.remove("drag-over");
+
+  //     const files = e.dataTransfer.files;
+
+  //     if (files.length > 0) {
+  //       const file = files[0];
+  //       const originalFileName = file.name;
+  //       const fileExtension = originalFileName.split(".").pop().toLowerCase();
+
+  //       const studyuri = drupalSettings.std.studyuri;
+
+  //       try {
+  //         const response = await fetch(
+  //           drupalSettings.path.baseUrl +
+  //             `std/check-file-name/${encodeURIComponent(
+  //               studyuri
+  //             )}/${encodeURIComponent(originalFileName)}`,
+  //           {
+  //             method: "GET",
+  //           }
+  //         );
+
+  //         if (!response.ok) {
+  //           throw new Error(`HTTP error! status: ${response.status}`);
+  //         }
+
+  //         const json = await response.json();
+
+  //         if (json && json.suggestedFileName) {
+  //           const newFileName = `${json.suggestedFileName}.${fileExtension}`;
+  //           const newFile = new File([file], newFileName, { type: file.type });
+
+  //           const formData = new FormData();
+  //           formData.append("files[mt_filename]", newFile);
+
+  //           const uploadUrl =
+  //             drupalSettings.path.baseUrl +
+  //             "std/file-upload/mt_filename/" +
+  //             studyuri;
+
+  //           $.ajax({
+  //             url: uploadUrl,
+  //             type: "POST",
+  //             data: formData,
+  //             processData: false,
+  //             contentType: false,
+  //             success: function (response) {
+  //               if (response.fid) {
+  //                 const currentPage = drupalSettings.std.page || 1;
+  //                 const currentPubPage = drupalSettings.pub.page || 1;
+  //                 const currentMediaPage = drupalSettings.media.page || 1;
+
+  //                 showToast("File uploaded successfully!", "success");
+  //                 loadTableData(currentPage);
+  //                 loadPublicationFiles(currentPubPage);
+  //                 loadMediaFiles(currentMediaPage);
+
+  //                 if (response.streamKey) {
+  //                   $.ajax({
+  //                     url: window.location.href,
+  //                     type: 'GET',
+  //                     dataType: 'html',
+  //                     cache: false,
+  //                     success: function (pageHtml) {
+  //                       // parse HTML
+  //                       var tmp = $('<div>').append($.parseHTML(pageHtml));
+
+  //                       // 1) filtra apenas a tabela com rádios
+  //                       var newTable = tmp
+  //                         .find('#dpl-streams-table')
+  //                         .filter(function() {
+  //                           return $(this).find('input[type=radio]').length > 0;
+  //                         })
+  //                         .first();
+
+  //                       if (!newTable.length) {
+  //                         console.error('Não encontrei a tabela correta de streams');
+  //                         showToast("Streams table not found in refresh.", "danger");
+  //                         return;
+  //                       }
+
+  //                       // 2) substitui a tabela antiga
+  //                       $('#dpl-streams-table').replaceWith(newTable);
+
+  //                       // 3) reatacha behaviors
+  //                       var tableContainer = newTable.closest('.card').get(0);
+  //                       Drupal.attachBehaviors(tableContainer, drupalSettings);
+
+  //                       // 4) marca o rádio e dispara o change
+  //                       var radio = $('#dpl-streams-table input[type=radio][value="' + response.streamKey + '"]');
+  //                       if (radio.length) {
+  //                         radio
+  //                           .closest('table').find('input[type=radio]')
+  //                           .prop('checked', false)
+  //                           .data('waschecked', false)
+  //                           .closest('tr').removeClass('selected');
+
+  //                         radio
+  //                           .prop('checked', true)
+  //                           .data('waschecked', true)
+  //                           .trigger('change');
+  //                       } else {
+  //                         console.error('Ainda não encontrei o rádio do streamKey', response.streamKey);
+  //                       }
+  //                     },
+
+  //                     error: function () {
+  //                       showToast("Failed to refresh streams table.", "danger");
+  //                     }
+  //                   });
+  //                 }
+  //               }
+  //               else {
+  //                 showToast("Failed to upload file. Please try again.", "danger");
+  //               }
+  //             },
+  //             error: function () {
+  //               showToast("Error uploading file.", "danger");
+  //             },
+  //           });
+  //         } else {
+  //           showToast("Error generating file name.", "danger");
+  //         }
+  //       } catch (error) {
+  //         showToast("Error communicating with the server.", "danger");
+  //       }
+  //     }
+  //   });
+  // };
+
+
+  // This function creates a toast notification with a message and type
+
   const attachDragAndDropEvents = function () {
     const dropCard = document.querySelector("#drop-card");
 
@@ -290,7 +449,6 @@
       e.stopPropagation();
     };
 
-    // Eventos de arrastar
     dropCard.addEventListener("dragenter", preventDefault);
     dropCard.addEventListener("dragover", (e) => {
       preventDefault(e);
@@ -300,81 +458,124 @@
       preventDefault(e);
       dropCard.classList.remove("drag-over");
     });
+
     dropCard.addEventListener("drop", async (e) => {
       preventDefault(e);
       dropCard.classList.remove("drag-over");
 
       const files = e.dataTransfer.files;
+      if (!files.length) {
+        return;
+      }
 
-      if (files.length > 0) {
-        const file = files[0];
-        const originalFileName = file.name;
-        const fileExtension = originalFileName.split(".").pop().toLowerCase();
+      const file = files[0];
+      const originalFileName = file.name;
+      const fileExtension = originalFileName.split(".").pop().toLowerCase();
+      const studyuri = drupalSettings.std.studyuri;
 
-        const studyuri = drupalSettings.std.studyuri;
+      try {
+        // 1) Check filename
+        const checkUrl = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
+        const checkResponse = await fetch(checkUrl, { method: "GET" });
+        if (!checkResponse.ok) throw new Error(`HTTP ${checkResponse.status}`);
+        const json = await checkResponse.json();
 
-        try {
-          const response = await fetch(
-            drupalSettings.path.baseUrl +
-              `std/check-file-name/${encodeURIComponent(
-                studyuri
-              )}/${encodeURIComponent(originalFileName)}`,
-            {
-              method: "GET",
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const json = await response.json();
-
-          if (json && json.suggestedFileName) {
-            const newFileName = `${json.suggestedFileName}.${fileExtension}`;
-            const newFile = new File([file], newFileName, { type: file.type });
-
-            const formData = new FormData();
-            formData.append("files[mt_filename]", newFile);
-
-            const uploadUrl =
-              drupalSettings.path.baseUrl +
-              "std/file-upload/mt_filename/" +
-              studyuri;
-
-            $.ajax({
-              url: uploadUrl,
-              type: "POST",
-              data: formData,
-              processData: false,
-              contentType: false,
-              success: function (response) {
-                if (response.fid) {
-                  const currentPage = drupalSettings.std.page || 1;
-                  const currentPubPage = drupalSettings.pub.page || 1;
-                  const currentMediaPage = drupalSettings.media.page || 1;
-
-                  showToast("File uploaded successfully!", "success");
-                  loadTableData(currentPage);
-                  loadPublicationFiles(currentPubPage);
-                  loadMediaFiles(currentMediaPage);
-                } else {
-                  showToast(
-                    "Failed to upload file. Please try again.",
-                    "danger"
-                  );
-                }
-              },
-              error: function () {
-                showToast("Error uploading file.", "danger");
-              },
-            });
-          } else {
-            showToast("Error generating file name.", "danger");
-          }
-        } catch (error) {
-          showToast("Error communicating with the server.", "danger");
+        if (!(json && json.suggestedFileName)) {
+          showToast("Error generating file name.", "danger");
+          return;
         }
+
+        // 2) Rename and prepare upload
+        const newFileName = `${json.suggestedFileName}.${fileExtension}`;
+        const newFile = new File([file], newFileName, { type: file.type });
+
+        const formData = new FormData();
+        formData.append("files[mt_filename]", newFile);
+
+        // 3) Upload
+        const uploadUrl = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${studyuri}`;
+        $.ajax({
+          url: uploadUrl,
+          type: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function (response) {
+            if (!response.fid) {
+              showToast("Failed to upload file. Please try again.", "danger");
+              return;
+            }
+
+            // Refresh other tables
+            showToast("File uploaded successfully!", "success");
+            loadTableData(drupalSettings.std.page || 1);
+            loadPublicationFiles(drupalSettings.pub.page || 1);
+            loadMediaFiles(drupalSettings.media.page || 1);
+
+            // 4) If streamKey present, refresh streams table
+            if (response.streamKey) {
+              $.ajax({
+                url: window.location.href,
+                type: "GET",
+                dataType: "html",
+                cache: false,
+                success: function (pageHtml) {
+                  const tmp = $('<div>').append($.parseHTML(pageHtml));
+
+                  // Find only the real streams table (with radios)
+                  const newTable = tmp
+                    .find('#dpl-streams-table')
+                    .filter(function () {
+                      const hasRadios = $(this).find('input[type=radio]').length > 0;
+                      return hasRadios;
+                    })
+                    .first();
+
+                  if (!newTable.length) {
+                    showToast("Streams table not found in refresh.", "danger");
+                    return;
+                  }
+
+                  // Replace old table
+                  $('#dpl-streams-table').replaceWith(newTable);
+
+                  // *** Crucial: reset the binding flag so we can rebind events ***
+                  newTable.removeData('dpl-bound');
+
+                  // Re-attach only our streamSelection behavior
+                  Drupal.behaviors.streamSelection.attach(
+                    newTable.closest('.card').get(0),
+                    drupalSettings
+                  );
+
+                  // Select the new radio and trigger change
+                  const radio = $(`#dpl-streams-table input[type=radio][value="${response.streamKey}"]`);
+                  if (radio.length) {
+                    radio
+                      .closest('table').find('input[type=radio]')
+                      .prop('checked', false).data('waschecked', false)
+                      .closest('tr').removeClass('selected');
+
+                    // 4a) Mark checked + data
+                    radio.prop('checked', true).data('waschecked', true);
+
+                    // 4b) Fire both click AND change, to hit both handlers
+                    radio.trigger('click');
+                    radio.trigger('change');
+                  }
+                },
+                error: function () {
+                  showToast("Failed to refresh streams table.", "danger");
+                }
+              });
+            }
+          },
+          error: function (xhr, status, error) {
+            showToast("Error uploading file.", "danger");
+          }
+        });
+      } catch (err) {
+        showToast("Error communicating with the server.", "danger");
       }
     });
   };
@@ -442,7 +643,7 @@
                       class="btn btn-sm btn-secondary download-url"
                       data-download-url="${file.download_url}"
                       style="margin-right:5px">
-                      <i class="fa-solid fa-save"></i>
+                      <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
                     file.delete_url
@@ -466,7 +667,8 @@
           if (response.files && response.pagination) {
             if (response.pagination) {
               $("#publication_files_count").text(
-                "Publications (" + response.pagination.total_files + ")"
+                // "Publications (" + response.pagination.total_files + ")"
+                "Publications"
               );
 
               totals.publications =
@@ -654,7 +856,8 @@
           if (response.files && response.pagination) {
             if (response.pagination) {
               $("#media_files_count").text(
-                "Media (" + response.pagination.total_files + ")"
+                // "Media (" + response.pagination.total_files + ")"
+                "Media"
               );
 
               totals.media = parseInt(response.pagination.total_files, 10) || 0;

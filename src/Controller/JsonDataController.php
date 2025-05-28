@@ -16,6 +16,8 @@ use Drupal\rep\Constant;
 use Drupal\Core\File\FileSystemInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use Drupal\rep\Entity\MetadataTemplate as DataFile;
+use Drupal\Component\Utility\Html;
 
 class JsonDataController extends ControllerBase
 {
@@ -163,7 +165,24 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        $this->setList(ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize));
+        $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
+
+        $unassociated = array_filter($allItems, function ($item) {
+          return empty($item->hasDataFile->streamUri);
+        });
+
+        $totalUnassociated = count($unassociated);
+        $this->setListSize($totalUnassociated);
+        $total_pages = (int) ceil($totalUnassociated / $pagesize);
+
+        if (($page - 1) * $pagesize >= $totalUnassociated) {
+          $page = max(1, $page - 1);
+        }
+
+        $offset = ($page - 1) * $pagesize;
+        $paged = array_slice($unassociated, $offset, $pagesize);
+
+        $this->setList($paged);
 
         $this->single_class_name = "";
         $this->plural_class_name = "";
@@ -275,6 +294,7 @@ class JsonDataController extends ControllerBase
     {
         try {
 
+            $streamUri = null;
             $uri = basename(base64_decode($studyuri));
             // Captura o arquivo enviado.
             $uploaded_files = $request->files->all();
@@ -327,7 +347,7 @@ class JsonDataController extends ControllerBase
 
             // Se o tipo for "da", adiciona a lógica adicional.
             if ($folder === 'da') {
-                $this->processDAFile($file, $uploaded_file->getClientOriginalName(), $studyuri);
+                $streamUri = $this->processDAFile($file, $uploaded_file->getClientOriginalName(), $studyuri);
             }
 
             // Log de sucesso.
@@ -341,6 +361,7 @@ class JsonDataController extends ControllerBase
                 'status' => 'success',
                 'fid' => $file->id(),
                 'uri' => $file->getFileUri(),
+                'streamKey' => $streamUri ? base64_encode($streamUri) : NULL,
             ]);
         } catch (\Exception $e) {
             \Drupal::logger('std')->error('Exception occurred: @message', ['@message' => $e->getMessage()]);
@@ -348,85 +369,6 @@ class JsonDataController extends ControllerBase
         }
     }
 
-    // private function processDAFile(File $file, string $filename, $studyuri)
-    // {
-    //     try {
-    //         // Add `FusekiAPIConnector` service.
-    //         $api = \Drupal::service('rep.api_connector');
-
-    //         $useremail = \Drupal::currentUser()->getEmail();
-
-    //         // File Data
-    //         $fileId = $file->id();
-
-    //         // FIND STREAM URI BY PATTERN
-    //         $streamList = $api->parseObjectResponse(
-    //             $api->streamByStudyState(
-    //                 base64_decode($studyuri),
-    //                 HASCO::ACTIVE,
-    //                 99999,
-    //                 0
-    //             ),
-    //             'streamByStudyState'
-    //         );
-
-    //         $streamUri = null;
-    //         if (!empty($streamList)) {
-    //             foreach ($streamList as $stream) {
-    //                 // certifica-te de que datasetPattern existe e não é vazio
-    //                 if (!empty($stream->datasetPattern)) {
-    //                     // verifica se $filename começa pelo padrão
-    //                     if (strpos($filename, $stream->datasetPattern) === 0) {
-    //                         $streamUri = $stream->uri;
-    //                         break;
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    //         // DATAFILE JSON
-    //         $newDataFileUri = Utils::uriGen('datafile');
-    //         $datafileJSON = '{"uri":"' . $newDataFileUri . '",' .
-    //             '"typeUri":"' . HASCO::DATAFILE . '",' .
-    //             '"hascoTypeUri":"' . HASCO::DATAFILE . '",' .
-    //             '"label":"' . $filename . '",' .
-    //             '"filename":"' . $filename . '",' .
-    //             '"id":"' . $fileId . '",' .
-    //             '"studyUri":"'.base64_decode($studyuri).'",'.
-    //             '"streamUri":"' . $streamUri ?? null . '",' .
-    //             '"fileStatus":"' . Constant::FILE_STATUS_UNPROCESSED . '",' .
-    //             '"hasSIRManagerEmail":"' . $useremail . '"}';
-
-    //         // MT JSON
-    //         $newMTUri = str_replace("DFL", Utils::elementPrefix('da'), $newDataFileUri);
-    //         $mtJSON = '{"uri":"' . $newMTUri . '",' .
-    //             '"typeUri":"' . HASCO::DATA_ACQUISITION . '",' .
-    //             '"hascoTypeUri":"' . HASCO::DATA_ACQUISITION . '",' .
-    //             '"isMemberOfUri":"' . base64_decode($studyuri) . '",' .
-    //             '"label":"' . $filename . '",' .
-    //             '"hasDataFileUri":"' . $newDataFileUri . '",' .
-    //             '"hasVersion":"",' .
-    //             '"comment":"",' .
-    //             '"hasSIRManagerEmail":"' . $useremail . '"}';
-
-    //         // dpm($datafileJSON);
-    //         // dpm($mtJSON);
-
-    //         // Adiciona o `DataFile`.
-    //         $msg1 = $api->parseObjectResponse($api->datafileAdd($datafileJSON), 'datafileAdd');
-
-    //         // ADD MT
-    //         $msg2 = $api->parseObjectResponse($api->elementAdd('da', $mtJSON), 'elementAdd');
-
-    //         if ($msg1 && $msg2) {
-    //             \Drupal::logger('std')->info('DA file processed successfully.');
-    //         } else {
-    //             \Drupal::logger('std')->error('Error processing DA file.');
-    //         }
-    //     } catch (\Exception $e) {
-    //         \Drupal::logger('std')->error('Error processing DA file: @message', ['@message' => $e->getMessage()]);
-    //     }
-    // }
     private function processDAFile(File $file, string $filename, $studyuri)
     {
         try {
@@ -549,6 +491,8 @@ class JsonDataController extends ControllerBase
                 ['@message' => $e->getMessage()]
             );
         }
+
+      return $streamUri;
     }
 
 
@@ -704,7 +648,7 @@ class JsonDataController extends ControllerBase
             $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
 
             // Adicionar token ao view_url para arquivos Word
-            $view_url = '/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
+            $view_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
             if ($token !== null) {
                 $view_url .= '/' . $token;
             }
@@ -840,7 +784,7 @@ class JsonDataController extends ControllerBase
             $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
 
             // Adicionar token ao view_url para arquivos Word
-            $view_url = '/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
+            $view_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
             if ($token !== null) {
                 $view_url .= '/' . $token;
             }
@@ -1016,6 +960,123 @@ class JsonDataController extends ControllerBase
         \Drupal::logger('custom_module')->info('File served: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
 
         return $response;
+    }
+
+    /**
+     * AJAX callback for data files + messages.
+     *
+     * Query parameters:
+     *   - studyUri   Base64-encoded study URI
+     *   - streamUri  Base64-encoded stream URI
+     *   - page       (optional) page number, default 1
+     *   - pagesize   (optional) items per page, default 10
+     */
+    public function streamDataAjax(Request $request) {
+      // 1) Decode study & stream from base64.
+      $studyKey   = $request->query->get('studyUri');
+      $streamKey  = $request->query->get('streamUri');
+      $studyUri   = base64_decode($studyKey);
+      $streamUri  = base64_decode($streamKey);
+
+      $stream = \Drupal::service('rep.api_connector')
+      ->parseObjectResponse(
+        \Drupal::service('rep.api_connector')
+          ->getUri($streamUri),
+        'getUri'
+      );
+      $streamType = isset($stream->method) ? $stream->method : 'unknown';
+
+      // 2) Pagination parameters.
+      $page      = max(1, (int) $request->query->get('page', 1));
+      $pageSize  = max(1, (int) $request->query->get('pagesize', 10));
+      $offset    = ($page - 1) * $pageSize;
+
+      // 3) Manager email.
+      $managerEmail = \Drupal::currentUser()->getEmail();
+
+      // 4) Fetch total count (already returns an array).
+      $totalArr = \Drupal::service('rep.api_connector')
+        ->parseObjectResponse(
+          \Drupal::service('rep.api_connector')
+            ->listSizeByManagerEmailByStudy($studyUri, 'da', $managerEmail),
+          'listSizeByManagerEmailByStudy'
+        );
+      $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
+
+      // 5) Fetch raw page of DAs (already returns an array).
+      $rawList = \Drupal::service('rep.api_connector')
+        ->parseObjectResponse(
+          \Drupal::service('rep.api_connector')
+            ->listByManagerEmailByStudy($studyUri, 'da', $managerEmail, $pageSize, $offset),
+          'listByManagerEmailByStudy'
+        );
+      if (!is_array($rawList)) {
+        $rawList = [];
+      }
+
+      // 6) Filter by hasDataFile->streamUri.
+      $filtered = array_filter($rawList, function ($element) use ($streamUri) {
+        return isset($element->hasDataFile->streamUri)
+          && $element->hasDataFile->streamUri === $streamUri;
+      });
+      $filtered = array_values($filtered);
+
+      // 7) Build header & rows via DataFile.
+      $header = DataFile::generateStreamHeader();
+      $rows   = DataFile::generateStreamOutputCompact('da',$filtered);
+
+      foreach ($rows as $key => &$row) {
+        if (isset($row['element_log'])) {
+          $html = $row['element_log'];
+          $row['element_log'] = [
+            'data' => [
+              '#markup' => $html,
+            ],
+          ];
+        }
+        if (isset($row['element_operations'])) {
+          $html = $row['element_operations'];
+          $row['element_operations'] = [
+            'data' => [
+              '#markup' => $html,
+            ],
+          ];
+        }
+      }
+      unset($row);
+
+      // 8) Render the table.
+      $tableBuild = [
+        '#theme'      => 'table',
+        '#header'     => $header,
+        '#rows'       => $rows,
+        '#attributes' => ['class' => ['table','table-sm']],
+      ];
+      $filesHtml = \Drupal::service('renderer')->renderRoot($tableBuild);
+
+      $filesHtml = Html::decodeEntities($filesHtml);
+
+      // 9) Build pager.
+      $totalPages = (int) ceil($totalDAs / $pageSize);
+      $pagerHtml = '<nav><ul class="pagination">';
+      for ($p = 1; $p <= $totalPages; $p++) {
+        $active = ($p === $page) ? ' active' : '';
+        $pagerHtml .= '<li class="page-item' . $active . '">'
+          . '<a href="#" class="page-link dpl-files-page" data-page="' . $p . '">'
+          . $p . '</a></li>';
+      }
+      $pagerHtml .= '</ul></nav>';
+
+      // 10) Placeholder for messages.
+      $messagesHtml = '<p>' . $this->t('No messages for this stream.') . '</p>';
+
+      // 11) Return JSON.
+      return new JsonResponse([
+        'streamType'       => $streamType,
+        'files'      => $filesHtml,
+        'filesPager' => $pagerHtml,
+        'messages'   => $messagesHtml,
+      ]);
     }
 
     # TO BE CHECKED IF NEEDED
