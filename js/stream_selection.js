@@ -40,7 +40,7 @@
       }
 
       // Attach click handler to radio inputs within the table
-      $table.on('click', 'input[type=radio]', function (e) {
+      $table.on('click', 'input[type=radio]', function () {
         var radio = this;
 
         // If clicking the same radio again: deselect + hide cards
@@ -69,13 +69,11 @@
           // Adjust layout based on streamType
           var type = (data.streamType || '').toLowerCase();
           if (type === 'file' || type === 'files') {
-            // Full-width data files
             $('#stream-data-files-container')
               .removeClass('col-md-6').addClass('col-md-12').show();
             $('#message-stream-container').hide();
           }
           else {
-            // Side-by-side
             $('#stream-data-files-container')
               .removeClass('col-md-12').addClass('col-md-6').show();
             $('#message-stream-container')
@@ -111,7 +109,7 @@
       var ingestUrl   = drupalSettings.std.fileIngestUrl;
       var uningestUrl = drupalSettings.std.fileUningestUrl;
 
-      // Delegate on document so that dynamically added buttons are handled
+      // Delegate on document so dynamically injected buttons are handled
       $(document)
         .off('click.dplFileIngest', '.ingest-button, .uningest-button')
         .on('click.dplFileIngest', '.ingest-button, .uningest-button', function (e) {
@@ -159,73 +157,80 @@
   };
 
 
+  // Global flag to ensure delete behavior binds only once
+  var streamDataFileDeleteBound = false;
+
   /**
-   * Behavior #3 (updated): Delete a Stream Data File and refresh that card
+   * Behavior #3: Delete a Stream Data File and refresh that card
    *
-   * Now listens for clicks on .delete-stream-file-button anywhere on the page.
+   * - Listens for clicks on .delete-stream-file-button anywhere on the page.
+   * - On success, re-fires the same AJAX used in streamSelection to re-render
+   *   only the Stream Data Files (and hide message-stream if needed).
    */
   Drupal.behaviors.streamDataFileDelete = {
     attach: function (context, settings) {
-      // Only bind once per page load
-      if ($(context).data('bound-stream-file-delete')) {
+      if (streamDataFileDeleteBound) {
         return;
       }
-      $(context).data('bound-stream-file-delete', true);
+      streamDataFileDeleteBound = true;
 
-      // Delegate click on the delete‐stream‐file button
-      $(document).on('click', '.delete-stream-file-button', function (e) {
-        e.preventDefault();
-        if (!confirm('Are you sure you want to delete this stream data file?')) {
-          return;
-        }
+      // Namespaced .off()/.on() to prevent multiple bindings
+      $(document)
+        .off('click.streamDataFileDelete', '.delete-stream-file-button')
+        .on('click.streamDataFileDelete', '.delete-stream-file-button', function (e) {
+          e.preventDefault();
+          if (!confirm('Are you sure you want to delete this stream data file?')) {
+            return;
+          }
 
-        var $btn = $(this);
-        var url  = $btn.data('url');
+          var $btn = $(this);
+          var url  = $btn.data('url');
 
-        // POST to the delete endpoint
-        $.post(url, {}, function (resp) {
-          if (resp.status === 'success') {
-            // Re‐load the Stream Data Files card by re‐firing the same AJAX
-            var selected = $('#dpl-streams-table input[type=radio]:checked').val();
-            if (!selected) {
-              $('#stream-data-files-container, #message-stream-container').hide();
-              return;
+          // POST to the delete endpoint, expect JSON { status: "...", message?: "..." }
+          $.post(url, {}, function (resp) {
+            if (resp.status === 'success') {
+              // Re-load the Stream Data Files card just like a radio click
+              var selected = $('#dpl-streams-table input[type=radio]:checked').val();
+              if (!selected) {
+                $('#stream-data-files-container, #message-stream-container').hide();
+                return;
+              }
+
+              $.getJSON(drupalSettings.std.ajaxUrl, {
+                studyUri:  drupalSettings.std.studyUri,
+                streamUri: selected
+              })
+              .done(function (data) {
+                $('#data-files-table'  ).html(data.files);
+                $('#data-files-pager'  ).html(data.filesPager);
+                $('#message-stream-table').html(data.messages);
+
+                var type = (data.streamType || '').toLowerCase();
+                if (type === 'file' || type === 'files') {
+                  $('#stream-data-files-container')
+                    .removeClass('col-md-6').addClass('col-md-12').show();
+                  $('#message-stream-container').hide();
+                }
+                else {
+                  $('#stream-data-files-container')
+                    .removeClass('col-md-12').addClass('col-md-6').show();
+                  $('#message-stream-container')
+                    .removeClass('col-md-12').addClass('col-md-6').show();
+                }
+              })
+              .fail(function () {
+                alert('Failed to refresh stream data files card.');
+              });
             }
-
-            $.getJSON(drupalSettings.std.ajaxUrl, {
-              studyUri:  drupalSettings.std.studyUri,
-              streamUri: selected
-            })
-            .done(function (data) {
-              $('#data-files-table'  ).html(data.files);
-              $('#data-files-pager'  ).html(data.filesPager);
-              $('#message-stream-table').html(data.messages);
-
-              var type = (data.streamType||'').toLowerCase();
-              if (type === 'file' || type === 'files') {
-                $('#stream-data-files-container')
-                  .removeClass('col-md-6').addClass('col-md-12').show();
-                $('#message-stream-container').hide();
-              }
-              else {
-                $('#stream-data-files-container')
-                  .removeClass('col-md-12').addClass('col-md-6').show();
-                $('#message-stream-container')
-                  .removeClass('col-md-12').addClass('col-md-6').show();
-              }
-            })
-            .fail(function () {
-              alert('Failed to refresh stream data files card.');
-            });
-          }
-          else {
-            alert(resp.message || 'Error deleting the stream data file.');
-          }
-        }, 'json')
-        .fail(function () {
-          alert('Communication error while deleting the stream data file.');
+            else {
+              alert(resp.message || 'Error deleting the stream data file.');
+            }
+          }, 'json')
+          .fail(function () {
+            alert('Communication error while deleting the stream data file.');
+          });
         });
-      });
     }
   };
+
 })(jQuery, Drupal, drupalSettings);
