@@ -131,7 +131,10 @@ class JsonDataController extends ControllerBase
         $this->element_type = $elementtype;
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
-          $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+          // $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+          $total = $api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy');
+          dpm($total, 'Total DAs');
+          $this->setListSize($total);
         }
 
         if (gettype($this->list_size) == 'string') {
@@ -165,7 +168,9 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
+        // $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
+        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
+        dpm($allItems, 'All DAs');
 
         $unassociated = array_filter($allItems, function ($item) {
           return empty($item->hasDataFile->streamUri);
@@ -369,6 +374,19 @@ class JsonDataController extends ControllerBase
         }
     }
 
+    /**
+     * Process the uploaded DA file and associate it with a stream.
+     *
+     * @param File $file
+     *   The uploaded file entity.
+     * @param string $filename
+     *   The original filename of the uploaded file.
+     * @param string $studyuri
+     *   The base64-encoded study URI.
+     *
+     * @return string|null
+     *   The stream URI if a matching stream is found, otherwise null.
+     */
     private function processDAFile(File $file, string $filename, $studyuri)
     {
         try {
@@ -376,20 +394,8 @@ class JsonDataController extends ControllerBase
             $useremail = \Drupal::currentUser()->getEmail();
             $fileId    = $file->id();
 
-            // 1) buscar streams activos
-            $streamList = $api->parseObjectResponse(
-                $api->streamByStudyState(
-                    base64_decode($studyuri),
-                    HASCO::ACTIVE,
-                    99999,
-                    0
-                ),
-                'streamByStudyState'
-            );
-
-            \Drupal::logger('debug')->debug('processDAFile: encontrados @count streams', [
-                '@count' => count($streamList),
-            ]);
+            // 1) Get active Streams for the study
+            $streamList = $api->parseObjectResponse($api->streamByStudyState(base64_decode($studyuri),HASCO::ACTIVE,99999,0),'streamByStudyState');
 
             $streamUri = null;
             foreach ($streamList as $stream) {
@@ -398,29 +404,29 @@ class JsonDataController extends ControllerBase
                     continue;
                 }
 
-                // 1) Preparar o corpo do regex: remover possíveis delimiters
+                // 1) Prepare regex body: remove possible delimiters
                 $body = trim($rawPattern, '/');
 
-                // 2) Garantir que casa só no início (âncora ^)
+                // 2) Ensure it matches only at the start (anchor ^)
                 if (strpos($body, '^') !== 0) {
                     $body = '^' . $body;
                 }
 
-                // 3) Construir o regex com delimiters e, opcionalmente, flags (aqui sem flags)
+                // 3) Build the regex with delimiters and, optionally, flags (none here)
                 $regex = '/' . $body . '/';
 
-                // 4) Tentar casar; se for inválido, preg_match devolve false
+                // 4) Try to match; if invalid, preg_match returns false
                 $res = @preg_match($regex, $filename);
 
                 if ($res === false) {
                     \Drupal::logger('std')
-                        ->warning("Pattern inválido “{$rawPattern}”: regex “{$regex}”");
+                        ->warning("Invalid pattern “{$rawPattern}”: regex “{$regex}”");
                     continue;
                 }
 
                 if ($res === 1) {
-                    \Drupal::logger('std')
-                        ->info("Filename “{$filename}” casou com regex “{$regex}”");
+                    // \Drupal::logger('std')
+                    //     ->info("Filename “{$filename}” matched regex “{$regex}”");
                     $streamUri = $stream->uri;
                     break;
                 }
@@ -428,11 +434,11 @@ class JsonDataController extends ControllerBase
 
             if ($streamUri === null) {
                 \Drupal::logger('std')
-                    ->warning("Nenhum stream pattern casou com “{$filename}”");
+                    ->warning("No stream pattern matched “{$filename}”");
             }
 
 
-            // 3) montar o JSON com json_encode (evita bugs de precedência no ??)
+            // 3) Build JSON with json_encode (avoids precedence bugs in ??)
             $newDataFileUri = Utils::uriGen('datafile');
             $datafileArr = [
                 'uri'               => $newDataFileUri,
@@ -442,14 +448,14 @@ class JsonDataController extends ControllerBase
                 'filename'          => $filename,
                 'id'                => $fileId,
                 'studyUri'          => base64_decode($studyuri),
-                'streamUri'         => $streamUri,        // será null se nenhum match
+                'streamUri'         => $streamUri,
                 'fileStatus'        => Constant::FILE_STATUS_UNPROCESSED,
                 'hasSIRManagerEmail'=> $useremail,
             ];
             $datafileJSON = json_encode($datafileArr);
-            \Drupal::logger('debug')->debug('DATAFILE JSON: @json', ['@json' => $datafileJSON]);
+            // \Drupal::logger('debug')->debug('DATAFILE JSON: @json', ['@json' => $datafileJSON]);
 
-            // Montar o MT JSON
+            // Mount the MT JSON
             $newMTUri = str_replace("DFL", Utils::elementPrefix('da'), $newDataFileUri);
             $mtArr = [
                 'uri'             => $newMTUri,
@@ -463,38 +469,37 @@ class JsonDataController extends ControllerBase
                 'hasSIRManagerEmail'=> $useremail,
             ];
             $mtJSON = json_encode($mtArr);
-            \Drupal::logger('debug')->debug('MT JSON: @json', ['@json' => $mtJSON]);
+            // \Drupal::logger('debug')->debug('MT JSON: @json', ['@json' => $mtJSON]);
 
-            // 4) chamar a API e logar as respostas
+            // 4) Call API and log responses
             $msg1 = $api->parseObjectResponse($api->datafileAdd($datafileJSON), 'datafileAdd');
-            \Drupal::logger('debug')->debug('Resposta datafileAdd: @resp', [
-                '@resp' => print_r($msg1, TRUE),
-            ]);
+            // \Drupal::logger('debug')->debug('Response datafileAdd: @resp', [
+            //     '@resp' => print_r($msg1, TRUE),
+            // ]);
 
             $msg2 = $api->parseObjectResponse($api->elementAdd('da', $mtJSON), 'elementAdd');
-            \Drupal::logger('debug')->debug('Resposta elementAdd: @resp', [
-                '@resp' => print_r($msg2, TRUE),
-            ]);
+            // \Drupal::logger('debug')->debug('Response elementAdd: @resp', [
+            //     '@resp' => print_r($msg2, TRUE),
+            // ]);
 
-            if ($msg1 && $msg2) {
-                \Drupal::logger('std')->info('DA file processed successfully.');
-            } else {
-                \Drupal::logger('std')->error(
-                    'Error processing DA file: datafileAdd=@d1, elementAdd=@d2',
-                    ['@d1' => var_export($msg1, TRUE), '@d2' => var_export($msg2, TRUE)]
-                );
-            }
+            // if ($msg1 && $msg2) {
+            //     \Drupal::logger('std')->info('DA file processed successfully.');
+            // } else {
+            //     \Drupal::logger('std')->error(
+            //         'Error processing DA file: datafileAdd=@d1, elementAdd=@d2',
+            //         ['@d1' => var_export($msg1, TRUE), '@d2' => var_export($msg2, TRUE)]
+            //     );
+            // }
 
         } catch (\Exception $e) {
-            \Drupal::logger('std')->error(
-                'Exception processing DA file: @message',
-                ['@message' => $e->getMessage()]
-            );
+            // \Drupal::logger('std')->error(
+            //     'Exception processing DA file: @message',
+            //     ['@message' => $e->getMessage()]
+            // );
         }
 
       return $streamUri;
     }
-
 
     public function checkFileName($studyuri, $fileNameWithoutExtension)
     {
@@ -595,7 +600,6 @@ class JsonDataController extends ControllerBase
 
         return $response;
     }
-
 
     /*
     ** PUBLICATIONS TABLE RELATED FUNCTIONS
@@ -870,45 +874,6 @@ class JsonDataController extends ControllerBase
     /*
     ** VIEW FILES
     */
-    // public function viewFile($filename, $studyuri, $type)
-    // {
-    //     // Verificar se os parâmetros necessários estão presentes
-    //     if (empty($studyuri)) {
-    //         return new JsonResponse(['error' => 'No study provided.'], 400);
-    //     }
-
-    //     if (empty($type)) {
-    //         return new JsonResponse(['error' => 'No type provided.'], 400);
-    //     }
-
-    //     if (empty($filename)) {
-    //         return new JsonResponse(['error' => 'No file provided.'], 400);
-    //     }
-
-    //     // Decodificar e construir o caminho do arquivo
-    //     $decoded_studyuri = basename(base64_decode($studyuri));
-    //     $directory = 'private://std/' . $decoded_studyuri . '/' . $type . '/';
-    //     $file_system = \Drupal::service('file_system');
-    //     $real_path = $file_system->realpath($directory . $filename);
-
-    //     // Verificar se o arquivo existe
-    //     if (!file_exists($real_path)) {
-    //         return new JsonResponse(['error' => 'File not found.'], 404);
-    //     }
-
-    //     // Definir o tipo MIME do arquivo
-    //     $mime_type = mime_content_type($real_path);
-
-    //     // Retornar o arquivo como uma resposta binária
-    //     $response = new \Symfony\Component\HttpFoundation\BinaryFileResponse($real_path);
-    //     $response->headers->set('Content-Type', $mime_type);
-    //     $response->setContentDisposition(
-    //         \Symfony\Component\HttpFoundation\ResponseHeaderBag::DISPOSITION_INLINE,
-    //         $filename
-    //     );
-
-    //     return $response;
-    // }
     public function viewFile($filename, $studyuri, $type, $token = null)
     {
         // Verificar se os parâmetros necessários estão presentes
