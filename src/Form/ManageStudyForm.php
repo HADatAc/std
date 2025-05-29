@@ -186,14 +186,14 @@ class ManageStudyForm extends FormBase
 
 
     // Attach our JS behavior + settings.
-    $form['#attached']['library'][] = 'dpl/stream_selection';
-    $form['#attached']['drupalSettings']['dpl'] = [
+    $form['#attached']['library'][] = 'std/stream_selection';
+    $form['#attached']['drupalSettings']['std'] = [
       'studyUri' => base64_encode($this->studyUri),
       'streamDataUrl' => Url::fromRoute('std.stream_data_ajax')->toString(),
       'ajaxUrl'  => Url::fromRoute('std.stream_data_ajax')->toString(),
     ];
-    $form['#attached']['drupalSettings']['dpl']['fileIngestUrl']   = Url::fromRoute('dpl.file_ingest_ajax')->toString();
-    $form['#attached']['drupalSettings']['dpl']['fileUningestUrl'] = Url::fromRoute('dpl.file_uningest_ajax')->toString();
+    $form['#attached']['drupalSettings']['std']['fileIngestUrl']   = Url::fromRoute('dpl.file_ingest_ajax')->toString();
+    $form['#attached']['drupalSettings']['std']['fileUningestUrl'] = Url::fromRoute('dpl.file_uningest_ajax')->toString();
 
 
     //MODAL

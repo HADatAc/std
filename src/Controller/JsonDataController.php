@@ -131,10 +131,8 @@ class JsonDataController extends ControllerBase
         $this->element_type = $elementtype;
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
-          // $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
-          $total = $api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy');
-          dpm($total, 'Total DAs');
-          $this->setListSize($total);
+          $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+          // NEW $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
         }
 
         if (gettype($this->list_size) == 'string') {
@@ -168,9 +166,9 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        // $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
-        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
-        dpm($allItems, 'All DAs');
+        $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
+        // NEW $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
+        // dpm($allItems, 'All DAs');
 
         $unassociated = array_filter($allItems, function ($item) {
           return empty($item->hasDataFile->streamUri);
@@ -959,22 +957,24 @@ class JsonDataController extends ControllerBase
       // 3) Manager email.
       $managerEmail = \Drupal::currentUser()->getEmail();
 
-      // 4) Fetch total count (already returns an array).
+      // 4) Fetch total count FROM STUDY (already returns an array).
       $totalArr = \Drupal::service('rep.api_connector')
         ->parseObjectResponse(
           \Drupal::service('rep.api_connector')
             ->listSizeByManagerEmailByStudy($studyUri, 'da', $managerEmail),
           'listSizeByManagerEmailByStudy'
         );
+      // NEW $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStudy($studyUri),'getTotalStudyDAsByStudy');
       $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
 
-      // 5) Fetch raw page of DAs (already returns an array).
+      // 5) Fetch raw page of DAs FROM STUDY(already returns an array).
       $rawList = \Drupal::service('rep.api_connector')
         ->parseObjectResponse(
           \Drupal::service('rep.api_connector')
             ->listByManagerEmailByStudy($studyUri, 'da', $managerEmail, $pageSize, $offset),
           'listByManagerEmailByStudy'
         );
+      // NEW  $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStudy($studyUri, $pageSize, $offset),'getStudyDAsByStudy');
       if (!is_array($rawList)) {
         $rawList = [];
       }
@@ -987,8 +987,8 @@ class JsonDataController extends ControllerBase
       $filtered = array_values($filtered);
 
       // 7) Build header & rows via DataFile.
-      $header = DataFile::generateStreamHeader();
-      $rows   = DataFile::generateStreamOutputCompact('da',$filtered);
+      $header = DataFile::generateStreamHeader($stream->method);
+      $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
 
       foreach ($rows as $key => &$row) {
         if (isset($row['element_log'])) {
