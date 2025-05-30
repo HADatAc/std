@@ -716,17 +716,6 @@ class ManageStudyForm extends FormBase
       '#markup' => '<br><br><br><br>',
     ];
 
-    $form['#attached']['html_head'][] = [
-      [
-        '#tag' => 'script',
-        '#value' => "
-          setTimeout(function() {
-            location.reload();
-          }, 20000); // atualiza a cada 20 segundos
-        ",
-      ],
-      'mqtt_auto_refresh',
-    ];
 
     return $form;
   }
