@@ -10,6 +10,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Entity\Stream;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\std\Controller\JsonDataController;
+use Drupal\dpl\Controller\StreamController;
 use Drupal\Core\Render\Markup;
 
 use function Termwind\style;
@@ -429,13 +430,44 @@ class ManageStudyForm extends FormBase
         ',
       ],
     ];
+
+    $ip = $stream->messageIP ?? NULL;
+    $port = $stream->messagePort ?? NULL;
+    $topic = 'wsaheadhin';
+    
+    $result = StreamController::readMessages($ip, $port, $topic);
+    $messages = $result['messages'];
+    $debug_info = $result['debug'];
+    
+    $output = '<div class="mqtt-messages">';
+    $output .= $debug_info;
+    
+    if (empty($messages)) {
+      $output .= '<em>No messages received.</em>';
+    } else {
+      foreach ($messages as $msg) {
+        $decoded = json_decode($msg, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+          $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:10px; border-radius:5px;">';
+          $output .= '<pre style="margin:0;"><strong>Tópico:</strong> ' . htmlspecialchars($topic) . '</pre>';
+          foreach ($decoded as $key => $value) {
+            $output .= '<div><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars((string) $value) . '</div>';
+          }
+          $output .= '</div>';
+        } else {
+          $output .= '<div class="mqtt-raw">' . htmlspecialchars($msg) . '</div>';
+        }
+      }
+    }
+
+    $output .= '</div>';
     // Message Stream card (right half)
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-6'],        // half width of the parent row
         'id'    => 'message-stream-container',
-        'style' => 'display:none;',
+        'style' => 'display:block;',
       ],
       'card' => [
         '#type' => 'markup',
@@ -445,7 +477,7 @@ class ManageStudyForm extends FormBase
               <h3 id="message-stream-count">Message Stream</h3>
             </div>
             <div class="card-body">
-              <div id="message-stream-table">No messages for this stream.</div>
+              <div id="message-stream-table">' . $output . '</div>
             </div>
             <div class="card-footer text-center">
               <div id="message-stream-pager" class="pagination"></div>
@@ -682,6 +714,18 @@ class ManageStudyForm extends FormBase
       '#type' => 'markup',
       '#attributes' => array('class' => array('col-md-1')),
       '#markup' => '<br><br><br><br>',
+    ];
+
+    $form['#attached']['html_head'][] = [
+      [
+        '#tag' => 'script',
+        '#value' => "
+          setTimeout(function() {
+            location.reload();
+          }, 20000); // atualiza a cada 20 segundos
+        ",
+      ],
+      'mqtt_auto_refresh',
     ];
 
     return $form;
