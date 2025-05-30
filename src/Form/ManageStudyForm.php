@@ -431,41 +431,10 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
-    $ip = $stream->messageIP ?? NULL;
-    $port = $stream->messagePort ?? NULL;
-    $topic = 'wsaheadhin';
-    
-    $result = StreamController::readMessages($ip, $port, $topic);
-    $messages = $result['messages'];
-    $debug_info = $result['debug'];
-    
-    $output = '<div class="mqtt-messages">';
-    $output .= $debug_info;
-    
-    if (empty($messages)) {
-      $output .= '<em>No messages received.</em>';
-    } else {
-      foreach ($messages as $msg) {
-        $decoded = json_decode($msg, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-          $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:10px; border-radius:5px;">';
-          $output .= '<pre style="margin:0;"><strong>Tópico:</strong> ' . htmlspecialchars($topic) . '</pre>';
-          foreach ($decoded as $key => $value) {
-            $output .= '<div><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars((string) $value) . '</div>';
-          }
-          $output .= '</div>';
-        } else {
-          $output .= '<div class="mqtt-raw">' . htmlspecialchars($msg) . '</div>';
-        }
-      }
-    }
-
-    $output .= '</div>';
-    // Message Stream card (right half)
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-6'],        // half width of the parent row
+        'class' => ['col-md-6'],
         'id'    => 'message-stream-container',
         'style' => 'display:block;',
       ],
@@ -477,7 +446,9 @@ class ManageStudyForm extends FormBase
               <h3 id="message-stream-count">Message Stream</h3>
             </div>
             <div class="card-body">
-              <div id="message-stream-table">' . $output . '</div>
+              <div id="message-stream-table">
+                <p class="text-muted">Select a stream to view messages.</p>
+              </div>
             </div>
             <div class="card-footer text-center">
               <div id="message-stream-pager" class="pagination"></div>
@@ -485,7 +456,7 @@ class ManageStudyForm extends FormBase
           </div>
         ',
       ],
-    ];
+    ];    
 
     /**
       * 2) Fixed cards (Study Data Files, Publications, Media)

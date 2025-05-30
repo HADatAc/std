@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
 use Drupal\Component\Utility\Html;
+use Drupal\dpl\Controller\StreamController;
 
 class JsonDataController extends ControllerBase
 {
@@ -1033,14 +1034,42 @@ class JsonDataController extends ControllerBase
       $pagerHtml .= '</ul></nav>';
 
       // 10) Placeholder for messages.
-      $messagesHtml = '<p>' . $this->t('No messages for this stream.') . '</p>';
+      $ip = $stream->messageIP ?? NULL;
+      $port = $stream->messagePort ?? NULL;
+      $topic = 'wsaheadhin';
+      
+      $result = StreamController::readMessages($ip, $port, $topic);
+      $messages = $result['messages'];
+      $debug_info = $result['debug'];
+      
+      $output = '<div class="mqtt-messages">';
+      $output .= $debug_info;
+      
+      if (empty($messages)) {
+        $output .= '<em>No messages received.</em>';
+      } else {
+        foreach ($messages as $msg) {
+          $decoded = json_decode($msg, true);
+          if (json_last_error() === JSON_ERROR_NONE) {
+            $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:10px; border-radius:5px;">';
+            $output .= '<pre style="margin:0;"><strong>Tópico:</strong> ' . htmlspecialchars($topic) . '</pre>';
+            foreach ($decoded as $key => $value) {
+              $output .= '<div><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars((string) $value) . '</div>';
+            }
+            $output .= '</div>';
+          } else {
+            $output .= '<div class="mqtt-raw">' . htmlspecialchars($msg) . '</div>';
+          }
+        }
+      }
+      $output .= '</div>';      
 
       // 11) Return JSON.
       return new JsonResponse([
         'streamType'       => $streamType,
         'files'      => $filesHtml,
         'filesPager' => $pagerHtml,
-        'messages'   => $messagesHtml,
+        'messages'   => $output,
       ]);
     }
 
