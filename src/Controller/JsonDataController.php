@@ -1043,23 +1043,30 @@ class JsonDataController extends ControllerBase
       $debug_info = $result['debug'];
       
       $output = '<div class="mqtt-messages">';
-      $output .= $debug_info;
+      //$output .= $debug_info;
       
       if (empty($messages)) {
         $output .= '<em>No messages received.</em>';
       } else {
         foreach ($messages as $msg) {
-          $decoded = json_decode($msg, true);
-          if (json_last_error() === JSON_ERROR_NONE) {
-            $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:10px; border-radius:5px;">';
-            $output .= '<pre style="margin:0;"><strong>Tópico:</strong> ' . htmlspecialchars($topic) . '</pre>';
-            foreach ($decoded as $key => $value) {
-              $output .= '<div><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars((string) $value) . '</div>';
+            $decoded = json_decode($msg, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+              $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:10px; border-radius:5px; background:#f9f9f9;">';
+        
+              $output .= '<h5 style="margin-top:0; margin-bottom:10px;">Tópico: ' . htmlspecialchars($topic) . '</h5>';
+        
+              $output .= '<table style="width:100%; border-collapse: collapse;">';
+              foreach ($decoded as $key => $value) {
+                $output .= '<tr>';
+                $output .= '<td style="padding:4px 8px; border-bottom:1px solid #ddd; font-weight:bold; width:40%;">' . htmlspecialchars($key) . '</td>';
+                $output .= '<td style="padding:4px 8px; border-bottom:1px solid #ddd;">' . htmlspecialchars((string) $value) . '</td>';
+                $output .= '</tr>';
+              }
+              $output .= '</table>';
+              $output .= '</div>';
+            } else {
+              $output .= '<div class="mqtt-raw">' . htmlspecialchars($msg) . '</div>';
             }
-            $output .= '</div>';
-          } else {
-            $output .= '<div class="mqtt-raw">' . htmlspecialchars($msg) . '</div>';
-          }
         }
       }
       $output .= '</div>';      
