@@ -1043,46 +1043,50 @@ class JsonDataController extends ControllerBase
       $debug_info = $result['debug'];
       
       $output = '<div class="mqtt-messages">';
-      //$output .= $debug_info;
-      
+
       if (empty($messages)) {
         $output .= '<em>No messages received.</em>';
       } else {
         foreach ($messages as $msg) {
-            $decoded = json_decode($msg, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-              $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">';
-        
-              $output .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
-              $output .= 'Tópico: ' . htmlspecialchars($topic);
-              if (!empty($decoded['timestamp'])) {
-                $dt = DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
-                if ($dt) {
-                  $output .= ' | Data: ' . $dt->format('d/m/Y H:i:s');
-                }
+          // Remove aspas escapadas, se houver
+          $cleanMsg = stripslashes($msg);
+          $decoded = json_decode($cleanMsg, true);
+      
+          if (json_last_error() === JSON_ERROR_NONE) {
+            $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">';
+      
+            // Cabeçalho
+            $output .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
+            $output .= 'Tópico: ' . htmlspecialchars($topic);
+            if (!empty($decoded['timestamp'])) {
+              $dt = DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
+              if ($dt) {
+                $output .= ' | Data: ' . $dt->format('d/m/Y H:i:s');
               }
-              $output .= '</div>';
-        
-              $output .= '<ul style="list-style:none; padding-left:0; margin:0;">';
-              foreach ($decoded as $key => $value) {
-                if ($key === 'timestamp') continue;
-        
-                $label = str_replace(['_', 'Pa', 'C', 'percent', 'ID', 'V'], [' ', '', ' °C', '%', 'ID', ' V'], $key);
-                $label = ucfirst($label);
-        
-                $output .= '<li style="padding:5px 0; border-bottom:1px solid #eee; color:#555;">';
-                $output .= '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars((string) $value);
-                $output .= '</li>';
-              }
-              $output .= '</ul>';
-        
-              $output .= '</div>';
-            } else {
-              $output .= '<div class="mqtt-raw" style="color:#c00; font-family: monospace;">' . htmlspecialchars($msg) . '</div>';
             }
+            $output .= '</div>';
+      
+            // Lista formatada, ignorando timestamp para não repetir
+            $output .= '<ul style="list-style:none; padding-left:0; margin:0;">';
+            foreach ($decoded as $key => $value) {
+              if ($key === 'timestamp') continue;
+      
+              $label = str_replace(['_', 'Pa', 'C', 'percent', 'ID', 'V'], [' ', '', ' °C', '%', 'ID', ' V'], $key);
+              $label = ucfirst($label);
+      
+              $output .= '<li style="padding:5px 0; border-bottom:1px solid #eee; color:#555;">';
+              $output .= '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars((string) $value);
+              $output .= '</li>';
+            }
+            $output .= '</ul>';
+      
+            $output .= '</div>';
+          } else {
+            $output .= '<div class="mqtt-raw" style="color:#c00; font-family: monospace;">' . htmlspecialchars($msg) . '</div>';
           }
+        }
       }
-      $output .= '</div>';      
+      $output .= '</div>';
 
       // 11) Return JSON.
       return new JsonResponse([
