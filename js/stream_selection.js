@@ -8,6 +8,8 @@
 
 (function ($, Drupal, drupalSettings) {
   'use strict';
+  var messageStreamInterval = null;
+  var currentStreamUri = null;
 
   /**
    * Helper to show a Bootstrap toast in the page's toast-container.
@@ -50,6 +52,32 @@
           .hide();
       }
 
+      function loadMessages(streamUri) {
+        $.getJSON(drupalSettings.std.ajaxUrl, {
+          studyUri:  drupalSettings.std.studyUri,
+          streamUri: streamUri
+        })
+        .done(function (data) {
+          $('#message-stream-table').html(data.messages);
+
+          var type = (data.streamType || '').toLowerCase();
+          if (type === 'file' || type === 'files') {
+            $('#stream-data-files-container')
+              .removeClass('col-md-6').addClass('col-md-12').show();
+            $('#message-stream-container').hide();
+          }
+          else {
+            $('#stream-data-files-container')
+              .removeClass('col-md-12').addClass('col-md-6').show();
+            $('#message-stream-container')
+              .removeClass('col-md-12').addClass('col-md-6').show();
+          }
+        })
+        .fail(function () {
+          showToast('Failed to load stream data. Please try again.', 'danger');
+        });
+      }
+
       $table.on('click', 'input[type=radio]', function () {
         var radio = this;
         if (radio === lastRadio) {
@@ -82,6 +110,14 @@
             $('#message-stream-container')
               .removeClass('col-md-12').addClass('col-md-6').show();
           }
+
+          if (messageStreamInterval) {
+            clearInterval(messageStreamInterval);
+          }
+          messageStreamInterval = setInterval(function () {
+            loadMessages(currentStreamUri);
+          }, 20000);
+                    
         })
         .fail(function () {
           showToast('Failed to load stream data. Please try again.', 'danger');
