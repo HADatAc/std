@@ -226,56 +226,226 @@
       }
     });
 
-    $(document).on("click", ".download-url", function (e) {
+    $(document).on("click", ".download-media-url", function (e) {
       e.preventDefault();
+      const $link = $(this);
 
-      const viewUrl =
-        drupalSettings.path.baseUrl + `std` + $(this).data("download-url");
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
 
+      const viewUrl = $link.data("download-url");
       if (!viewUrl) {
         showToast("URL not found.", "danger");
-        return;
+        $link.removeData('downloading');
+        return false;
       }
 
       fetch(viewUrl, { method: "GET" })
-        .then((response) => {
+        .then(response => {
           if (!response.ok) {
             throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
           }
-
-          const contentDisposition = response.headers.get(
-            "Content-Disposition"
-          );
+          const contentDisposition = response.headers.get("Content-Disposition");
           let filename = "arquivo";
-
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
               filename = matches[1];
             }
           }
-
-          return response.blob().then((blob) => ({ blob, filename }));
+          return response.blob().then(blob => ({ blob, filename }));
         })
         .then(({ blob, filename }) => {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.style.display = "none";
           a.href = url;
-
           a.download = filename;
-
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
-
           showToast(`Download started: ${filename}`, "success");
         })
-        .catch((error) => {
-          showToast(error, "danger");
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
         });
+
+      return false;
     });
+
+    $(document).on("click", ".download-publications-url", function (e) {
+      e.preventDefault();
+      const $link = $(this);
+
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
+
+      const viewUrl = $link.data("download-url");
+      if (!viewUrl) {
+        showToast("URL not found.", "danger");
+        $link.removeData('downloading');
+        return false;
+      }
+
+      fetch(viewUrl, { method: "GET" })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+          }
+          const contentDisposition = response.headers.get("Content-Disposition");
+          let filename = "arquivo";
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?(.+?)"?$/);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+          return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          showToast(`Download started: ${filename}`, "success");
+        })
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
+        });
+
+      return false;
+    });
+
+    $(document).on("click", ".download-associated-url", function (e) {
+      e.preventDefault();
+      const $link = $(this);
+
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
+
+      const viewUrl = $link.data("download-url");
+      if (!viewUrl) {
+        showToast("URL not found.", "danger");
+        $link.removeData('downloading');
+        return false;
+      }
+
+      fetch(viewUrl, { method: "GET" })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+          }
+          const contentDisposition = response.headers.get("Content-Disposition");
+          let filename = "arquivo";
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?(.+?)"?$/);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+          return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          showToast(`Download started: ${filename}`, "success");
+        })
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
+        });
+
+      return false;
+    });
+
+    $(document).on("click", ".download-unassociated-url", function (e) {
+      e.preventDefault();
+      const $link = $(this);
+
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
+
+      const viewUrl = $link.data("download-url");
+      if (!viewUrl) {
+        showToast("URL not found.", "danger");
+        $link.removeData('downloading');
+        return false;
+      }
+
+      fetch(viewUrl, { method: "GET" })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+          }
+          const contentDisposition = response.headers.get("Content-Disposition");
+          let filename = "arquivo";
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?(.+?)"?$/);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+          return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          showToast(`Download started: ${filename}`, "success");
+        })
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
+        });
+
+      return false;
+    });
+
   };
 
   // This function creates a toast notification with a message and type
@@ -484,7 +654,7 @@
                       <i class="fa-solid fa-eye"></i>
                   </a>`;
             let fDownload = `<a href="#"
-                      class="btn btn-sm btn-secondary download-url"
+                      class="btn btn-sm btn-secondary download-publications-url"
                       data-download-url="${file.download_url}"
                       style="margin-right:5px">
                       <i class="fa-solid fa-download"></i>
@@ -673,7 +843,7 @@
                      <i class="fa-solid fa-eye"></i>
                   </a>`;
             let fDownload = `<a href="#"
-                      class="btn btn-sm btn-secondary download-url"
+                      class="btn btn-sm btn-secondary download-media-url"
                       data-download-url="${file.download_url}"
                       style="margin-right:5px">
                       <i class="fa-solid fa-save"></i>

@@ -651,7 +651,7 @@ class JsonDataController extends ControllerBase
             $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
 
             // Adicionar token ao view_url para arquivos Word
-            $view_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
+            $view_url = \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
             if ($token !== null) {
                 $view_url .= '/' . $token;
             }
@@ -660,7 +660,7 @@ class JsonDataController extends ControllerBase
                 'filename' => $file,
                 'view_url' => $view_url,
                 'delete_url' => '/delete-publication-file/' . $file . '/' . $studyuri,
-                'download_url' => '/download-file/' . base64_encode($file) . '/' . $studyuri . '/Publications',
+                'download_url' => \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/Publications',
             ];
         }
 
@@ -787,7 +787,7 @@ class JsonDataController extends ControllerBase
             $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
 
             // Adicionar token ao view_url para arquivos Word
-            $view_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
+            $view_url = \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
             if ($token !== null) {
                 $view_url .= '/' . $token;
             }
@@ -795,7 +795,7 @@ class JsonDataController extends ControllerBase
                 'filename' => $file,
                 'view_url' =>  $view_url,
                 'delete_url' => '/delete-media-file/' . $file . '/' . $studyuri,
-                'download_url' => '/download-file/' . base64_encode($file) . '/' . $studyuri . '/media',
+                'download_url' => \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/media',
             ];
         }
 
