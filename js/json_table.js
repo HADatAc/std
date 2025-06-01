@@ -656,7 +656,8 @@
             let fDownload = `<a href="#"
                       class="btn btn-sm btn-secondary download-publications-url"
                       data-download-url="${file.download_url}"
-                      style="margin-right:5px">
+                      style="margin-right:5px"
+                      title="Download file">
                       <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
@@ -845,8 +846,9 @@
             let fDownload = `<a href="#"
                       class="btn btn-sm btn-secondary download-media-url"
                       data-download-url="${file.download_url}"
-                      style="margin-right:5px">
-                      <i class="fa-solid fa-save"></i>
+                      style="margin-right:5px"
+                      title="Download file">
+                      <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#"
                      class="btn btn-sm btn-danger delete-media-button"
