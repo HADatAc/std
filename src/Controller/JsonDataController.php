@@ -132,8 +132,8 @@ class JsonDataController extends ControllerBase
         $this->element_type = $elementtype;
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
-          $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
-          // NEW $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
+          // $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+          $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
         }
 
         if (gettype($this->list_size) == 'string') {
@@ -167,8 +167,8 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
-        // NEW $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
+        // $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
+        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
         // dpm($allItems, 'All DAs');
 
         $unassociated = array_filter($allItems, function ($item) {
@@ -934,171 +934,6 @@ class JsonDataController extends ControllerBase
      *   - streamUri  Base64-encoded stream URI
      *   - page       (optional) page number, default 1
      *   - pagesize   (optional) items per page, default 10
-     */
-    // TIAGO
-    // public function streamDataAjax(Request $request) {
-    //   // 1) Decode study & stream from base64.
-    //   $studyKey   = $request->query->get('studyUri');
-    //   $streamKey  = $request->query->get('streamUri');
-    //   $studyUri   = base64_decode($studyKey);
-    //   $streamUri  = base64_decode($streamKey);
-
-    //   $stream = \Drupal::service('rep.api_connector')
-    //   ->parseObjectResponse(
-    //     \Drupal::service('rep.api_connector')
-    //       ->getUri($streamUri),
-    //     'getUri'
-    //   );
-    //   $streamType = isset($stream->method) ? $stream->method : 'unknown';
-
-    //   // 2) Pagination parameters.
-    //   $page      = max(1, (int) $request->query->get('page', 1));
-    //   $pageSize  = max(1, (int) $request->query->get('pagesize', 10));
-    //   $offset    = ($page - 1) * $pageSize;
-
-    //   // 3) Manager email.
-    //   $managerEmail = \Drupal::currentUser()->getEmail();
-
-    //   // 4) Fetch total count FROM STUDY (already returns an array).
-    //   $totalArr = \Drupal::service('rep.api_connector')
-    //     ->parseObjectResponse(
-    //       \Drupal::service('rep.api_connector')
-    //         ->listSizeByManagerEmailByStudy($studyUri, 'da', $managerEmail),
-    //       'listSizeByManagerEmailByStudy'
-    //     );
-    //   // NEW $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStudy($studyUri),'getTotalStudyDAsByStudy');
-    //   $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
-
-    //   // 5) Fetch raw page of DAs FROM STUDY(already returns an array).
-    //   $rawList = \Drupal::service('rep.api_connector')
-    //     ->parseObjectResponse(
-    //       \Drupal::service('rep.api_connector')
-    //         ->listByManagerEmailByStudy($studyUri, 'da', $managerEmail, $pageSize, $offset),
-    //       'listByManagerEmailByStudy'
-    //     );
-    //   // NEW  $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStudy($studyUri, $pageSize, $offset),'getStudyDAsByStudy');
-    //   if (!is_array($rawList)) {
-    //     $rawList = [];
-    //   }
-
-    //   // 6) Filter by hasDataFile->streamUri.
-    //   $filtered = array_filter($rawList, function ($element) use ($streamUri) {
-    //     return isset($element->hasDataFile->streamUri)
-    //       && $element->hasDataFile->streamUri === $streamUri;
-    //   });
-    //   $filtered = array_values($filtered);
-
-    //   // 7) Build header & rows via DataFile.
-    //   $header = DataFile::generateStreamHeader($stream->method);
-    //   $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
-
-    //   foreach ($rows as $key => &$row) {
-    //     if (isset($row['element_log'])) {
-    //       $html = $row['element_log'];
-    //       $row['element_log'] = [
-    //         'data' => [
-    //           '#markup' => $html,
-    //         ],
-    //       ];
-    //     }
-    //     if (isset($row['element_operations'])) {
-    //       $html = $row['element_operations'];
-    //       $row['element_operations'] = [
-    //         'data' => [
-    //           '#markup' => $html,
-    //         ],
-    //       ];
-    //     }
-    //   }
-    //   unset($row);
-
-    //   // 8) Render the table.
-    //   $tableBuild = [
-    //     '#theme'      => 'table',
-    //     '#header'     => $header,
-    //     '#rows'       => $rows,
-    //     '#attributes' => ['class' => ['table','table-sm']],
-    //   ];
-    //   $filesHtml = \Drupal::service('renderer')->renderRoot($tableBuild);
-
-    //   $filesHtml = Html::decodeEntities($filesHtml);
-
-    //   // 9) Build pager.
-    //   $totalPages = (int) ceil($totalDAs / $pageSize);
-    //   $pagerHtml = '<nav><ul class="pagination">';
-    //   for ($p = 1; $p <= $totalPages; $p++) {
-    //     $active = ($p === $page) ? ' active' : '';
-    //     $pagerHtml .= '<li class="page-item' . $active . '">'
-    //       . '<a href="#" class="page-link dpl-files-page" data-page="' . $p . '">'
-    //       . $p . '</a></li>';
-    //   }
-    //   $pagerHtml .= '</ul></nav>';
-
-    //   // 10) Placeholder for messages.
-    //   $ip = $stream->messageIP ?? NULL;
-    //   $port = $stream->messagePort ?? NULL;
-    //   $topic = 'wsaheadhin';
-
-    //   $result = StreamController::readMessages($ip, $port, $topic);
-    //   $messages = $result['messages'];
-    //   $debug_info = $result['debug'];
-
-    //   $output = '<div class="mqtt-messages">';
-
-    //   if (empty($messages)) {
-    //     $output .= '<em>No messages received.</em>';
-    //   } else {
-    //     foreach ($messages as $msg) {
-    //       // Remove aspas escapadas, se houver
-    //       $cleanMsg = stripslashes($msg);
-    //       $decoded = json_decode($cleanMsg, true);
-
-    //       if (json_last_error() === JSON_ERROR_NONE) {
-    //         $output .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">';
-
-    //         // Cabeçalho
-    //         $output .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
-    //         $output .= 'Tópico: ' . htmlspecialchars($topic);
-    //         if (!empty($decoded['timestamp'])) {
-    //           $dt = DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
-    //           if ($dt) {
-    //             $output .= ' | Data: ' . $dt->format('d/m/Y H:i:s');
-    //           }
-    //         }
-    //         $output .= '</div>';
-
-    //         // Lista formatada, ignorando timestamp para não repetir
-    //         $output .= '<ul style="list-style:none; padding-left:0; margin:0;">';
-    //         foreach ($decoded as $key => $value) {
-    //           if ($key === 'timestamp') continue;
-
-    //           $label = str_replace(['_', 'Pa', 'C', 'percent', 'ID', 'V'], [' ', '', ' °C', '%', 'ID', ' V'], $key);
-    //           $label = ucfirst($label);
-
-    //           $output .= '<li style="padding:5px 0; border-bottom:1px solid #eee; color:#555;">';
-    //           $output .= '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars((string) $value);
-    //           $output .= '</li>';
-    //         }
-    //         $output .= '</ul>';
-
-    //         $output .= '</div>';
-    //       } else {
-    //         $output .= '<div class="mqtt-raw" style="color:#c00; font-family: monospace;">' . htmlspecialchars($msg) . '</div>';
-    //       }
-    //     }
-    //   }
-    //   $output .= '</div>';
-
-    //   // 11) Return JSON.
-    //   return new JsonResponse([
-    //     'streamType'       => $streamType,
-    //     'files'      => $filesHtml,
-    //     'filesPager' => $pagerHtml,
-    //     'messages'   => $output,
-    //   ]);
-    // }
-    /**
-     * AJAX callback to load either file listings or MQTT messages for a given stream.
      */
     public function streamDataAjax(Request $request) {
       // 1) Decode study & stream from base64.
