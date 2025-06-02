@@ -195,6 +195,7 @@ class ManageStudyForm extends FormBase
     ];
     $form['#attached']['drupalSettings']['std']['fileIngestUrl']   = Url::fromRoute('dpl.file_ingest_ajax')->toString();
     $form['#attached']['drupalSettings']['std']['fileUningestUrl'] = Url::fromRoute('dpl.file_uningest_ajax')->toString();
+    $build['#attached']['library'][] = 'dpl/stream_record';
 
 
     //MODAL
