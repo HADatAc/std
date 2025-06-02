@@ -91,7 +91,7 @@
 
       // Load only the messages for a given streamUri.
       function loadMessages(streamUri) {
-        console.log('[DEBUG] loadMessages called with streamUri =', streamUri, new Date().toISOString());
+        //console.log('[DEBUG] loadMessages called with streamUri =', streamUri, new Date().toISOString());
         if (!streamUri) {
           return;
         }

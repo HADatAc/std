@@ -1094,9 +1094,13 @@ class JsonDataController extends ControllerBase
               $messagesHtml .= '</ul>';
             }
             else {
-              // If JSON decoding failed, show the raw message.
-              $messagesHtml .= '<div class="mqtt-raw" style="color:#c00; font-family: monospace;">'
-                . htmlspecialchars($msg) . '</div>';
+                $messagesHtml .= '<div class="mqtt-raw" style="color:#000; font-family: monospace;">';
+                $formatted = trim($cleanMsg, "{}");
+                $lines = explode(',', $formatted);
+                foreach ($lines as $line) {
+                  $messagesHtml .= '<div style="margin-bottom:3px;">' . htmlspecialchars(trim($line)) . '</div>';
+                }
+                $messagesHtml .= '</div>';
             }
 
             $messagesHtml .= '</div>';
