@@ -1094,7 +1094,7 @@ class JsonDataController extends ControllerBase
               $messagesHtml .= '</ul>';
             }
             else {
-                $messagesHtml .= '<div class="mqtt-raw" style="color:#000; font-family: monospace;">';
+                $messagesHtml .= '<div class="mqtt-raw" style="color:#000; font-family: monospace; text-align: left;">';
                 $formatted = trim($cleanMsg, "{}");
                 $lines = explode(',', $formatted);
                 foreach ($lines as $line) {
