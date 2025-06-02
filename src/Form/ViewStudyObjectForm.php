@@ -3,14 +3,10 @@
 namespace Drupal\std\Form;
 
 use Drupal\Core\Form\FormBase;
-use Drupal\Core\Form\FormBuilder;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Drupal\rep\Utils;
-use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\rep\Vocabulary\REPGUI;
-use Drupal\Component\Serialization\Json;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 
 class ViewStudyObjectForm extends FormBase {
 
