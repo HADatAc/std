@@ -132,7 +132,7 @@ class JsonDataController extends ControllerBase
         $this->element_type = $elementtype;
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
-          // $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+          //OLD $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
           $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
         }
 
@@ -167,7 +167,7 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        // $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
+        // OLD $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
         $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
         // dpm($allItems, 'All DAs');
 
@@ -968,21 +968,14 @@ class JsonDataController extends ControllerBase
         $managerEmail = \Drupal::currentUser()->getEmail();
 
         // 3c) Fetch total count of data attachments (DAs) for this study.
-        $totalArr = \Drupal::service('rep.api_connector')
-          ->parseObjectResponse(
-            \Drupal::service('rep.api_connector')
-              ->listSizeByManagerEmailByStudy($studyUri, 'da', $managerEmail),
-            'listSizeByManagerEmailByStudy'
-          );
+        // OLD $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->listSizeByManagerEmailByStudy($studyUri, 'da', $managerEmail), 'listSizeByManagerEmailByStudy');
+        $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($studyUri), 'getTotalStudyDAsByStream');
         $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
 
         // 3d) Fetch the raw page of DAs for this study.
-        $rawList = \Drupal::service('rep.api_connector')
-          ->parseObjectResponse(
-            \Drupal::service('rep.api_connector')
-              ->listByManagerEmailByStudy($studyUri, 'da', $managerEmail, $pageSize, $offset),
-            'listByManagerEmailByStudy'
-          );
+        // OLD $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->listByManagerEmailByStudy($studyUri, 'da', $managerEmail, $pageSize, $offset), 'listByManagerEmailByStudy');
+        $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($studyUri, $pageSize, $offset), 'getStudyDAsByStream');
+
         if (!is_array($rawList)) {
           $rawList = [];
         }
