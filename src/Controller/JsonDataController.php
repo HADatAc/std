@@ -167,9 +167,7 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        // OLD $allItems = ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize);
-        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $page, $pagesize),'getStudyDAsByStudy');
-        // dpm($allItems, 'All DAs');
+        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page),'getStudyDAsByStudy');
 
         $unassociated = array_filter($allItems, function ($item) {
           return empty($item->hasDataFile->streamUri);
@@ -960,21 +958,16 @@ class JsonDataController extends ControllerBase
       // 3) If this stream is file-based, build the file listing and pager.
       if ($streamType === 'files') {
         // 3a) Pagination parameters.
-        $page     = max(1, (int) $request->query->get('page', 1));
+        $page     = max(1, (int) $request->query->get('page', 0));
         $pageSize = max(1, (int) $request->query->get('pagesize', 10));
         $offset   = ($page - 1) * $pageSize;
 
-        // 3b) Manager email.
-        $managerEmail = \Drupal::currentUser()->getEmail();
-
         // 3c) Fetch total count of data attachments (DAs) for this study.
-        // OLD $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->listSizeByManagerEmailByStudy($studyUri, 'da', $managerEmail), 'listSizeByManagerEmailByStudy');
-        $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($studyUri), 'getTotalStudyDAsByStream');
+        $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($streamUri), 'getTotalStudyDAsByStream');
         $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
 
         // 3d) Fetch the raw page of DAs for this study.
-        // OLD $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->listByManagerEmailByStudy($studyUri, 'da', $managerEmail, $pageSize, $offset), 'listByManagerEmailByStudy');
-        $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($studyUri, $pageSize, $offset), 'getStudyDAsByStream');
+        $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, $pageSize, $offset), 'getStudyDAsByStream');
 
         if (!is_array($rawList)) {
           $rawList = [];
