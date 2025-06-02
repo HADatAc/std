@@ -91,10 +91,10 @@
 
       // Load only the messages for a given streamUri.
       function loadMessages(streamUri) {
+        console.log('[DEBUG] loadMessages called with streamUri =', streamUri, new Date().toISOString());
         if (!streamUri) {
           return;
         }
-        // console.log('[DEBUG] loadMessages called with streamUri =', streamUri, new Date().toISOString());
         // console.time('[DEBUG] loadMessages AJAX time');
 
         $.getJSON(drupalSettings.std.ajaxUrl, {
