@@ -188,7 +188,7 @@ class ManageStudyForm extends FormBase
 
     // Attach our JS behavior + settings.
     $form['#attached']['library'][] = 'std/stream_selection';
-    $build['#attached']['library'][] = 'dpl/stream_recorder';
+    $form['#attached']['library'][] = 'dpl/stream_recorder';
     $form['#attached']['drupalSettings']['std'] = [
       'studyUri' => base64_encode($this->studyUri),
       'streamDataUrl' => Url::fromRoute('std.stream_data_ajax')->toString(),
