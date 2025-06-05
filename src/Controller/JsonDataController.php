@@ -1051,11 +1051,10 @@ class JsonDataController extends ControllerBase
             && $element->hasDataFile->streamUri === $streamUri;
         });
         $filtered = array_values($filtered);
-        dpm($filtered);
         // 3f) Build table header and rows using DataFile helper methods.
         $header = DataFile::generateStreamHeader($stream->method);
         $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
-
+        dpm($rows);
         // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
         foreach ($rows as $key => &$row) {
           if (isset($row['element_log'])) {
