@@ -1039,10 +1039,8 @@ class JsonDataController extends ControllerBase
         // 3c) Fetch total count of data attachments (DAs) for this study.
         $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($streamUri), 'getTotalStudyDAsByStream');
         $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
-        dpm($totalDAs);
         // 3d) Fetch the raw page of DAs for this study.
         $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, $pageSize, $offset), 'getStudyDAsByStream');
-        dpm($rawList);
         if (!is_array($rawList)) {
           $rawList = [];
         }
@@ -1053,7 +1051,7 @@ class JsonDataController extends ControllerBase
             && $element->hasDataFile->streamUri === $streamUri;
         });
         $filtered = array_values($filtered);
-
+        dpm($filtered);
         // 3f) Build table header and rows using DataFile helper methods.
         $header = DataFile::generateStreamHeader($stream->method);
         $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
