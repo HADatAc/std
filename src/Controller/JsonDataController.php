@@ -1055,7 +1055,6 @@ class JsonDataController extends ControllerBase
         $header = DataFile::generateStreamHeader($stream->method);
         $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
 
-        \Drupal::logger('stf')->debug('Visualização de rows: @rows', ['@rows' => $rows]);
 
         // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
         foreach ($rows as $key => &$row) {
