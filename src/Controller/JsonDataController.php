@@ -1054,8 +1054,9 @@ class JsonDataController extends ControllerBase
         // 3f) Build table header and rows using DataFile helper methods.
         $header = DataFile::generateStreamHeader($stream->method);
         $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
-        dpm($rows);
-        // dpm($rows);
+
+        \Drupal::logger('stf')->debug('Visualização de rows: @rows', ['@rows' => $rows]);
+
         // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
         foreach ($rows as $key => &$row) {
           if (isset($row['element_log'])) {
