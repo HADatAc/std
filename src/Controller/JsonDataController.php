@@ -1032,12 +1032,9 @@ class JsonDataController extends ControllerBase
       // 4) Otherwise, if this stream is message-based (or any other type), load only messages.
       else {
         // 4a) Prepare connection parameters for MQTT (if available).
-        $ip    = $stream->messageIP   ?? NULL;
-        $port  = $stream->messagePort ?? NULL;
-        $topic = 'wsaheadhin';
+        $filename    = $stream->messageArchiveId ?? NULL;
 
-        // 4b) Fetch messages via the StreamController helper.
-        $result   = StreamController::readMessages($ip, $port, $topic);
+        $result   = StreamController::readMessages($filename);
         $messages = $result['messages'];
         $debug   = $result['debug'];
 
