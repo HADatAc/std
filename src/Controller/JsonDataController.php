@@ -1052,8 +1052,8 @@ class JsonDataController extends ControllerBase
         });
         $filtered = array_values($filtered);
         // 3f) Build table header and rows using DataFile helper methods.
-        $header = DataFile::generateStreamHeader($stream->method);
-        $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
+        $header = DataFile::generateStreamHeader('messages');
+        $rows   = DataFile::generateStreamOutputCompact('messages', $filtered);
 
 
         // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
