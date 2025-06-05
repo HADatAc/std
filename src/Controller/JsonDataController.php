@@ -1053,7 +1053,6 @@ class JsonDataController extends ControllerBase
             if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
               // Build a styled header with topic and timestamp (if available).
               $messagesHtml .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
-              $messagesHtml .= 'Topic: ' . htmlspecialchars($topic);
               if (!empty($decoded['timestamp'])) {
                 $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
                 if ($dt) {
