@@ -1039,10 +1039,10 @@ class JsonDataController extends ControllerBase
         // 3c) Fetch total count of data attachments (DAs) for this study.
         $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($streamUri), 'getTotalStudyDAsByStream');
         $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
-
+        dpm($totalDAs);
         // 3d) Fetch the raw page of DAs for this study.
         $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, $pageSize, $offset), 'getStudyDAsByStream');
-
+        dpm($rawList);
         if (!is_array($rawList)) {
           $rawList = [];
         }
@@ -1102,7 +1102,7 @@ class JsonDataController extends ControllerBase
 
         // 3j) Since this is a files-only stream, do NOT fetch MQTT messages.
         $messagesHtml = '<div class="mqtt-messages"><em>No messages for file-only stream.</em></div>';
-        
+
         // 4a) Prepare connection parameters for MQTT (if available).
         $filename    = $stream->messageArchiveId ?? NULL;
 
