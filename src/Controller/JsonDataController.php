@@ -1036,7 +1036,6 @@ class JsonDataController extends ControllerBase
 
         $result   = StreamController::readMessages($filename);
         $messages = $result['messages'];
-        $debug   = $result['debug'];
 
         // 4c) Build HTML output for received messages.
         $messagesHtml = '<div class="mqtt-messages">';
