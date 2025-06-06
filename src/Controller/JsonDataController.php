@@ -1183,7 +1183,6 @@ class JsonDataController extends ControllerBase
           }
         }
         $messagesHtml .= '</div>';
-
       }
 
       // 5) Return a JSON response with exactly three keys: streamType, files, filesPager, and messages.
