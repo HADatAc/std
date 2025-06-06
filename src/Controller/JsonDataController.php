@@ -17,6 +17,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
+use Drupal\rep\Entity\Stream;
 use Drupal\Component\Utility\Html;
 use Drupal\dpl\Controller\StreamController;
 
@@ -1032,6 +1033,7 @@ class JsonDataController extends ControllerBase
       // 4) Otherwise, if this stream is message-based (or any other type), load only messages.
       else {
 
+        // COMMON OPERATION TO GET STREAMS
         $page     = max(1, (int) $request->query->get('page', 0));
         $pageSize = max(1, (int) $request->query->get('pagesize', 10));
         $offset   = ($page - 1) * $pageSize;
@@ -1045,15 +1047,32 @@ class JsonDataController extends ControllerBase
           $rawList = [];
         }
 
+        // RENDER TOPIC LIST
+        $filteredTopics = [];
+        // 3f) Build table header and rows using DataFile helper methods.
+        $headerTopic = Stream::generateHeaderTopic();
+        $rowsTopic   = Stream::generateOutputTopic($filteredTopics);
+
+        // 3h) Render the table to a string.
+        $tableTopicBuild = [
+          '#theme'      => 'table',
+          '#header'     => $headerTopic,
+          '#rows'       => $rowsTopic,
+          '#attributes' => ['class' => ['table', 'table-sm']],
+        ];
+        $topicList = \Drupal::service('renderer')->renderRoot($tableTopicBuild);
+        $topicList = Html::decodeEntities($topicList);
+
+
         // 3e) Filter only those DAs that belong to this streamUri.
-        $filtered = array_filter($rawList, function ($element) use ($streamUri) {
+        $filteredDA = array_filter($rawList, function ($element) use ($streamUri) {
           return isset($element->hasDataFile->streamUri)
             && $element->hasDataFile->streamUri === $streamUri;
         });
-        $filtered = array_values($filtered);
+        $filteredDA = array_values($filteredDA);
         // 3f) Build table header and rows using DataFile helper methods.
         $header = DataFile::generateStreamHeader('messages');
-        $rows   = DataFile::generateStreamOutputCompact('messages', $filtered);
+        $rows   = DataFile::generateStreamOutputCompact('messages', $filteredDA);
 
 
         // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
@@ -1098,9 +1117,8 @@ class JsonDataController extends ControllerBase
         }
         $pagerHtml .= '</ul></nav>';
 
-        // 3j) Since this is a files-only stream, do NOT fetch MQTT messages.
-        $messagesHtml = '<div class="mqtt-messages"><em>No messages for file-only stream.</em></div>';
 
+        // TIAGO DEVELOPMENT IN FRONT
         // 4a) Prepare connection parameters for MQTT (if available).
         $filename    = $stream->messageArchiveId ?? NULL;
 
@@ -1166,17 +1184,15 @@ class JsonDataController extends ControllerBase
         }
         $messagesHtml .= '</div>';
 
-        // 4d) Since this is a messages-only stream, do NOT fetch or build any file HTML.
-        $filesHtml = '';
-        $pagerHtml = '';
       }
 
       // 5) Return a JSON response with exactly three keys: streamType, files, filesPager, and messages.
       return new JsonResponse([
-        'streamType' => $streamType,
-        'files'      => $filesHtml,
-        'filesPager' => $pagerHtml,
-        'messages'   => $messagesHtml,
+        'streamType'  => $streamType,
+        'topics'   => $topicList,
+        'files'       => $filesHtml,
+        'filesPager'  => $pagerHtml,
+        'messages'    => $messagesHtml,
       ]);
     }
 

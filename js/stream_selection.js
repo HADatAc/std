@@ -84,8 +84,8 @@
 
       // Hide both cards (reset state).
       function hideCards() {
-        $('#stream-data-files-container, #message-stream-container')
-          .removeClass('col-md-6 col-md-12')
+        $('#stream-data-files-container, #message-stream-container, #stream-topic-list-container')
+          .removeClass('col-md-2 col-md-5 col-md-12')
           .hide();
       }
 
@@ -106,7 +106,7 @@
           // console.log('[DEBUG] loadMessages response data:', data);
 
           // Only update the messages table.
-          $('#message-stream-table').html(data.messages);
+          // $('#message-stream-table').html(data.messages);
 
           var type = (data.streamType || '').toLowerCase().trim();
           // console.log('[DEBUG] loadMessages streamType =', type);
@@ -118,13 +118,15 @@
             $('#stream-data-files-container')
               .removeClass('col-md-6').addClass('col-md-12').show();
             $('#message-stream-container').hide();
+            $('#stream-topic-list-container').hide();
           }
           else {
             // If still a message-based stream, ensure both cards remain visible.
             $('#stream-data-files-container')
-              .removeClass('col-md-12').addClass('col-md-6').show();
+              .removeClass('col-md-12').addClass('col-md-5').show();
             $('#message-stream-container')
-              .removeClass('col-md-12').addClass('col-md-6').show();
+              .removeClass('col-md-12').addClass('col-md-5').show();
+            $('#stream-topic-list-container').addClass('col-md-2').show();
           }
         })
         .fail(function () {
@@ -168,6 +170,7 @@
           $('#data-files-table').html(data.files);
           $('#data-files-pager').html(data.filesPager);
           $('#message-stream-table').html(data.messages);
+          $('#topic-list-table').html(data.topics);
 
           var type = (data.streamType || '').toLowerCase().trim();
           // console.log('[DEBUG] streamType received =', type);
@@ -177,6 +180,7 @@
             $('#stream-data-files-container')
               .removeClass('col-md-6').addClass('col-md-12').show();
             $('#message-stream-container').hide();
+            $('#stream-topic-list-container').hide();
 
             // Ensure any existing polling is stopped.
             clearInterval(messageStreamInterval);
@@ -185,9 +189,10 @@
           else {
             // If this is a message-based stream, show both containers.
             $('#stream-data-files-container')
-              .removeClass('col-md-12').addClass('col-md-6').show();
+              .removeClass('col-md-12').addClass('col-md-5').show();
             $('#message-stream-container')
-              .removeClass('col-md-12').addClass('col-md-6').show();
+              .removeClass('col-md-12').addClass('col-md-5').show();
+            $('#stream-topic-list-container').addClass('col-md-2').show();
 
             // Clear any previous interval before setting a new one.
             if (messageStreamInterval) {
@@ -283,7 +288,7 @@
 
               var selected = $('#dpl-streams-table input[type=radio]:checked').val();
               if (!selected) {
-                $('#stream-data-files-container, #message-stream-container').hide();
+                $('#stream-data-files-container, #message-stream-container, #stream-topic-list-container').hide();
                 return;
               }
 
@@ -296,14 +301,18 @@
                 $('#data-files-table').html(data.files);
                 $('#data-files-pager').html(data.filesPager);
                 $('#message-stream-table').html(data.messages);
+                $('#topic-list-table').html(data.topics);
 
                 var type = (data.streamType || '').toLowerCase().trim();
                 if (type === 'files') {
                   $('#stream-data-files-container')
                     .removeClass('col-md-6').addClass('col-md-12').show();
                   $('#message-stream-container').hide();
+                  $('#stream-topic-list-container').hide();
                 }
                 else {
+                  $('#stream-topic-list-container')
+                    .addClass('col-md-5').show();
                   $('#stream-data-files-container')
                     .removeClass('col-md-12').addClass('col-md-6').show();
                   $('#message-stream-container')

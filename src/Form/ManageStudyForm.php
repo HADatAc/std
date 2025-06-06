@@ -399,6 +399,7 @@ class ManageStudyForm extends FormBase
         'class' => ['col-md-12', 'mb-4'],  // span entire width, with bottom margin
       ],
     ];
+
     // inner row for the two AJAX cards
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row'] = [
       '#type' => 'container',
@@ -406,13 +407,39 @@ class ManageStudyForm extends FormBase
         'class' => ['row'],
       ],
     ];
+
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_topic_list'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-2'],
+        'id'    => 'stream-topic-list-container',
+        'style' => 'display:none;',
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3 id="topic-list-count">Stream Topic List</h3>
+            </div>
+            <div class="card-body">
+              <div id="topic-list-table">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="topic-list-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
     // Stream Data Files card (left half)
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-6'],        // half width of the parent row
+        'class' => ['col-md-5'],
         'id'    => 'stream-data-files-container',
-        'style' => 'display:none;',     // hidden until AJAX kicks in
+        'style' => 'display:none;',
       ],
       'card' => [
         '#type' => 'markup',
@@ -435,7 +462,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-6'],
+        'class' => ['col-md-5'],
         'id'    => 'message-stream-container',
         'style' => 'display:block;',
       ],
@@ -457,7 +484,7 @@ class ManageStudyForm extends FormBase
           </div>
         ',
       ],
-    ];    
+    ];
 
     /**
       * 2) Fixed cards (Study Data Files, Publications, Media)
