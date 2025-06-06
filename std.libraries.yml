@@ -32,3 +32,11 @@ std_processstem:
   dependencies:
     - core/jquery
     - core/drupal
+
+stream_selection:
+  version: 1.0
+  js:
+    js/stream_selection.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
