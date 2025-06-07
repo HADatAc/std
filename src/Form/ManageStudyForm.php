@@ -397,7 +397,6 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-12', 'mb-4'],  // span entire width, with bottom margin
-        'style' => 'display:none!important;',
       ],
     ];
 
@@ -414,7 +413,6 @@ class ManageStudyForm extends FormBase
       '#attributes' => [
         'class' => ['col-md-12'],
         'id'    => 'stream-topic-list-container',
-        'style' => 'display:none;',
       ],
       'card' => [
         '#type' => 'markup',
@@ -437,7 +435,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-4', 'mt-3'],
+        'class' => ['col-md-5', 'mt-3'],
         'id'    => 'message-stream-container',
         'style' => 'display:none!important;',
       ],
@@ -465,7 +463,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-8', 'mt-3'],
+        'class' => ['col-md-7', 'mt-3'],
         'id'    => 'stream-data-files-container',
         'style' => 'display:none;',
       ],
