@@ -1,48 +1,52 @@
 /**
  * @file
  * JavaScript behaviors for the Manage Study page (Drupal 10):
- *  - streamSelection: toggle/select-stream rows and load the two cards via AJAX
+ *  - fileDownload: download files when clicking on ".download-url"
+ *  - showToast: display Bootstrap toasts
+ *  - streamSelection: handle initial stream selection and show only the topic list or files
+ *  - streamTopicSelection: handle selecting a topic to load messages and files
  *  - dplFileIngest: handle ingest / uningest buttons with toasts
- *  - streamDataFileDelete: handle delete within the Stream Data Files card and re-load it
+ *  - streamDataFileDelete: handle deleting a data file and refreshing the view
  */
-
 (function ($, Drupal, drupalSettings) {
   'use strict';
+
+  // Holds the polling interval ID for message updates.
   var messageStreamInterval = null;
+  // The URI of the currently selected stream.
   var currentStreamUri = null;
 
   /**
-   * Behavior adicional: Download file when clicking on ".download-url"
+   * Behavior: Download file when clicking on ".download-url"
    */
   Drupal.behaviors.fileDownload = {
     attach: function (context) {
-      // Unbind para evitar múltiplas vinculações
+      // Unbind previous handlers to avoid duplicates
       $(document).off('click.fileDownload', '.download-url');
 
       $(document).on('click.fileDownload', '.download-url', function (e) {
         e.preventDefault();
 
-        // Obtem o caminho de download (por exemplo: "/download-file/…/da")
+        // Read the download path from data attribute
         var downloadPath = $(this).attr('data-download-url');
         if (!downloadPath) {
           showToast('Download URL not found.', 'danger');
           return;
         }
 
-        // Se começar com "/", consideramos que já é um caminho absoluto no domínio atual.
-        // Caso contrário, prefixamos com baseUrl.
-        var fullUrl = (downloadPath.charAt(0) === '/')
+        // If path is relative, prefix with baseUrl
+        var fullUrl = downloadPath.charAt(0) === '/'
           ? downloadPath
           : (drupalSettings.path.baseUrl + downloadPath);
 
-        // Redireciona o navegador para iniciar o download.
+        // Trigger browser download
         window.location.href = fullUrl;
       });
     }
   };
 
   /**
-   * Helper to show a Bootstrap toast in the page's toast-container.
+   * Helper: Show a Bootstrap toast in the page's toast-container.
    *
    * @param {string} message
    *   The text to display.
@@ -65,12 +69,12 @@
   }
 
   /**
-   * Behavior #1: Stream selection
+   * Behavior: Stream selection
    *
-   * On click of a radio button in the streams table, load the appropriate
-   * cards via AJAX. If the selected streamType is 'files', only the
-   * Stream Data Files card is shown (no periodic message loading). Otherwise,
-   * show both cards and poll for new messages every 20 seconds.
+   * On clicking a radio in the streams table:
+   *  - If streamType === 'files': show only the data-files card.
+   *  - Otherwise: show only the topic-list card (no files/messages yet).
+   *  - In both cases, stop any existing polling.
    */
   Drupal.behaviors.streamSelection = {
     attach: function (context) {
@@ -82,64 +86,18 @@
 
       var lastRadio = null;
 
-      // Hide both cards (reset state).
+      // Utility: hide all AJAX-loaded cards
       function hideCards() {
-        $('#stream-data-files-container, #message-stream-container, #stream-topic-list-container')
-          .removeClass('col-md-2 col-md-5 col-md-12')
-          .hide();
-      }
-
-      // Load only the messages for a given streamUri.
-      function loadMessages(streamUri) {
-        //console.log('[DEBUG] loadMessages called with streamUri =', streamUri, new Date().toISOString());
-        if (!streamUri) {
-          return;
-        }
-        // console.time('[DEBUG] loadMessages AJAX time');
-
-        $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
-          streamUri: streamUri
-        })
-        .done(function (data) {
-          // console.timeEnd('[DEBUG] loadMessages AJAX time');
-          // console.log('[DEBUG] loadMessages response data:', data);
-
-          // Only update the messages table.
-          // $('#message-stream-table').html(data.messages);
-
-          var type = (data.streamType || '').toLowerCase().trim();
-          // console.log('[DEBUG] loadMessages streamType =', type);
-
-          // If the streamType has changed to 'files', stop polling.
-          if (type === 'files') {
-            clearInterval(messageStreamInterval);
-            messageStreamInterval = null;
-            $('#stream-data-files-container')
-              .removeClass('col-md-6').addClass('col-md-12').show();
-            $('#message-stream-container').hide();
-            $('#stream-topic-list-container').hide();
-          }
-          else {
-            // If still a message-based stream, ensure both cards remain visible.
-            $('#stream-data-files-container')
-              .removeClass('col-md-12').addClass('col-md-5').show();
-            $('#message-stream-container')
-              .removeClass('col-md-12').addClass('col-md-5').show();
-            $('#stream-topic-list-container').addClass('col-md-2').show();
-          }
-        })
-        .fail(function () {
-          // console.timeEnd('[DEBUG] loadMessages AJAX time');
-          showToast('Failed to load stream data. Please try again.', 'danger');
-        });
+        $('#stream-topic-list-container').hide();
+        $('#edit-ajax-cards-container').hide();
+        $('#stream-data-files-container').hide();
+        $('#message-stream-container').hide();
       }
 
       $table.on('click', 'input[type=radio]', function () {
-        // console.log('[DEBUG] radio click detected:', this.value, new Date().toISOString());
         var radio = this;
 
-        // If the same radio is clicked again, unselect and hide cards.
+        // If clicking the same radio again, unselect and hide everything
         if (radio === lastRadio) {
           $(radio).prop('checked', false);
           lastRadio = null;
@@ -149,73 +107,107 @@
           return;
         }
 
-        // Otherwise, select the new radio.
+        // Select new stream
         lastRadio = radio;
         $(radio).prop('checked', true);
-
         currentStreamUri = radio.value;
-        // console.log('[DEBUG] currentStreamUri set to:', currentStreamUri);
+        hideCards();
 
-        // Measure how long the initial AJAX call takes.
-        // console.time('[DEBUG] initial AJAX time');
+        // AJAX: load topic list (and get streamType)
         $.getJSON(drupalSettings.std.ajaxUrl, {
           studyUri:  drupalSettings.std.studyUri,
           streamUri: currentStreamUri
         })
         .done(function (data) {
-          // console.timeEnd('[DEBUG] initial AJAX time');
-          // console.log('[DEBUG] initial AJAX response data:', data);
-
-          // Populate both tables immediately.
-          $('#data-files-table').html(data.files);
-          $('#data-files-pager').html(data.filesPager);
-          $('#message-stream-table').html(data.messages);
+          // Populate topic list
           $('#topic-list-table').html(data.topics);
+          $('#edit-ajax-cards-container').show();
 
           var type = (data.streamType || '').toLowerCase().trim();
-          // console.log('[DEBUG] streamType received =', type);
+
+          // Stop any ongoing polling
+          clearInterval(messageStreamInterval);
+          messageStreamInterval = null;
 
           if (type === 'files') {
-            // If this is a file-based stream, show only the files container.
-            $('#stream-data-files-container')
-              .removeClass('col-md-6').addClass('col-md-12').show();
+            // File stream → show files only
+            $('#stream-data-files-container').show();
+            $('#stream-data-files-container').hide();
             $('#message-stream-container').hide();
-            $('#stream-topic-list-container').hide();
-
-            // Ensure any existing polling is stopped.
-            clearInterval(messageStreamInterval);
-            messageStreamInterval = null;
           }
           else {
-            // If this is a message-based stream, show both containers.
-            $('#stream-data-files-container')
-              .removeClass('col-md-12').addClass('col-md-5').show();
-            $('#message-stream-container')
-              .removeClass('col-md-12').addClass('col-md-5').show();
-            $('#stream-topic-list-container').addClass('col-md-2').show();
-
-            // Clear any previous interval before setting a new one.
-            if (messageStreamInterval) {
-              clearInterval(messageStreamInterval);
-            }
-            messageStreamInterval = setInterval(function () {
-              loadMessages(currentStreamUri);
-            }, 20000);
+            // Message/topic stream → show only topic list for now
+            $('#stream-topic-list-container').show();
+            $('#stream-data-files-container').hide();
+            $('#message-stream-container').hide();
           }
         })
         .fail(function () {
-          // console.timeEnd('[DEBUG] initial AJAX time');
           showToast('Failed to load stream data. Please try again.', 'danger');
         });
       });
 
-      // Initially hide both cards on page load.
+      // Hide all AJAX cards on initial page load
       hideCards();
     }
   };
 
   /**
-   * Behavior #2: Ingest / Uningest file buttons
+   * Behavior: Topic selection within a non-file stream
+   *
+   * On clicking a radio in the topic list:
+   *  - Load both data-files and messages for that topic via AJAX.
+   *  - Show both cards.
+   *  - Start polling messages every 20 seconds.
+   */
+  Drupal.behaviors.streamTopicSelection = {
+    attach: function (context) {
+      // Unbind and rebind on document to catch dynamically loaded radios
+      $(document).off('click.streamTopicSelection', '.topic-radio');
+      $(document).on('click.streamTopicSelection', '.topic-radio', function () {
+        var topicUri = this.value;
+
+        // Stop previous polling
+        clearInterval(messageStreamInterval);
+        messageStreamInterval = null;
+
+        // AJAX: load files + messages for the selected topic
+        $.getJSON(drupalSettings.std.ajaxUrl, {
+          studyUri:  drupalSettings.std.studyUri,
+          streamUri: currentStreamUri,
+          topicUri:  topicUri
+        })
+        .done(function (data) {
+          // Populate files and messages tables
+          $('#data-files-table').html(data.files);
+          $('#data-files-pager').html(data.filesPager);
+          $('#message-stream-table').html(data.messages);
+
+          // Show both cards
+          $('#stream-data-files-container').show();
+          $('#message-stream-container').show();
+
+          // Start polling messages every 20 seconds
+          messageStreamInterval = setInterval(function () {
+            $.getJSON(drupalSettings.std.ajaxUrl, {
+              studyUri:  drupalSettings.std.studyUri,
+              streamUri: currentStreamUri,
+              topicUri:  topicUri
+            })
+            .done(function (upd) {
+              $('#message-stream-table').html(upd.messages);
+            });
+          }, 20000);
+        })
+        .fail(function () {
+          showToast('Failed to load topic data. Please try again.', 'danger');
+        });
+      });
+    }
+  };
+
+  /**
+   * Behavior: Ingest / Uningest file buttons
    *
    * Handle clicks on ingest/uningest buttons, send AJAX request, and show toast.
    */
@@ -259,10 +251,10 @@
   var streamDataFileDeleteBound = false;
 
   /**
-   * Behavior #3: Delete a Stream Data File and refresh that card
+   * Behavior: Delete a Stream Data File and refresh that card
    *
    * When the delete button is clicked, confirm, delete via AJAX, show toast,
-   * then reload the appropriate card based on the currently selected stream.
+   * then reload the current stream & topic tables.
    */
   Drupal.behaviors.streamDataFileDelete = {
     attach: function () {
@@ -286,38 +278,31 @@
             if (resp.status === 'success') {
               showToast(resp.message || 'File deleted successfully!', 'success');
 
-              var selected = $('#dpl-streams-table input[type=radio]:checked').val();
-              if (!selected) {
-                $('#stream-data-files-container, #message-stream-container, #stream-topic-list-container').hide();
+              var selectedStream = $('#dpl-streams-table input[type=radio]:checked').val();
+              var selectedTopic  = $('#topic-list-table input[type=radio]:checked').val();
+
+              if (!selectedStream || !selectedTopic) {
+                $('#stream-topic-list-container').hide();
+                $('#stream-data-files-container').hide();
+                $('#message-stream-container').hide();
                 return;
               }
 
-              // Reload the card for the currently selected stream.
+              // Reload the current topic
               $.getJSON(drupalSettings.std.ajaxUrl, {
                 studyUri:  drupalSettings.std.studyUri,
-                streamUri: selected
+                streamUri: selectedStream,
+                topicUri:  selectedTopic
               })
               .done(function (data) {
                 $('#data-files-table').html(data.files);
                 $('#data-files-pager').html(data.filesPager);
                 $('#message-stream-table').html(data.messages);
                 $('#topic-list-table').html(data.topics);
-
-                var type = (data.streamType || '').toLowerCase().trim();
-                if (type === 'files') {
-                  $('#stream-data-files-container')
-                    .removeClass('col-md-6').addClass('col-md-12').show();
-                  $('#message-stream-container').hide();
-                  $('#stream-topic-list-container').hide();
-                }
-                else {
-                  $('#stream-topic-list-container')
-                    .addClass('col-md-5').show();
-                  $('#stream-data-files-container')
-                    .removeClass('col-md-12').addClass('col-md-6').show();
-                  $('#message-stream-container')
-                    .removeClass('col-md-12').addClass('col-md-6').show();
-                }
+                $('#edit-ajax-cards-container').show();
+                $('#stream-topic-list-container').show();
+                $('#stream-data-files-container').show();
+                $('#message-stream-container').show();
               })
               .fail(function () {
                 showToast('Failed to refresh stream data files card.', 'danger');

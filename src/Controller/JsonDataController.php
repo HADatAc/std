@@ -21,6 +21,8 @@ use Drupal\rep\Entity\Stream;
 use Drupal\Component\Utility\Html;
 use Drupal\dpl\Controller\StreamController;
 
+use function PHPUnit\Framework\isArray;
+
 class JsonDataController extends ControllerBase
 {
 
@@ -1049,20 +1051,57 @@ class JsonDataController extends ControllerBase
 
         // RENDER TOPIC LIST
         $filteredTopics = [];
+        // dpm($stream->topics);
+        if (isset($stream->topics) && is_array($stream->topics)) {
+          $filteredTopics = $stream->topics;
+        }
+
         // 3f) Build table header and rows using DataFile helper methods.
-        $headerTopic = Stream::generateHeaderTopic();
-        $rowsTopic   = Stream::generateOutputTopic($filteredTopics);
+        $headerTopics = Stream::generateHeaderTopic();
+        $rowsTopics   = Stream::generateOutputTopic($filteredTopics, $stream->uri);
+
+        foreach ($rowsTopics as $key => &$row) {
+          // transforma o deployment num render-array com classe
+          $row['element_deployment'] = [
+            'data' => $row['element_deployment'],
+            'class'=> ['text-center'],
+          ];
+          $row['element_sdd'] = [
+            'data' => $row['element_sdd'],
+            'class'=> ['text-center'],
+          ];
+          $row['element_operations'] = [
+            'data' => $row['element_operations'],
+            'class'=> ['text-center'],
+          ];
+        }
+        unset($row);
 
         // 3h) Render the table to a string.
         $tableTopicBuild = [
-          '#theme'      => 'table',
-          '#header'     => $headerTopic,
-          '#rows'       => $rowsTopic,
-          '#attributes' => ['class' => ['table', 'table-sm']],
+          '#theme'             => 'table',
+          '#header'            => $headerTopics,
+          '#rows'              => $rowsTopics,
+          '#attributes'        => [
+            'class' => ['table','table-sm','table-hover','selectable'],
+          ],
+          '#column_attributes' => [
+            // keys devem bater com as chaves do header:
+            'element_select' => ['class' => ['text-center']],
+            'element_deployment' => ['class' => ['text-center']],
+            'element_sdd'        => ['class' => ['text-center']],
+            'element_operations' => ['class' => ['text-center']],
+          ],
+          '#header_attributes' => [
+            'element_deployment' => ['class' => ['text-center']],
+            'element_sdd'        => ['class' => ['text-center']],
+            'element_operations' => ['class' => ['text-center']],
+          ],
         ];
-        $topicList = \Drupal::service('renderer')->renderRoot($tableTopicBuild);
-        $topicList = Html::decodeEntities($topicList);
 
+        $topicList = \Drupal::service('renderer')->renderRoot($tableTopicBuild);
+
+        $topicList = Html::decodeEntities($topicList);
 
         // 3e) Filter only those DAs that belong to this streamUri.
         $filteredDA = array_filter($rawList, function ($element) use ($streamUri) {

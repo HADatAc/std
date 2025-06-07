@@ -384,7 +384,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['card6']['card']['card_footer'] = [
       '#type'   => 'markup',
       '#markup' => '<div class="card-footer text-center">'
-        . '<div id="json-table-pager" class="pagination"></div>'
+        . '<div id="json-table-stream-pager" class="pagination"></div>'
         . '</div>',
     ];
 
@@ -397,6 +397,7 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-12', 'mb-4'],  // span entire width, with bottom margin
+        'style' => 'display:none!important;',
       ],
     ];
 
@@ -411,7 +412,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_topic_list'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-2'],
+        'class' => ['col-md-12'],
         'id'    => 'stream-topic-list-container',
         'style' => 'display:none;',
       ],
@@ -433,38 +434,12 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
-    // Stream Data Files card (left half)
-    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-5'],
-        'id'    => 'stream-data-files-container',
-        'style' => 'display:none;',
-      ],
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card">
-            <div class="card-header text-center">
-              <h3 id="data-files-count">Stream Data Files</h3>
-            </div>
-            <div class="card-body">
-              <div id="data-files-table">Loading…</div>
-            </div>
-            <div class="card-footer text-center">
-              <div id="data-files-pager" class="pagination"></div>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-5'],
+        'class' => ['col-md-4', 'mt-3'],
         'id'    => 'message-stream-container',
-        'style' => 'display:block;',
+        'style' => 'display:none!important;',
       ],
       'card' => [
         '#type' => 'markup',
@@ -480,6 +455,32 @@ class ManageStudyForm extends FormBase
             </div>
             <div class="card-footer text-center">
               <div id="message-stream-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
+    // Stream Data Files card (left half)
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-8', 'mt-3'],
+        'id'    => 'stream-data-files-container',
+        'style' => 'display:none;',
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3 id="data-files-count">Stream Data Files</h3>
+            </div>
+            <div class="card-body">
+              <div id="data-files-table">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="data-files-pager" class="pagination"></div>
             </div>
           </div>
         ',

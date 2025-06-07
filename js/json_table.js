@@ -64,6 +64,7 @@
           totals.daFiles = 0;
           updateTotal();
           $("#json-table-pager").empty();
+          $("#json-table-stream-pager").empty();
           return;
         }
 
@@ -108,7 +109,8 @@
           $("#json-table-container").html(
             "<p>No data available to display.</p>"
           );
-          $("#json-table-pager").empty(); // Limpa a paginação se não houver dados
+          $("#json-table-pager").empty();
+          $("#json-table-stream-pager").empty();
         }
       },
       error: function () {
