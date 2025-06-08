@@ -432,6 +432,32 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
+    // Stream Data Files card (left half)
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-7', 'mt-3'],
+        'id'    => 'stream-data-files-container',
+        'style' => 'display:none;',
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3 id="data-files-count">Stream Data Files</h3>
+            </div>
+            <div class="card-body">
+              <div id="data-files-table">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="data-files-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -453,32 +479,6 @@ class ManageStudyForm extends FormBase
             </div>
             <div class="card-footer text-center">
               <div id="message-stream-pager" class="pagination"></div>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
-    // Stream Data Files card (left half)
-    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-7', 'mt-3'],
-        'id'    => 'stream-data-files-container',
-        'style' => 'display:none;',
-      ],
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card">
-            <div class="card-header text-center">
-              <h3 id="data-files-count">Stream Data Files</h3>
-            </div>
-            <div class="card-body">
-              <div id="data-files-table">Loading…</div>
-            </div>
-            <div class="card-footer text-center">
-              <div id="data-files-pager" class="pagination"></div>
             </div>
           </div>
         ',
