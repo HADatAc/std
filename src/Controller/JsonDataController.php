@@ -399,6 +399,8 @@ class JsonDataController extends ControllerBase
 
             $streamUri = null;
             foreach ($streamList as $stream) {
+
+              if ($stream->method === 'files') {
                 $rawPattern = $stream->datasetPattern;
                 if (empty($rawPattern)) {
                     continue;
@@ -430,6 +432,7 @@ class JsonDataController extends ControllerBase
                     $streamUri = $stream->uri;
                     break;
                 }
+              }
             }
 
             if ($streamUri === null) {

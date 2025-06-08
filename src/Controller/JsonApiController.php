@@ -6,6 +6,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\Component\Utility\Xss;
+use Drupal\rep\Utils;
 
 /**
  * Class JsonApiController
@@ -84,7 +85,8 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($deployments as $deployment) {
       $results[] = [
-        'value' => $deployment->label . ' [' . $deployment->uri . ']',
+        // 'value' => $deployment->label . ' [' . $deployment->uri . ']',
+        'value' => UTILS::trimAutoCompleteString($deployment->label, $deployment->uri),
         'label' => $deployment->label,
       ];
     }
