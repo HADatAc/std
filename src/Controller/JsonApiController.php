@@ -85,8 +85,8 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($deployments as $deployment) {
       $results[] = [
-        // 'value' => $deployment->label . ' [' . $deployment->uri . ']',
-        'value' => UTILS::trimAutoCompleteString($deployment->label, $deployment->uri),
+        'value' => $deployment->label . ' [' . $deployment->uri . ']',
+        // 'value' => UTILS::trimAutoCompleteString($deployment->label, $deployment->uri),
         'label' => $deployment->label,
       ];
     }
