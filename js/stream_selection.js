@@ -3,36 +3,35 @@
  * JavaScript behaviors for the Manage Study page (Drupal 10):
  *  - fileDownload: download files when clicking on ".download-url"
  *  - showToast: display Bootstrap toasts
- *  - streamSelection: handle initial stream selection and show only the topic list or files
- *  - streamTopicSelection: handle selecting a topic to load messages and files
- *  - dplFileIngest: handle ingest / uningest buttons with toasts
- *  - streamDataFileDelete: handle deleting a data file and refreshing the view
+ *  - streamSelection: initial stream click → load topics OR files (with pager)
+ *  - streamTopicSelection: topic click → load files + messages
+ *  - streamFilesPagination: handle clicks on the files-only pager links
+ *  - dplFileIngest: ingest / uningest buttons
+ *  - streamDataFileDelete: delete a file & refresh
  */
 (function ($, Drupal, drupalSettings) {
   'use strict';
 
-  // Holds the polling interval ID for message updates.
   var messageStreamInterval = null;
-  // The URI of the currently selected stream.
-  var currentStreamUri = null;
+  var currentStreamUri      = null;
 
-  /** Helper: Show a Bootstrap toast. */
-  function showToast(message, type) {
-    var id    = 'toast-' + Date.now();
-    var $toast = $(
-      '<div id="' + id + '" class="toast align-items-center text-white bg-' + type + '" ' +
-        'role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">' +
+  /** Show a Bootstrap toast inside #toast-container */
+  function showToast(text, type) {
+    var id = 'toast-' + Date.now();
+    var $t = $(
+      '<div id="' + id + '" class="toast align-items-center text-white bg-' + type +
+      '" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000">' +
         '<div class="d-flex">' +
-          '<div class="toast-body">' + message + '</div>' +
+          '<div class="toast-body">' + text + '</div>' +
           '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
         '</div>' +
       '</div>'
     );
-    $('#toast-container').append($toast);
+    $('#toast-container').append($t);
     new bootstrap.Toast(document.getElementById(id)).show();
   }
 
-  /** Utility: hide all AJAX-loaded cards and wrapper. */
+  /** Hide all of our AJAX cards at once */
   function hideAllCards() {
     $('#edit-ajax-cards-container').hide();
     $('#stream-topic-list-container').hide();
@@ -40,76 +39,72 @@
     $('#message-stream-container').hide();
   }
 
-  /** Behavior: Download file when clicking on ".download-url". */
+  /** Download link behavior */
   Drupal.behaviors.fileDownload = {
     attach: function (context) {
-      $(document).off('click.fileDownload', '.download-url');
-      $(document).on('click.fileDownload', '.download-url', function (e) {
+      $(document).off('click.fileDownload', '.download-url')
+                 .on('click.fileDownload', '.download-url', function (e) {
         e.preventDefault();
-        var path = $(this).data('download-url');
-        if (!path) {
-          showToast('Download URL not found.', 'danger');
-          return;
-        }
-        var url = path.charAt(0) === '/'
-          ? path
-          : drupalSettings.path.baseUrl + path;
-        window.location.href = url;
+        var p = $(this).data('download-url');
+        if (!p) return showToast('Download URL not found.', 'danger');
+        window.location.href = p.charAt(0) === '/'
+          ? p
+          : drupalSettings.path.baseUrl + p;
       });
     }
   };
 
-  /** Behavior: Stream selection – show either files (full width) or topics. */
+  /** Stream-row click: load either topic list or files+pager */
   Drupal.behaviors.streamSelection = {
     attach: function (context) {
-      var $table = $('#dpl-streams-table', context);
-      if ($table.data('bound-stream-selection')) return;
-      $table.data('bound-stream-selection', true);
+      var $tbl = $('#dpl-streams-table', context);
+      if ($tbl.data('bound-stream-selection')) return;
+      $tbl.data('bound-stream-selection', true);
 
-      var lastRadio = null;
-      $table.on('click', 'input[type=radio]', function () {
-        // Stop polling now.
+      var last = null;
+      $tbl.on('click', 'input[type=radio]', function () {
         clearInterval(messageStreamInterval);
         messageStreamInterval = null;
 
-        // If same clicked twice: unselect and hide all.
-        if (this === lastRadio) {
+        // de-select if same clicked
+        if (this === last) {
           $(this).prop('checked', false);
-          lastRadio = null;
-          hideAllCards();
-          return;
+          last = null;
+          return hideAllCards();
         }
-
-        lastRadio = this;
+        last = this;
         $(this).prop('checked', true);
         currentStreamUri = this.value;
         hideAllCards();
 
-        // Load topics, files and streamType
+        // fetch topics/files + streamType
         $.getJSON(drupalSettings.std.ajaxUrl, {
           studyUri:  drupalSettings.std.studyUri,
           streamUri: currentStreamUri
         })
         .done(function (data) {
-          // Always show wrapper
           $('#edit-ajax-cards-container').show();
-
           var type = (data.streamType || '').toLowerCase().trim();
+
           if (type === 'files') {
-            // FILES ONLY: populate & show files card full-width
+            // ——— FILES-ONLY STREAM ———
             $('#data-files-table').html(data.files);
             $('#data-files-pager').html(data.filesPager);
-            $('#message-stream-container').hide();
-            $('#stream-topic-list-container').hide();
-
             $('#stream-data-files-container')
               .removeClass('col-md-6').addClass('col-md-12')
               .show();
+            // hide topics + messages
+            $('#stream-topic-list-container, #message-stream-container').hide();
           }
           else {
-            // MESSAGE/TOPIC: populate & show topic list only
+            // ——— MESSAGE/TOPIC STREAM ———
             $('#topic-list-table').html(data.topics);
             $('#stream-topic-list-container').show();
+            // restore half-width if previously changed
+            $('#stream-data-files-container')
+              .removeClass('col-md-12').addClass('col-md-7');
+            $('#message-stream-container')
+              .removeClass('col-md-12').addClass('col-md-5');
           }
         })
         .fail(function () {
@@ -117,24 +112,19 @@
         });
       });
 
-      // Initial page load
       hideAllCards();
     }
   };
 
-  /** Behavior: Topic selection – show both files & messages side by side. */
+  /** Topic-row click: load both files + messages side-by-side */
   Drupal.behaviors.streamTopicSelection = {
     attach: function (context) {
-      $(document).off('click.streamTopicSelection', '.topic-radio');
-      $(document).on('click.streamTopicSelection', '.topic-radio', function () {
-        // Stop polling now.
+      $(document).off('click.streamTopicSelection', '.topic-radio')
+                 .on('click.streamTopicSelection', '.topic-radio', function () {
         clearInterval(messageStreamInterval);
         messageStreamInterval = null;
-
-        // Hide everything then keep topics visible
         hideAllCards();
-        $('#edit-ajax-cards-container').show();
-        $('#stream-topic-list-container').show();
+        $('#edit-ajax-cards-container, #stream-topic-list-container').show();
 
         var topicUri = this.value;
         $.getJSON(drupalSettings.std.ajaxUrl, {
@@ -143,20 +133,18 @@
           topicUri:  topicUri
         })
         .done(function (data) {
-          // Populate tables
           $('#data-files-table').html(data.files);
           $('#data-files-pager').html(data.filesPager);
           $('#message-stream-table').html(data.messages);
 
-          // Show both cards half-width
           $('#stream-data-files-container')
-            .removeClass('col-md-12').addClass('col-md-7')
+            .removeClass('col-md-12').addClass('col-md-6')
             .show();
           $('#message-stream-container')
-            .removeClass('col-md-5').addClass('col-md-5')
+            .removeClass('col-md-12').addClass('col-md-6')
             .show();
 
-          // Restart polling every 20s
+          // start polling
           messageStreamInterval = setInterval(function () {
             $.getJSON(drupalSettings.std.ajaxUrl, {
               studyUri:  drupalSettings.std.studyUri,
@@ -175,7 +163,38 @@
     }
   };
 
-  /** Behavior: Ingest / Uningest file buttons. */
+  /**
+   * Files-only pagination clicks.
+   * Delegated so it works on newly-injected links.
+   */
+  Drupal.behaviors.streamFilesPagination = {
+    attach: function (context) {
+      $(document).off('click.streamFilesPagination', '.dpl-files-page')
+                 .on('click.streamFilesPagination', '.dpl-files-page', function (e) {
+        e.preventDefault();
+        var page = $(this).data('page');
+        hideAllCards();
+        $('#edit-ajax-cards-container, #stream-data-files-container')
+          .removeClass('col-md-6').addClass('col-md-12')
+          .show();
+
+        $.getJSON(drupalSettings.std.ajaxUrl, {
+          studyUri:  drupalSettings.std.studyUri,
+          streamUri: currentStreamUri,
+          page:      page
+        })
+        .done(function (data) {
+          $('#data-files-table').html(data.files);
+          $('#data-files-pager').html(data.filesPager);
+        })
+        .fail(function () {
+          showToast('Failed to load files page. Please try again.', 'danger');
+        });
+      });
+    }
+  };
+
+  /** Ingest / Uningest file buttons */
   Drupal.behaviors.dplFileIngest = {
     attach: function (context) {
       if ($(context).data('bound-dpl-file-ingest')) return;
@@ -183,59 +202,43 @@
 
       var ingestUrl   = drupalSettings.std.fileIngestUrl;
       var uningestUrl = drupalSettings.std.fileUningestUrl;
-
-      $(document)
-        .off('click.dplFileIngest', '.ingest-button, .uningest-button')
-        .on('click.dplFileIngest', '.ingest-button, .uningest-button', function (e) {
-          e.preventDefault();
-          var uri = $(this).data('elementuri');
-          var url = $(this).hasClass('ingest-button') ? ingestUrl : uningestUrl;
-          $.ajax({
-            url: url,
-            type: 'GET',
-            data: { elementuri: uri },
-            dataType: 'json'
-          })
-          .done(function (resp) {
-            showToast(resp.message, resp.status === 'success' ? 'success' : 'danger');
-          })
-          .fail(function (xhr) {
-            showToast(xhr.responseJSON?.message || 'An unexpected error occurred.', 'danger');
-          });
-        });
+      $(document).off('click.dplFileIngest', '.ingest-button, .uningest-button')
+                 .on('click.dplFileIngest', '.ingest-button, .uningest-button', function (e) {
+        e.preventDefault();
+        var uri = $(this).data('elementuri');
+        var url = $(this).hasClass('ingest-button') ? ingestUrl : uningestUrl;
+        $.getJSON(url, { elementuri: uri })
+         .done(function (resp) {
+           showToast(resp.message, resp.status === 'success' ? 'success' : 'danger');
+         })
+         .fail(function () {
+           showToast('An unexpected error occurred.', 'danger');
+         });
+      });
     }
   };
 
-  // Flag for delete behavior
-  var streamDataFileDeleteBound = false;
-
-  /** Behavior: Delete a Stream Data File and refresh view. */
+  /** Delete a data file & refresh whichever view is active */
   Drupal.behaviors.streamDataFileDelete = {
     attach: function () {
-      if (streamDataFileDeleteBound) return;
-      streamDataFileDeleteBound = true;
-
-      $(document)
-        .off('click.streamDelete', '.delete-stream-file-button')
-        .on('click.streamDelete', '.delete-stream-file-button', function (e) {
-          e.preventDefault();
-          if (!confirm('Are you sure you want to delete this stream data file?')) return;
-          var url = $(this).data('url');
-
-          $.post(url, {}, function (resp) {
-            showToast(resp.message || 'File deleted successfully!', resp.status === 'success' ? 'success' : 'danger');
-            // Re-trigger current view: topic if selected, else stream
-            if ($('.topic-radio:checked').length) {
-              $('.topic-radio:checked').trigger('click');
-            }
-            else {
-              $('#dpl-streams-table input[type=radio]:checked').trigger('click');
-            }
-          }, 'json')
-          .fail(function () {
-            showToast('Communication error while deleting the stream data file.', 'danger');
-          });
+      $(document).off('click.streamDelete', '.delete-stream-file-button')
+                 .on('click.streamDelete', '.delete-stream-file-button', function (e) {
+        e.preventDefault();
+        if (!confirm('Are you sure you want to delete this stream data file?')) return;
+        var url = $(this).data('url');
+        $.post(url, {}, function (resp) {
+          showToast(resp.message || 'Deleted!', resp.status === 'success' ? 'success' : 'danger');
+          // re-trigger current view
+          if ($('.topic-radio:checked').length) {
+            $('.topic-radio:checked').trigger('click');
+          } else {
+            $('#dpl-streams-table input[type=radio]:checked').trigger('click');
+          }
+        }, 'json')
+        .fail(function () {
+          showToast('Failed to delete file.', 'danger');
         });
+      });
     }
   };
 
