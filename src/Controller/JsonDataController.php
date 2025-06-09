@@ -1225,7 +1225,7 @@ class JsonDataController extends ControllerBase
         }
         $pagerHtml .= '</ul></nav>';
 
-        dpm($request);return false;
+        dpm($request->query);return false;
         // TIAGO DEVELOPMENT IN FRONT
         // 4a) Prepare connection parameters for MQTT (if available).
         $filename    = $stream->messageArchiveId . '_' . $stream->topic->label ?? NULL;
