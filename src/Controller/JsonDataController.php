@@ -1225,7 +1225,7 @@ class JsonDataController extends ControllerBase
         }
         $pagerHtml .= '</ul></nav>';
 
-        dpm($request->query);
+        // dpm($request->query);
         // TIAGO DEVELOPMENT IN FRONT
         // 4a) Prepare connection parameters for MQTT (if available).
 
@@ -1236,7 +1236,7 @@ class JsonDataController extends ControllerBase
                 ->getUri(base64_decode($request->query->get('topicUri'))),
               'getUri'
             );
-        
+
             $filename = $stream->messageArchiveId . '_' . $topic->label ?? NULL;
 
             $result   = StreamController::readMessages($filename);
@@ -1301,7 +1301,7 @@ class JsonDataController extends ControllerBase
             }
             $messagesHtml .= '</div>';
         }
-    }    
+    }
       // 5) Return a JSON response with exactly three keys: streamType, files, filesPager, and messages.
       return new JsonResponse([
         'streamType'  => $streamType,
