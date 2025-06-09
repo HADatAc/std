@@ -138,10 +138,10 @@
           $('#message-stream-table').html(data.messages);
 
           $('#stream-data-files-container')
-            .removeClass('col-md-12').addClass('col-md-6')
+            .removeClass('col-md-12').addClass('col-md-7')
             .show();
           $('#message-stream-container')
-            .removeClass('col-md-12').addClass('col-md-6')
+            .removeClass('col-md-5').addClass('col-md-5')
             .show();
 
           // start polling
