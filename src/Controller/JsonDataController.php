@@ -1237,9 +1237,9 @@ class JsonDataController extends ControllerBase
               'getUri'
             );
 
-            $filename = $stream->messageArchiveId . '_' . $topic->label ?? NULL;
+            //$filename = $stream->messageArchiveId . '_' . $topic->label ?? NULL;
 
-            $result   = StreamController::readMessages($filename);
+            $result   = StreamController::readMessages($topic->label);
             $messages = $result['messages'];
 
             // 4c) Build HTML output for received messages.
