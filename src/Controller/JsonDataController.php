@@ -1229,79 +1229,79 @@ class JsonDataController extends ControllerBase
         // TIAGO DEVELOPMENT IN FRONT
         // 4a) Prepare connection parameters for MQTT (if available).
 
-        if (!empty($request->query->get('topicUri'))) {
-            $topic = \Drupal::service('rep.api_connector')
-            ->parseObjectResponse(
-              \Drupal::service('rep.api_connector')
-                ->getUri(base64_decode($request->query->get('topicUri'))),
-              'getUri'
-            );
+            if (!empty($request->query->get('topicUri'))) {
+                $topic = \Drupal::service('rep.api_connector')
+                ->parseObjectResponse(
+                \Drupal::service('rep.api_connector')
+                    ->getUri(base64_decode($request->query->get('topicUri'))),
+                'getUri'
+                );
 
-            //$filename = $stream->messageArchiveId . '_' . $topic->label ?? NULL;
+                //$filename = $stream->messageArchiveId . '_' . $topic->label ?? NULL;
 
-            $result   = StreamController::readMessages($topic->label);
-            $messages = $result['messages'];
+                $result   = StreamController::readMessages($topic->label);
+                $messages = $result['messages'];
 
-            // 4c) Build HTML output for received messages.
-            $messagesHtml = '<div class="mqtt-messages">';
-            if (empty($messages)) {
-            $messagesHtml .= '<em>No messages received.</em>';
-            }
-            else {
-            foreach ($messages as $msg) {
-                // Remove any escaped quotes before attempting to JSON-decode.
-                $cleanMsg = stripslashes($msg);
-                $decoded  = json_decode($cleanMsg, true);
-
-                $messagesHtml .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">';
-
-                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                // Build a styled header with topic and timestamp (if available).
-                $messagesHtml .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
-                if (!empty($decoded['timestamp'])) {
-                    $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
-                    if ($dt) {
-                    $messagesHtml .= ' | Date: ' . $dt->format('d/m/Y H:i:s');
-                    }
-                }
-                $messagesHtml .= '</div>';
-
-                // Render the rest of the JSON fields (excluding 'timestamp') as a list.
-                $messagesHtml .= '<ul style="list-style:none; padding-left:0; margin:0;">';
-                foreach ($decoded as $key => $value) {
-                    if ($key === 'timestamp') {
-                    continue;
-                    }
-                    // Transform field names into more readable labels.
-                    $label = str_replace(
-                    ['_', 'Pa', 'C', 'percent', 'ID', 'V'],
-                    [' ', '', ' °C', '%', 'ID', ' V'],
-                    $key
-                    );
-                    $label = ucfirst($label);
-
-                    $messagesHtml .= '<li style="padding:5px 0; border-bottom:1px solid #eee; color:#555;">';
-                    $messagesHtml .= '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars((string) $value);
-                    $messagesHtml .= '</li>';
-                }
-                $messagesHtml .= '</ul>';
+                // 4c) Build HTML output for received messages.
+                $messagesHtml = '<div class="mqtt-messages">';
+                if (empty($messages)) {
+                $messagesHtml .= '<em>No messages received.</em>';
                 }
                 else {
-                    $messagesHtml .= '<div class="mqtt-raw" style="color:#000; font-family: monospace; text-align: left;">';
-                    $formatted = trim($cleanMsg, "{}");
-                    $lines = explode(',', $formatted);
-                    foreach ($lines as $line) {
-                    $messagesHtml .= '<div style="margin-bottom:3px;">' . htmlspecialchars(trim($line)) . '</div>';
-                    }
-                    $messagesHtml .= '</div>';
-                }
+                    foreach ($messages as $msg) {
+                        // Remove any escaped quotes before attempting to JSON-decode.
+                        $cleanMsg = stripslashes($msg);
+                        $decoded  = json_decode($cleanMsg, true);
 
+                        $messagesHtml .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">';
+
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                            // Build a styled header with topic and timestamp (if available).
+                            $messagesHtml .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
+                            if (!empty($decoded['timestamp'])) {
+                                $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
+                                if ($dt) {
+                                $messagesHtml .= ' | Date: ' . $dt->format('d/m/Y H:i:s');
+                                }
+                            }
+                            $messagesHtml .= '</div>';
+
+                            // Render the rest of the JSON fields (excluding 'timestamp') as a list.
+                            $messagesHtml .= '<ul style="list-style:none; padding-left:0; margin:0;">';
+                            foreach ($decoded as $key => $value) {
+                                if ($key === 'timestamp') {
+                                continue;
+                                }
+                                // Transform field names into more readable labels.
+                                $label = str_replace(
+                                ['_', 'Pa', 'C', 'percent', 'ID', 'V'],
+                                [' ', '', ' °C', '%', 'ID', ' V'],
+                                $key
+                                );
+                                $label = ucfirst($label);
+
+                                $messagesHtml .= '<li style="padding:5px 0; border-bottom:1px solid #eee; color:#555;">';
+                                $messagesHtml .= '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars((string) $value);
+                                $messagesHtml .= '</li>';
+                            }
+                            $messagesHtml .= '</ul>';
+                        }
+                        else {
+                            $messagesHtml .= '<div class="mqtt-raw" style="color:#000; font-family: monospace; text-align: left;">';
+                            $formatted = trim($cleanMsg, "{}");
+                            $lines = explode(',', $formatted);
+                            foreach ($lines as $line) {
+                            $messagesHtml .= '<div style="margin-bottom:3px;">' . htmlspecialchars(trim($line)) . '</div>';
+                            }
+                            $messagesHtml .= '</div>';
+                        }
+
+                        $messagesHtml .= '</div>';
+                    }
+                }
                 $messagesHtml .= '</div>';
             }
-            }
-            $messagesHtml .= '</div>';
         }
-    }
       // 5) Return a JSON response with exactly three keys: streamType, files, filesPager, and messages.
       return new JsonResponse([
         'streamType'  => $streamType,

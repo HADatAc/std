@@ -123,10 +123,12 @@
                  .on('click.streamTopicSelection', '.topic-radio', function () {
         clearInterval(messageStreamInterval);
         messageStreamInterval = null;
+  
         hideAllCards();
         $('#edit-ajax-cards-container, #stream-topic-list-container').show();
-
+  
         var topicUri = this.value;
+  
         $.getJSON(drupalSettings.std.ajaxUrl, {
           studyUri:  drupalSettings.std.studyUri,
           streamUri: currentStreamUri,
@@ -136,25 +138,59 @@
           $('#data-files-table').html(data.files);
           $('#data-files-pager').html(data.filesPager);
           $('#message-stream-table').html(data.messages);
-
+  
           $('#stream-data-files-container')
             .removeClass('col-md-12').addClass('col-md-7')
             .show();
           $('#message-stream-container')
             .removeClass('col-md-5').addClass('col-md-5')
             .show();
-
-          // start polling
-          messageStreamInterval = setInterval(function () {
-            $.getJSON(drupalSettings.std.ajaxUrl, {
-              studyUri:  drupalSettings.std.studyUri,
-              streamUri: currentStreamUri,
-              topicUri:  topicUri
-            })
-            .done(function (upd) {
-              $('#message-stream-table').html(upd.messages);
-            });
-          }, 20000);
+  
+          if (!window.messageWebSocket) {
+            window.messageWebSocket = new WebSocket('ws://127.0.0.1:8081');
+  
+            window.messageWebSocket.onopen = function () {
+              console.log('WS conectado. Subscrição tópico:', topicUri);
+              window.messageWebSocket.send(JSON.stringify({ action: 'subscribe', topic: topicUri }));
+              window.currentTopic = topicUri;  // Guardar tópico atual
+            };
+  
+            window.messageWebSocket.onmessage = function (event) {
+              var data = JSON.parse(event.data);
+              if (data.topic === window.currentTopic) {
+                var $msgCard = $('<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;"></div>');
+  
+                if (typeof data.message === 'object') {
+                  $msgCard.html('<pre>' + JSON.stringify(data.message, null, 2) + '</pre>');
+                } else {
+                  $msgCard.text(data.message);
+                }
+  
+                $('#message-stream-table').append($msgCard);
+              }
+            };
+  
+            window.messageWebSocket.onerror = function (error) {
+              console.error('WS erro:', error);
+            };
+  
+            window.messageWebSocket.onclose = function () {
+              console.log('WS fechado');
+            };
+          } else {
+            // Unsubscribe do tópico antigo antes de subscrever o novo
+            if (window.currentTopic && window.currentTopic !== topicUri) {
+              window.messageWebSocket.send(JSON.stringify({ action: 'unsubscribe', topic: window.currentTopic }));
+            }
+  
+            window.currentTopic = topicUri;
+  
+            // Limpar mensagens antigas antes de receber novas
+            $('#message-stream-table').empty();
+  
+            window.messageWebSocket.send(JSON.stringify({ action: 'subscribe', topic: topicUri }));
+            console.log('WS já aberto. Mudando tópico para:', topicUri);
+          }
         })
         .fail(function () {
           showToast('Failed to load topic data. Please try again.', 'danger');
