@@ -145,7 +145,7 @@
             .show();
 
           // start polling
-          messageStreamInterval = setInterval(function () {
+          messageStreamInterval = function () {
             $.getJSON(drupalSettings.std.ajaxUrl, {
               studyUri:  drupalSettings.std.studyUri,
               streamUri: currentStreamUri,
@@ -154,7 +154,7 @@
             .done(function (upd) {
               $('#message-stream-table').html(upd.messages);
             });
-          }, 20000);
+          };
         })
         .fail(function () {
           showToast('Failed to load topic data. Please try again.', 'danger');
