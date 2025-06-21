@@ -151,7 +151,7 @@
             .done(function (upd) {
               $('#message-stream-table').html(upd.messages);
             });
-          }, 5000);
+          }, 20000);
         })
         .fail(function () {
           showToast('Failed to load topic data. Please try again.', 'danger');
