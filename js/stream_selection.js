@@ -145,7 +145,6 @@
             .show();
 
           // start polling
-          console.log("AQUI");
           messageStreamInterval = setInterval(function () {
             $.getJSON(drupalSettings.std.latestUrl + topicUri)
             .done(function (upd) {
