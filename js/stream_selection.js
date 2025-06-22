@@ -14,6 +14,7 @@
 
   var messageStreamInterval = null;
   var currentStreamUri      = null;
+  var currentTopicUri       = null;
 
   /** Show a Bootstrap toast inside #toast-container */
   function showToast(text, type) {
@@ -127,6 +128,7 @@
         $('#edit-ajax-cards-container, #stream-topic-list-container').show();
 
         var topicUri = this.value;
+        currentTopicUri = topicUri;
         $.getJSON(drupalSettings.std.ajaxUrl, {
           studyUri:  drupalSettings.std.studyUri,
           streamUri: currentStreamUri,
@@ -144,13 +146,21 @@
             .removeClass('col-md-5').addClass('col-md-5')
             .show();
 
-          // start polling
-          messageStreamInterval = setInterval(function () {
+          function updateMessageStream() {
             $.getJSON(drupalSettings.std.latestUrl + topicUri)
-            .done(function (upd) {
-              $('#message-stream-table').html(upd.messages);
-            });
-          }, 20000);
+              .done(function (upd) {
+                var html = upd.messages;
+
+                if (html.trim() === 'Stream topic not found') {
+                  html = 'Stream Topic not Subscribed';
+                }
+
+                $('#message-stream-table').html(html);
+              });
+          }
+
+          updateMessageStream();
+          messageStreamInterval = setInterval(updateMessageStream, 20000);
         })
         .fail(function () {
           showToast('Failed to load topic data. Please try again.', 'danger');
