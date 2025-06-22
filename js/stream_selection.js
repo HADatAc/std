@@ -137,8 +137,8 @@
           studyUri:  drupalSettings.std.studyUri,
           streamUri: currentStreamUri,
           topicUri:  topicUri,
-          page:      1,
-          pagesize:  5
+          page:      $(this).data('page'),
+          pagesize:  $(this).data('pagesize')
         })
         .done(function (data) {
           $('#data-files-table').html(data.files);

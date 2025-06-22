@@ -1013,19 +1013,9 @@ class JsonDataController extends ControllerBase
       // 4) Otherwise, if this stream is message-based (or any other type), load only messages.
       else {
 
-        // COMMON OPERATION TO GET STREAMS
-        $page     = max(1, (int) $request->query->get('page', 0));
-        $pageSize = max(1, (int) $request->query->get('pagesize', 10));
+        $page     = max(1, (int) $request->query->get('page',  1));
+        $pageSize = max(1, (int) $request->query->get('pagesize', 5));
         $offset   = ($page - 1) * $pageSize;
-
-        // 3c) Fetch total count of data attachments (DAs) for this study.
-        // $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($streamUri), 'getTotalStudyDAsByStream');
-        // $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
-        // 3d) Fetch the raw page of DAs for this study.
-        // $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, $pageSize, $offset), 'getStudyDAsByStream');
-        // if (!is_array($rawList)) {
-        //   $rawList = [];
-        // }
 
         if (!empty($topicUri)) {
           $totalTopicArr = \Drupal::service('rep.api_connector')
@@ -1034,9 +1024,6 @@ class JsonDataController extends ControllerBase
           $body = json_decode($totalTopicArr, TRUE)['total'];
           $totalDAsTopic = !empty($body) ? (int) $body : 0;
 
-          $page     = max(1, (int) $request->query->get('page',  1));
-          $pageSize = max(1, (int) $request->query->get('pagesize', 5));
-          $offset   = ($page - 1) * $pageSize;
           $totalPages = (int) ceil($totalDAsTopic / $pageSize);
 
           $allForTopic = \Drupal::service('rep.api_connector')
