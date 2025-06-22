@@ -90,7 +90,8 @@
           if (type === 'files') {
             // ——— FILES-ONLY STREAM ———
             $('#data-files-table').html(data.files);
-            $('#data-files-pager').html(data.filesPager);
+            $('#data-files-pager').html(data.filesPager).show();
+            $('#topic-files-pager').hide();
             $('#stream-data-files-container')
               .removeClass('col-md-6').addClass('col-md-12')
               .show();
@@ -101,6 +102,8 @@
             // ——— MESSAGE/TOPIC STREAM ———
             $('#topic-list-table').html(data.topics);
             $('#stream-topic-list-container').show();
+            $('#topic-files-pager').html(data.filesPager).show();
+            $('#data-files-pager').hide();
             // restore half-width if previously changed
             $('#stream-data-files-container')
               .removeClass('col-md-12').addClass('col-md-7');
@@ -114,6 +117,7 @@
       });
 
       hideAllCards();
+      $('#data-files-pager, #topic-files-pager').hide();
     }
   };
 
@@ -132,11 +136,14 @@
         $.getJSON(drupalSettings.std.ajaxUrl, {
           studyUri:  drupalSettings.std.studyUri,
           streamUri: currentStreamUri,
-          topicUri:  topicUri
+          topicUri:  topicUri,
+          page:      1,
+          pagesize:  5
         })
         .done(function (data) {
           $('#data-files-table').html(data.files);
-          $('#data-files-pager').html(data.filesPager);
+          $('#topic-files-pager').html(data.filesPager).show();
+          $('#data-files-pager').hide();
           $('#message-stream-table').html(data.messages);
 
           $('#stream-data-files-container')
@@ -152,7 +159,7 @@
                 var html = upd.messages;
 
                 if (html.trim() === 'Stream topic not found') {
-                  html = '<p>Stream Topic not Subscribed</p><p>To subscribe, please press <a href="" class="btn btn-sm btn-green me-1 stream-topic-subscribe" title="Non working button"><i class="fa-solid fa-gears"></i></a> button on above Stream Topic table.</p>';
+                  html = '<p>Stream Topic not Subscribed</p><p>To subscribe, please press <a href="" class="btn btn-sm btn-green me-1 stream-topic-subscribe" title="Non working button"><i class="fa-solid fa-gears"></i></a>button on above Stream Topic table.</p>';
                 }
 
                 $('#message-stream-table').html(html);
@@ -173,12 +180,17 @@
    * Files-only pagination clicks.
    * Delegated so it works on newly-injected links.
    */
+
   Drupal.behaviors.streamFilesPagination = {
     attach: function (context) {
-      $(document).off('click.streamFilesPagination', '.dpl-files-page')
+      $(document).off('click.streamFilesPagination')
                  .on('click.streamFilesPagination', '.dpl-files-page', function (e) {
+        if (currentTopicUri) {
+          return;
+        }
         e.preventDefault();
         var page = $(this).data('page');
+
         hideAllCards();
         $('#edit-ajax-cards-container, #stream-data-files-container')
           .removeClass('col-md-6').addClass('col-md-12')
@@ -191,10 +203,51 @@
         })
         .done(function (data) {
           $('#data-files-table').html(data.files);
-          $('#data-files-pager').html(data.filesPager);
+          $('#data-files-pager').html(data.filesPager).show();
+          $('#topic-files-pager').hide();
         })
         .fail(function () {
           showToast('Failed to load files page. Please try again.', 'danger');
+        });
+      });
+    }
+  };
+
+  Drupal.behaviors.streamTopicFilesPagination = {
+    attach: function (context) {
+      $(document).off('click.streamTopicFilesPagination', '.dpl-files-page')
+                 .on('click.streamTopicFilesPagination', '.dpl-files-page', function (e) {
+        if (!currentTopicUri) {
+          return;
+        }
+        e.preventDefault();
+        var page = $(this).data('page');
+        var pagesize = $(this).data('pagesize');
+
+        hideAllCards();
+        $('#edit-ajax-cards-container').show();
+        $('#stream-topic-list-container').show();
+        $('#stream-data-files-container')
+          .removeClass('col-md-12').addClass('col-md-7')
+          .show();
+        $('#message-stream-container')
+          .removeClass('col-md-12').addClass('col-md-5')
+          .show();
+
+        $.getJSON(drupalSettings.std.ajaxUrl, {
+          studyUri:  drupalSettings.std.studyUri,
+          streamUri: currentStreamUri,
+          topicUri:  currentTopicUri,
+          page:      page,
+          pagesize:  pagesize
+        })
+        .done(function (data) {
+          $('#data-files-table').html(data.files);
+          $('#topic-files-pager').html(data.filesPager).show();
+          $('#data-files-pager').hide();
+        })
+        .fail(function () {
+          showToast('Failed to load topic files page. Please try again.', 'danger');
         });
       });
     }

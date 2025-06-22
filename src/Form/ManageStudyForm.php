@@ -452,7 +452,8 @@ class ManageStudyForm extends FormBase
               <div id="data-files-table">Loading…</div>
             </div>
             <div class="card-footer text-center">
-              <div id="data-files-pager"></div>
+              <div id="data-files-pager" class="pagination stream-only-pager"></div>
+              <div id="topic-files-pager" class="pagination topic-only-pager" style="display:none;"></div>
             </div>
           </div>
         ',
