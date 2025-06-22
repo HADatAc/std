@@ -152,7 +152,7 @@
                 var html = upd.messages;
 
                 if (html.trim() === 'Stream topic not found') {
-                  html = 'Stream Topic not Subscribed';
+                  html = '<p>Stream Topic not Subscribed</p><p>Please press the <a href="" class="btn btn-sm btn-green me-1 stream-topic-subscribe" title="Non working button"><i class="fa-solid fa-gears"></i></a> button on above Stream Topic table.</p>';
                 }
 
                 $('#message-stream-table').html(html);
