@@ -109,6 +109,7 @@ class ManageStudyForm extends FormBase
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
+    $totalPRCs = 0; // TODO
 
     // SET STREAM LIST
     $this->setStreamList($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ACTIVE,9999,0), 'streamByStudyState'));
@@ -154,8 +155,10 @@ class ManageStudyForm extends FormBase
         'value' => '<h1>' . $totalOutSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
-      //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
-      //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
+      14 => array(
+        'value' => '<h1>' . $totalPRCs . '</h1><h3>Process<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'prc',),
+      ),
     );
 
     // First row with 1 filler and 1 card
@@ -650,13 +653,34 @@ class ManageStudyForm extends FormBase
     $form['row3']['row3_wrapper']['row3'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['row', 'row-cols-4', 'g-3'],
+        'class' => ['row', 'row-cols-5', 'g-3'],
         // row-cols-4: 4 equal columns
         // g-3: standard gutter spacing
       ],
     ];
 
     // 3) Now each card is just one of those 4 columns:
+
+    // Card 7: STR
+    $form['row3']['row3_wrapper']['row3']['card14'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['col']],     // `col` is fine inside row-cols-4
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card h-100 text-center">
+            <div class="card-body">
+              <h1>' . $cards[14]['value'] . '</h1>
+            </div>
+            <div class="card-footer">
+              <a href="' . $cards[14]['link'] . '" class="btn btn-primary disabled">
+                <i class="fa-solid fa-list-check"></i> Manage Process
+              </a>
+            </div>
+          </div>
+        ',
+      ],
+    ];
 
     // Card 7: STR
     $form['row3']['row3_wrapper']['row3']['card7'] = [
@@ -668,7 +692,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[7]['value'] . '</h1>
-              <p>STR</p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[7]['link'] . '" class="btn btn-primary">
@@ -690,7 +713,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[8]['value'] . '</h1>
-              <p>Roles</p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[8]['link'] . '" class="btn btn-secondary disabled">
@@ -712,7 +734,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[9]['value'] . '</h1>
-              <p>Virtual Columns<br><small>(Entities)</small></p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[9]['link'] . '" class="btn btn-primary">
@@ -734,7 +755,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[10]['value'] . '</h1>
-              <p>Object Collections<br><small>(' . ($cards[10]['value_objects'] ?? '0') . ' Objects)</small></p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[10]['link'] . '" class="btn btn-primary">
@@ -749,9 +769,9 @@ class ManageStudyForm extends FormBase
     // Bottom part of the form
     $form['row4'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('row')),
+      '#attributes' => ['class' => ['row']],
       '#type' => 'markup',
-      '#markup' => '<p><b>Note</b>: Data Dictionaires (DD) and Semantic Data Dictionaires (SDD) are added' .
+      '#markup' => '<p><br /><b>Note</b>: Data Dictionaires (DD) and Semantic Data Dictionaires (SDD) are added' .
         ' to studies through their corresponding data files.</p><br>',
     );
 
