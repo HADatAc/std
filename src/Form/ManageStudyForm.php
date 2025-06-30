@@ -429,6 +429,7 @@ class ManageStudyForm extends FormBase
           <div class="card">
             <div class="card-header text-center">
               <h3 id="topic-list-count">Stream Topic List</h3>
+              <div class="info-card">Cards data is refreshed every 20 seconds</div>
             </div>
             <div class="card-body">
               <div id="topic-list-table">Loading…</div>

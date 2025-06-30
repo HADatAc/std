@@ -40,6 +40,33 @@
     $('#message-stream-container').hide();
   }
 
+    function reloadTopicList() {
+    if (!currentStreamUri) {
+      return;
+    }
+    $.getJSON(drupalSettings.std.ajaxUrl, {
+      studyUri:  drupalSettings.std.studyUri,
+      streamUri: currentStreamUri
+    })
+    .done(function (data) {
+      // injeta só os tópicos
+      $('#topic-list-table').html(data.topics);
+      // restaura a seleção anterior
+      if (currentTopicUri) {
+        var $radio = $('#topic-list-table')
+          .find('input.topic-radio[value="' + currentTopicUri + '"]');
+        if ($radio.length) {
+          $radio.prop('checked', true);
+        }
+      }
+    })
+    .fail(function () {
+      console.warn('Failed to reload topic list.');
+    });
+  }
+
+  setInterval(reloadTopicList, 20000);
+
   /** Download link behavior */
   Drupal.behaviors.fileDownload = {
     attach: function (context) {
