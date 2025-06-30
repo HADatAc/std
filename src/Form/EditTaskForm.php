@@ -60,6 +60,11 @@ class EditTaskForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $processuri=NULL, $state=NULL, $taskuri=NULL) {
 
+    if (!isset($processuri) || !isset($state) || !isset($taskuri)) {
+      \Drupal::messenger()->addMessage(t("Invalid parameters for Edit Task Form."), 'error');
+      self::backUrl();
+      return;
+    }
 
     // INITIALIZE NS TABLE
     $tables = new Tables;
@@ -138,7 +143,7 @@ class EditTaskForm extends FormBase {
     $states = [
       'basic' => 'Basic task properties',
       'tasks' => 'Sub-Tasks',
-      'instrument' => 'Instruments and detectors',
+      'instrument' => 'Instruments and Components',
     ];
 
     foreach ($states as $key => $label) {
@@ -309,7 +314,7 @@ class EditTaskForm extends FormBase {
         '#type' => 'markup',
         '#markup' =>
           '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Detectors</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">Components</div>' .
           '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
       );
 

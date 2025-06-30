@@ -563,6 +563,7 @@ class EditProcessForm extends FormBase {
           '"hasReviewNote":"'.$this->getProcess()->hasReviewNote.'",'.
           '"hasEditorEmail":"'.$this->getProcess()->hasEditorEmail.'"}';
 
+        // dpm($processJSON, 'Process JSON');return false;
         // UPDATE BY DELETING AND CREATING
         $api->elementDel('process',$this->getProcessUri());
         $message = $api->elementAdd('process',$processJSON);

@@ -19,7 +19,7 @@ class Task {
       'element_top_task' => t('Top Task'),
       'element_language' => t('Language'),
       'element_tot_instruments' => t('# Instruments'),
-      'element_tot_detectors' => t('# Detectors'),
+      'element_tot_detectors' => t('# Components'),
       'element_status' => t('Status'),
       'element_actions' => t('Actions'),
     ];

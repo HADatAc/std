@@ -387,7 +387,7 @@ class AddTaskForm extends FormBase {
         '#type' => 'markup',
         '#markup' =>
           '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Detectors</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">Components</div>' .
           '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
       );
 
