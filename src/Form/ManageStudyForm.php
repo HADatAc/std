@@ -24,6 +24,8 @@ class ManageStudyForm extends FormBase
 
   protected $streamList;
 
+  protected $outStreamList;
+
   public function getStreamList()
   {
     return $this->streamList;
@@ -31,6 +33,15 @@ class ManageStudyForm extends FormBase
   public function setStreamList($list)
   {
     return $this->streamList = $list;
+  }
+
+  public function getOutStreamList()
+  {
+    return $this->outStreamList;
+  }
+  public function setSOutStreamList($list)
+  {
+    return $this->outStreamList = $list;
   }
 
   public function getStudyUri()
@@ -92,20 +103,18 @@ class ManageStudyForm extends FormBase
     //Dá erro 404, $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
     // $totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
     $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->streamSizeByStudyState($this->getStudy()->uri, HASCO::ACTIVE), 'streamSizeByStudyState'));
+    $totalOutSTREAMs = 0; // self::extractValue($api->parseObjectResponse($api->streamSizeByStudyState($this->getStudy()->uri, HASCO::ACTIVE), 'streamSizeByStudyState'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
 
-    // DEBBUG
-    // kint([
-    //   'studyUri' => $this->getStudy()->uri,
-    //   'stateUri' => HASCO::ALL_STATUSES,
-    //   'resultAPI' => $api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0), 'streamByStudyState'),
-    //   'totalSTREAMs' => $totalSTREAMs,
-    // ]);
+    // SET STREAM LIST
     $this->setStreamList($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ACTIVE,9999,0), 'streamByStudyState'));
+
+    // TODO - SET OUT STREAM LIST
+    $this->setSOutStreamList([]);
 
     // Example data for cards
     $cards = array(
@@ -118,7 +127,7 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
-        'head' => 'Streams (' . $totalSTREAMs . ')',
+        'head' => 'Streams IN (' . $totalSTREAMs . ')',
         'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
@@ -140,6 +149,11 @@ class ManageStudyForm extends FormBase
       ),
       11 => array('value' => 'Message Stream'),
       12 => array('value' => 'Unassociated Data Files'),
+      13 => array(
+        'head' => 'Streams OUT (' . $totalOutSTREAMs . ')',
+        'value' => '<h1>' . $totalOutSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
+      ),
       //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
       //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
     );
@@ -248,11 +262,6 @@ class ManageStudyForm extends FormBase
     // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
     if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
       // User is the owner: enable drag & drop functionality.
-      // $markup = '<div class="card drop-area" id="drop-card">' .
-      //           ' <div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-      //           '   <div class="info-card">You can drag&drop files directly into this card</div>
-      //             </div>' .
-      //             \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
       $markup = '<div class="card drop-area" id="drop-card" style="position: relative;">'
         . '  <div class="card-header text-center" style="position: relative;">'
         . '    <h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>'
@@ -334,8 +343,7 @@ class ManageStudyForm extends FormBase
       ),
     );
 
-    // Row 3, Card 6
-
+    // Card 6 STREAMS IN
     $header = Stream::generateHeaderStudy();
     $output = Stream::generateOutputStudy($this->getStreamList());
 
@@ -487,6 +495,60 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
+    // STREAMS OUT card (card 13)
+    $headerOut = Stream::generateHeaderOutStream();
+    $outputOut = Stream::generateOutputStream($this->getOutStreamList());
+    $form['row2']['card1']['inner_row']['card13'] = [
+      '#type'       => 'container',
+      '#attributes' => [
+        'class' => ['col-md-12', 'mt-4'],
+      ],
+    ];
+
+    $form['row2']['card1']['inner_row']['card13']['card'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['col-md-12', 'mb-4']],
+      '#prefix'     => '<div class="card">',
+      '#suffix'     => '</div>',
+    ];
+
+    // 3) Header
+    $form['row2']['card1']['inner_row']['card13']['card']['card_header'] = [
+      '#type'   => 'markup',
+      '#markup' => '<div class="card-header text-center">'
+        . '<h3 id="stream_files_count">' . $cards[13]['head'] . '</h3>'
+        . '</div>',
+    ];
+
+    // 4) Body + tabela
+    $form['row2']['card1']['inner_row']['card13']['card']['card_body'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['card-body', 'p-2']],
+    ];
+    $form['row2']['card1']['inner_row']['card13']['card']['card_body']['element_table'] = [
+      '#type'          => 'tableselect',
+      '#header'        => $headerOut,
+      '#options'          => $outputOut,
+      // '#default_value' => [],
+      '#empty'         => t('No stream has been found'),
+      '#attributes' => [
+        'id' => 'dpl-streamsout-table',
+      ],
+      // forca seleção única (radio) — ajuste se quiser usar checkbox:
+      '#multiple'   => FALSE,
+    ];
+
+    // 5) Footer
+    $form['row2']['card1']['inner_row']['card13']['card']['card_footer'] = [
+      '#type'   => 'markup',
+      '#markup' => '<div class="card-footer text-center">'
+        . '<div id="json-table-stream-pager" class="pagination"></div>'
+        . '</div>',
+    ];
+
+
+
+
     /**
       * 2) Fixed cards (Study Data Files, Publications, Media)
       *    → Another full-width wrapper, then an inner row with three col-md-4 cards.
@@ -574,7 +636,6 @@ class ManageStudyForm extends FormBase
         ',
       ],
     ];
-
 
     // Third row with 5 cards (card 6 to card 10)
     $form['row3']['row3_wrapper'] = [
