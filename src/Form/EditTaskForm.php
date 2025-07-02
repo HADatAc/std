@@ -1499,10 +1499,10 @@ class EditTaskForm extends FormBase {
    */
 
   /**
-   * “Submit handler” só para criar uma nova linha.
+   * “Submit handler” create new line.
    */
   public function onAddInstrumentRow(array &$form, FormStateInterface $form_state) {
-    // Acrescenta a linha ao state e indica rebuild.
+    $this->updateInstruments($form_state);
     $this->addInstrumentRow($form_state);
     $form_state->setRebuild(TRUE);
   }
