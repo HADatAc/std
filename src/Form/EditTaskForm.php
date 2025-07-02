@@ -103,7 +103,8 @@ class EditTaskForm extends FormBase {
       // $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
       // $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
       $basic = $this->populateBasic();;
-      $instruments = $this->populateInstruments();
+      $instruments = \Drupal::state()->get('my_form_instruments')
+               ?? $this->populateInstruments();
       $tasks = $this->getTask()->hasSubtaskUris;
 
     }
@@ -301,46 +302,48 @@ class EditTaskForm extends FormBase {
       //   '#markup' => 'Instruments',
       // ];
 
-      $form['instruments'] = array(
+      // Wrap the instruments block in a container with an ID we can replace.
+      $form['instruments'] = [
         '#type' => 'container',
-        '#title' => $this->t('instruments'),
-        '#attributes' => array(
-          'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
-          'id' => 'custom-table-wrapper',
-        ),
-      );
-
-      $form['instruments']['header'] = array(
-        '#type' => 'markup',
-        '#markup' =>
-          '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Components</div>' .
-          '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
-      );
-
-      $form['instruments']['rows'] = $this->renderInstrumentRows($instruments);
-
-      $form['instruments']['space_3'] = [
-        '#type' => 'markup',
-        '#markup' => $separator,
+        '#attributes' => [
+          'class' => ['p-3','bg-light','text-dark','row','border','border-secondary','rounded'],
+          'id' => 'instrument-wrapper',
+        ],
       ];
 
-      $form['instruments']['actions']['top'] = array(
+      // 1) Header row
+      $form['instruments']['header'] = [
         '#type' => 'markup',
-        '#markup' => '<div class="p-3 col">',
-      );
+        '#markup' =>
+          '<div class="row mb-2">' .
+            '<div class="col bg-secondary text-white p-2">Instrument</div>' .
+            '<div class="col bg-secondary text-white p-2">Components</div>' .
+            '<div class="col-md-1 bg-secondary text-white p-2">Operations</div>' .
+          '</div>',
+      ];
 
-      $form['instruments']['actions']['add_row'] = [
+      // 2) Data rows
+      $form['instruments']['rows'] = $this->renderInstrumentRows($instruments);
+
+      // 3) Button numa nova row full-width
+      $form['instruments']['add_row'] = [
         '#type' => 'submit',
         '#value' => $this->t('New Instrument'),
         '#name' => 'new_instrument',
-        '#attributes' => array('class' => array('btn', 'btn-sm', 'save-button')),
+        '#limit_validation_errors' => [],
+        '#submit' => ['::onAddInstrumentRow'],
+        '#ajax' => [
+          'callback' => '::ajaxAddInstrumentRow',
+          'wrapper'  => 'instrument-wrapper',
+          'effect'   => 'fade',
+        ],
+        '#attributes' => ['class' => ['btn','btn-primary', 'col-1', 'mt-2','add-element-button']],
       ];
 
-      $form['instruments']['actions']['bottom'] = array(
-        '#type' => 'markup',
-        '#markup' => '</div>' . $separator,
-      );
+      $form['instruments']['actions']['bottom_space'] = [
+        '#type'   => 'markup',
+        '#markup' => '<div class="w-100"></div>',
+      ];
 
     }
 
@@ -821,19 +824,17 @@ class EditTaskForm extends FormBase {
     return;
   }
 
-  public function addInstrumentRow() {
+  /**
+   * Push a new empty instrument into storage and flag a rebuild.
+   *
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   */
+  protected function addInstrumentRow(FormStateInterface $form_state) {
     $instruments = \Drupal::state()->get('my_form_instruments') ?? [];
-
-    // Add a new row to the table.
-    $instruments[] = [
-      'instrument' => '',
-      'detectors' => '',
-    ];
+    $instruments[] = ['instrument'=>'', 'detectors'=>[]];
     \Drupal::state()->set('my_form_instruments', $instruments);
-
-    // Rebuild the table rows.
-    $form['instruments']['rows'] = $this->renderInstrumentRows($instruments);
-    return;
+    $form_state->setRebuild(TRUE);
   }
 
   public function removeInstrumentRow($button_name) {
@@ -1146,10 +1147,10 @@ class EditTaskForm extends FormBase {
     $instruments = \Drupal::state()->get('my_form_instruments');
     $tasks = \Drupal::state()->get('my_form_tasks');
 
-    if ($button_name === 'new_instrument') {
-      $this->addInstrumentRow();
-      return;
-    }
+    // if ($button_name === 'new_instrument') {
+    //   $this->addInstrumentRow($form_state);
+    //   return;
+    // }
 
     if (str_starts_with($button_name,'instrument_remove_')) {
       $this->removeInstrumentRow($button_name);
@@ -1272,14 +1273,6 @@ class EditTaskForm extends FormBase {
     if (!empty($trigger['#name']) && $trigger['#name'] === 'back') {
       return;
     }
-
-    // manual “required” check:
-    // $desc = $form_state->getValue('task_description');
-    // if (strlen(trim($desc)) === 0 && $trigger['#name'] === 'save') {
-    //   $form_state->setErrorByName('task_description', $this->t('Description is required.'));
-    // }
-
-    // and any other manual checks you need…
   }
 
   public function getComponents($instrumentUri) {
@@ -1501,6 +1494,30 @@ class EditTaskForm extends FormBase {
   }
 
 
+  /**
+   * AJAX CALLBACKS
+   */
+
+  /**
+   * “Submit handler” só para criar uma nova linha.
+   */
+  public function onAddInstrumentRow(array &$form, FormStateInterface $form_state) {
+    // Acrescenta a linha ao state e indica rebuild.
+    $this->addInstrumentRow($form_state);
+    $form_state->setRebuild(TRUE);
+  }
+
+  /**
+   * AJAX callback to add one blank instrument-row and re-render instruments.
+   */
+  public function ajaxAddInstrumentRow(array &$form, FormStateInterface $form_state) {
+    // Return the portion of the form we're replacing.
+    return $form['instruments'];
+  }
+
+
+
+  // BACK Function
   function backUrl() {
     // $root_url = \Drupal::request()->getBaseUrl();
     // $response = new RedirectResponse($root_url . '/std/select/task/1/9');
