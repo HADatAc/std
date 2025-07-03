@@ -1417,72 +1417,6 @@ protected function renderInstrumentRows(array $instruments) {
     return $components;
   }
 
-  // protected function buildDetectorTable(array $detectors, $container_id, $arraySelected = []) {
-
-  //   $root_url = \Drupal::request()->getBaseUrl();
-
-  //   $header = [
-  //     $this->t("#"),
-  //     $this->t('Name'),
-  //     $this->t('URI'),
-  //     $this->t('Type'),
-  //     $this->t('Status'),
-  //   ];
-
-  //   // Get the renderer service.
-  //   $renderer = \Drupal::service('renderer');
-
-  //   $rows = [];
-  //   foreach ($detectors as $detector) {
-  //     // Build an inline template render array for the checkbox.
-  //     $checkbox = [
-  //       '#type' => 'checkbox',
-  //       '#name' => $container_id . '[]',
-  //       '#return_value' => $detector['uri'],
-  //       '#checked' => !empty($arraySelected) ? in_array($detector['uri'], $arraySelected) : 1,
-  //       '#ajax' => [
-  //         'callback' => '::addNewInstrumentRow',
-  //         'event' => 'change', // Garante que está ouvindo o evento correto
-  //         'wrapper' => $container_id,
-  //         'progress' => [
-  //           'type' => 'throbber',
-  //           'message' => NULL,
-  //         ],
-  //         'method' => 'replace', // Use replace para garantir atualização
-  //       ],
-  //       '#executes_submit_callback' => TRUE, // Força o submit para garantir o disparo
-  //       '#attributes' => [
-  //         'class' => ['instrument-detector-ajax'],
-  //         //'data-container-id' => 'body'
-  //       ],
-  //     ];
-
-
-  //     // Manually render the inline template.
-  //     $checkbox_rendered = $renderer->render($checkbox);
-
-  //     $rows[] = [
-  //       'data' => [
-  //         $checkbox_rendered,
-  //         t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . $detector['name'] . '</a>'),
-  //         t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . UTILS::namespaceUri($detector['uri']) . '</a>'),
-  //         t(UTILS::namespaceUri($detector['type'])),
-  //         $detector['status'],
-  //       ],
-  //     ];
-  //   }
-
-  //   return [
-  //     '#type' => 'container',
-  //     '#attributes' => ['id' => $container_id],
-  //     'table' => [
-  //       '#type' => 'table',
-  //       '#header' => $header,
-  //       '#rows' => $rows,
-  //       '#empty' => $this->t('No detectors found.'),
-  //     ],
-  //   ];
-  // }
   /**
    * Build a detectors table grouped by their 'type' field.
    *
@@ -1564,12 +1498,12 @@ protected function renderInstrumentRows(array $instruments) {
         'data' => [
           $checkbox_rendered,
           // Link to describe page.
-          t('<a href="@url">@name</a>', [
+          t('<a target="_new" href="@url">@name</a>', [
             '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($detector['uri']),
             '@name' => Html::escape($detector['name']),
           ]),
           // Link to URI.
-          t('<a href="@url">@uri</a>', [
+          t('<a target="_new" href="@url">@uri</a>', [
             '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($detector['uri']),
             '@uri' => Html::escape(Utils::namespaceUri($detector['uri'])),
           ]),
