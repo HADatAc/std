@@ -7,6 +7,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\RedirectCommand;
 use Drupal\Core\Url;
+use Drupal\Component\Utility\Html;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
 use Drupal\rep\Entity\Tables;
@@ -323,8 +324,8 @@ class EditTaskForm extends FormBase {
         '#markup' =>
           '<div class="row mb-2">' .
             '<div class="col bg-secondary text-white p-2">Instrument</div>' .
-            '<div class="col bg-secondary text-white p-2">Components</div>' .
-            '<div class="col-md-1 bg-secondary text-white p-2">Operations</div>' .
+            '<div class="col bg-secondary text-white p-2 ps-4">Components</div>' .
+            '<div class="col-md-1 bg-secondary text-white p-2 ps-4">Operations</div>' .
           '</div>',
       ];
 
@@ -562,6 +563,7 @@ class EditTaskForm extends FormBase {
             $this->t('#'),
             $this->t('Name'),
             $this->t('URI'),
+            $this->t('Type'),
             $this->t('Status'),
           ],
           '#rows' => [],
@@ -1305,6 +1307,7 @@ class EditTaskForm extends FormBase {
       $components[] = [
         'name' => isset($obj->body->label) ? $obj->body->label : '',
         'uri' => isset($obj->body->uri) ? $obj->body->uri : '',
+        'type' => isset($obj->body->hascoTypeUri) ? Utils::namespaceUri($obj->body->hascoTypeUri) : '',
         'status' => isset($obj->body->hasStatus) ? Utils::plainStatus($obj->body->hasStatus) : '',
         'hasStatus' => isset($obj->body->hasStatus) ? $obj->body->hasStatus : null,
       ];
@@ -1312,60 +1315,170 @@ class EditTaskForm extends FormBase {
     return $components;
   }
 
-  protected function buildDetectorTable(array $detectors, $container_id, $arraySelected = []) {
+  // protected function buildDetectorTable(array $detectors, $container_id, $arraySelected = []) {
 
-    $root_url = \Drupal::request()->getBaseUrl();
+  //   $root_url = \Drupal::request()->getBaseUrl();
 
+  //   $header = [
+  //     $this->t("#"),
+  //     $this->t('Name'),
+  //     $this->t('URI'),
+  //     $this->t('Type'),
+  //     $this->t('Status'),
+  //   ];
+
+  //   // Get the renderer service.
+  //   $renderer = \Drupal::service('renderer');
+
+  //   $rows = [];
+  //   foreach ($detectors as $detector) {
+  //     // Build an inline template render array for the checkbox.
+  //     $checkbox = [
+  //       '#type' => 'checkbox',
+  //       '#name' => $container_id . '[]',
+  //       '#return_value' => $detector['uri'],
+  //       '#checked' => !empty($arraySelected) ? in_array($detector['uri'], $arraySelected) : 1,
+  //       '#ajax' => [
+  //         'callback' => '::addNewInstrumentRow',
+  //         'event' => 'change', // Garante que está ouvindo o evento correto
+  //         'wrapper' => $container_id,
+  //         'progress' => [
+  //           'type' => 'throbber',
+  //           'message' => NULL,
+  //         ],
+  //         'method' => 'replace', // Use replace para garantir atualização
+  //       ],
+  //       '#executes_submit_callback' => TRUE, // Força o submit para garantir o disparo
+  //       '#attributes' => [
+  //         'class' => ['instrument-detector-ajax'],
+  //         //'data-container-id' => 'body'
+  //       ],
+  //     ];
+
+
+  //     // Manually render the inline template.
+  //     $checkbox_rendered = $renderer->render($checkbox);
+
+  //     $rows[] = [
+  //       'data' => [
+  //         $checkbox_rendered,
+  //         t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . $detector['name'] . '</a>'),
+  //         t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . UTILS::namespaceUri($detector['uri']) . '</a>'),
+  //         t(UTILS::namespaceUri($detector['type'])),
+  //         $detector['status'],
+  //       ],
+  //     ];
+  //   }
+
+  //   return [
+  //     '#type' => 'container',
+  //     '#attributes' => ['id' => $container_id],
+  //     'table' => [
+  //       '#type' => 'table',
+  //       '#header' => $header,
+  //       '#rows' => $rows,
+  //       '#empty' => $this->t('No detectors found.'),
+  //     ],
+  //   ];
+  // }
+  /**
+   * Build a detectors table grouped by their 'type' field.
+   *
+   * @param array $detectors
+   *   A list of detector arrays, each containing:
+   *     - name:   string label
+   *     - uri:    string URI
+   *     - type:   string type name
+   *     - status: string status label
+   * @param string $container_id
+   *   The HTML id attribute for the outer container.
+   * @param array $arraySelected
+   *   An array of URIs that should be pre-checked.
+   *
+   * @return array
+   *   A renderable array for a Drupal table, wrapped in a container.
+   */
+  protected function buildDetectorTable(array $detectors, $container_id, array $arraySelected = []) {
+    // Build table header: checkbox + name + URI + type + status.
     $header = [
-      $this->t("#"),
+      $this->t('#'),
       $this->t('Name'),
       $this->t('URI'),
+      // $this->t('Type'),
       $this->t('Status'),
     ];
 
-    // Get the renderer service.
+    // Sort detectors by their 'type' so grouping works.
+    usort($detectors, function($a, $b) {
+      return strcmp($a['type'], $b['type']);
+    });
+
+    /** @var \Drupal\Core\Render\RendererInterface $renderer */
     $renderer = \Drupal::service('renderer');
+    $root_url = \Drupal::request()->getBaseUrl();
 
     $rows = [];
-    foreach ($detectors as $detector) {
+    $current_type = NULL;
 
-      // Build an inline template render array for the checkbox.
+    foreach ($detectors as $detector) {
+      // Whenever the type changes, inject a full-width grouping row.
+      if ($detector['type'] !== $current_type) {
+        $current_type = $detector['type'];
+        $rows[] = [
+          // The 'data' array holds a single cell with colspan == number of columns.
+          'data' => [
+            [
+              'data'    => [
+                '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
+              ],
+              'colspan' => count($header),
+              'class' => ['detector-type-row'],
+            ],
+          ],
+          'class' => ['detector-type-header'],
+        ];
+      }
+
+      // Build the checkbox render array.
       $checkbox = [
         '#type' => 'checkbox',
         '#name' => $container_id . '[]',
         '#return_value' => $detector['uri'],
-        '#checked' => !empty($arraySelected) ? in_array($detector['uri'], $arraySelected) : 1,
+        '#checked' => in_array($detector['uri'], $arraySelected),
+        // Ajax behavior to re-render this table on change.
         '#ajax' => [
-          'callback' => '::addNewInstrumentRow',
-          'event' => 'change', // Garante que está ouvindo o evento correto
+          'callback' => '::ajaxAddInstrumentRow',
+          'event' => 'change',
           'wrapper' => $container_id,
-          'progress' => [
-            'type' => 'throbber',
-            'message' => NULL,
-          ],
-          'method' => 'replace', // Use replace para garantir atualização
+          'progress' => ['type' => 'throbber'],
         ],
-        '#executes_submit_callback' => TRUE, // Força o submit para garantir o disparo
-        '#attributes' => [
-          'class' => ['instrument-detector-ajax'],
-          //'data-container-id' => 'body'
-        ],
+        '#executes_submit_callback' => TRUE,
+        '#attributes' => ['class' => ['instrument-detector-ajax']],
       ];
-
-
-      // Manually render the inline template.
       $checkbox_rendered = $renderer->render($checkbox);
 
+      // Append the normal detector row.
       $rows[] = [
         'data' => [
           $checkbox_rendered,
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . $detector['name'] . '</a>'),
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . UTILS::namespaceUri($detector['uri']) . '</a>'),
-          $detector['status'],
+          // Link to describe page.
+          t('<a href="@url">@name</a>', [
+            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($detector['uri']),
+            '@name' => Html::escape($detector['name']),
+          ]),
+          // Link to URI.
+          t('<a href="@url">@uri</a>', [
+            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($detector['uri']),
+            '@uri' => Html::escape(Utils::namespaceUri($detector['uri'])),
+          ]),
+          // Render type and status safely.
+          // Html::escape($detector['type']),
+          Html::escape($detector['status']),
         ],
       ];
     }
 
+    // Wrap the table in a container so AJAX can replace it cleanly.
     return [
       '#type' => 'container',
       '#attributes' => ['id' => $container_id],
@@ -1374,9 +1487,11 @@ class EditTaskForm extends FormBase {
         '#header' => $header,
         '#rows' => $rows,
         '#empty' => $this->t('No detectors found.'),
+        '#attributes' => ['class' => ['table', 'table-striped']],
       ],
     ];
   }
+
 
   /**
    * Validates befor submit sub-task.
