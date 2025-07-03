@@ -549,244 +549,113 @@ class EditTaskForm extends FormBase {
    *
    ******************************/
 
-  // protected function renderInstrumentRows(array $instruments) {
-  //   //dpm($instruments);
-
-  //   $form_rows = [];
-  //   $separator = '<div class="w-100"></div>';
-  //   foreach ($instruments as $delta => $instrument) {
-
-  //     $detectors_component = [];
-  //     if (empty($instrument['detectors'])) {
-  //       $detectors_component['table'] = [
-  //         '#type' => 'table',
-  //         '#header' => [
-  //           $this->t('#'),
-  //           $this->t('Name'),
-  //           $this->t('URI'),
-  //           $this->t('Type'),
-  //           $this->t('Status'),
-  //         ],
-  //         '#rows' => [],
-  //         '#empty' => $this->t('No detectors yet.'),
-  //       ];
-  //     }
-  //     else {
-  //       //WHEN THERE ARE DETECTORS, MUST GET ALL AND SELECT ONLY THE ONES IN ARRAY
-  //       $intURI = UTILS::uriFromAutocomplete($instrument['instrument']);
-
-  //       $detectorsList = [];
-  //       foreach ($instruments as $inst) {
-  //           $instrumentUri = UTILS::uriFromAutocomplete($inst['instrument']);
-  //           if ($instrumentUri === $intURI) {
-  //               $detectorsList = $inst['detectors'] ?? [];
-  //               break;
-  //           }
-  //       }
-
-  //       $detectors_component = $this->buildDetectorTable($this->getComponents($intURI), 'instrument_detectors_' . $delta, $detectorsList);
-
-  //     }
-
-  //     $form_row = array(
-  //       'instrument' => array(
-  //         'top' => array(
-  //           '#type' => 'markup',
-  //           '#markup' => '<div class="pt-3 col border border-white">',
-  //         ),
-  //         'instrument_instrument_'. $delta => array(
-  //           '#type' => 'textfield',
-  //           '#name' => 'instrument_instrument_' . $delta,
-  //           '#id' => 'instrument_instrument_' . $delta,
-  //           '#value' => $instrument['instrument'],
-  //           '#attributes' => [
-  //            'class' => ['open-tree-modal'],
-  //            'data-dialog-type' => 'modal',
-  //            'data-dialog-options' => json_encode(['width' => 800]),
-  //            'data-url' => Url::fromRoute(
-  //              'rep.tree_form',
-  //              [
-  //                'mode' => 'modal',
-  //                'elementtype' => 'instrument',
-  //              ],
-  //              [
-  //                'query' => ['field_id' => 'instrument_instrument_' . $delta]
-  //              ])->toString(),
-  //            'data-field-id' => 'instrument_instrument_' . $delta,
-  //            'data-search-value' => UTILS::uriFromAutocomplete($instrument['instrument']),
-  //            'data-elementtype' => 'instrument',
-  //           "autocomplete" => 'off',
-  //           ],
-  //           "#autocomplete" => 'off',
-  //           '#ajax' => [
-  //            'callback' => '::addDetectorCallback',
-  //            'event' => 'change',
-  //            'wrapper' => 'instrument_detectors_' . $delta,
-  //            'method' => 'replaceWith',
-  //            'effect' => 'fade',
-  //           ],
-
-  //         ),
-  //         'bottom' => array(
-  //           '#type' => 'markup',
-  //           '#markup' => '</div>',
-  //         ),
-  //       ),
-
-  //       'detectors' => [
-  //         'top' => [
-  //           '#type' => 'markup',
-  //           '#markup' => '<div class="pt-3 col border border-white">',
-  //         ],
-  //         // Mescla a configuração básica do container com o array condicional.
-  //         'instrument_detectors_' . $delta => array_merge([
-  //           '#type' => 'container',
-  //           '#attributes' => [
-  //             'id' => 'instrument_detectors_' . $delta,
-  //           ],
-  //         ], $detectors_component),
-  //         'bottom' => [
-  //           '#type' => 'markup',
-  //           '#markup' => '</div>',
-  //         ],
-  //       ],
-
-  //       'operations' => array(
-  //         'top' => array(
-  //           '#type' => 'markup',
-  //           '#markup' => '<div class="pt-3 col-md-1 border border-white">',
-  //         ),
-  //         'main' => array(
-  //           '#type' => 'submit',
-  //           '#name' => 'instrument_remove_' . $delta,
-  //           '#value' => $this->t('Remove'),
-  //           '#attributes' => array(
-  //             'class' => array('remove-row', 'btn', 'btn-sm', 'btn-danger' , 'delete-element-button'),
-  //             'id' => 'instrument-' . $delta,
-  //           ),
-  //         ),
-  //         'bottom' => array(
-  //           '#type' => 'markup',
-  //           '#markup' => '</div>' . $separator,
-  //         ),
-  //       ),
-  //     );
-
-  //     $rowId = 'row' . $delta;
-  //     $form_rows[] = [
-  //       $rowId => $form_row,
-  //     ];
-
-  //   }
-  //   return $form_rows;
-  // }
-
   /**
- * Render all instrument rows, always showing the full component list,
- * with any previously selected detectors still checked.
- *
- * @param array $instruments
- *   Array of instruments, each item:
- *     - instrument: autocomplete label
- *     - detectors:   array of URIs that were selected
- *
- * @return array
- *   Render array for the rows.
- */
-protected function renderInstrumentRows(array $instruments) {
-  $rows = [];
-  $separator = '<div class="w-100"></div>';
+   * Render all instrument rows, always showing the full component list,
+   * with any previously selected components still checked.
+   *
+   * @param array $instruments
+   *   Array of instruments, each item:
+   *     - instrument: autocomplete label
+   *     - components:   array of URIs that were selected
+   *
+   * @return array
+   *   Render array for the rows.
+   */
+  protected function renderInstrumentRows(array $instruments) {
+    $rows = [];
+    $separator = '<div class="w-100"></div>';
 
-  foreach ($instruments as $delta => $instrument) {
-    // Decode URI from autocomplete label.
-    $instrument_uri = Utils::uriFromAutocomplete($instrument['instrument']);
+    foreach ($instruments as $delta => $instrument) {
+      // Decode URI from autocomplete label.
+      $instrument_uri = Utils::uriFromAutocomplete($instrument['instrument']);
 
-    // Always fetch full component list.
-    $components = $instrument_uri
-      ? $this->getComponents($instrument_uri)
-      : [];
+      // Always fetch full component list.
+      $components = $instrument_uri
+        ? $this->getComponents($instrument_uri)
+        : [];
 
-    // Load persisted selections.
-    $selected = $instrument['detectors'] ?? [];
+      // Load persisted selections.
+      $selected = $instrument['components'] ?? [];
 
-    // Build the detector table (always, even if $selected is empty).
-    $detector_table = $this->buildDetectorTable(
-      $components,
-      'instrument_detectors_' . $delta,
-      $selected
-    );
+      // Build the component table (always, even if $selected is empty).
+      $component_table = $this->buildComponentTable(
+        $components,
+        'instrument_components_' . $delta,
+        $selected
+      );
 
-    // Build the instrument field with your existing modal settings.
-    $instrument_field = [
-      '#type' => 'textfield',
-      '#name' => "instrument_instrument_$delta",
-      '#id' => "instrument_instrument_$delta",
-      '#value' => $instrument['instrument'],
-      '#attributes' => [
-        'class' => ['open-tree-modal'],
-        'data-dialog-type' => 'modal',
-        'data-dialog-options' => json_encode(['width' => 800]),
-        'data-url' => Url::fromRoute('rep.tree_form', [
-          'mode' => 'modal',
-          'elementtype' => 'instrument',
-        ], ['query' => ['field_id' => "instrument_instrument_$delta"]])->toString(),
-        'data-field-id' => "instrument_instrument_$delta",
-        'data-search-value' => Html::escape($instrument_uri),
-        'data-elementtype' => 'instrument',
-        'autocomplete' => 'off',
-      ],
-      '#autocomplete' => 'off',
-      '#ajax' => [
-        'callback' => '::addDetectorCallback',
-        'event'    => 'change',
-        'wrapper'  => 'instrument_detectors_' . $delta,
-        'method'   => 'replaceWith',
-        'effect'   => 'fade',
-      ],
-    ];
-
-    // Assemble the row.
-    $rows[] = [
-      "row$delta" => [
-        'instrument' => [
-          'top'   => ['#markup' => '<div class="pt-3 col border border-white">'],
-          'field' => $instrument_field,
-          'bottom'=> ['#markup' => '</div>'],
+      // Build the instrument field with your existing modal settings.
+      $instrument_field = [
+        '#type' => 'textfield',
+        '#name' => "instrument_instrument_$delta",
+        '#id' => "instrument_instrument_$delta",
+        '#value' => $instrument['instrument'],
+        '#attributes' => [
+          'class' => ['open-tree-modal'],
+          'data-dialog-type' => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url' => Url::fromRoute('rep.tree_form', [
+            'mode' => 'modal',
+            'elementtype' => 'instrument',
+          ], ['query' => ['field_id' => "instrument_instrument_$delta"]])->toString(),
+          'data-field-id' => "instrument_instrument_$delta",
+          'data-search-value' => Html::escape($instrument_uri),
+          'data-elementtype' => 'instrument',
+          'autocomplete' => 'off',
         ],
-        'detectors' => [
-          'top'   => ['#markup' => '<div class="pt-3 col border border-white">'],
-          // Ensure '#tree' so selections persist:
-          'instrument_detectors_' . $delta => array_merge(
-            ['#type' => 'container', '#attributes' => ['id' => 'instrument_detectors_' . $delta], '#tree' => TRUE],
-            $detector_table
-          ),
-          'bottom'=> ['#markup' => '</div>'],
+        '#autocomplete' => 'off',
+        '#ajax' => [
+          'callback' => '::addComponentCallback',
+          'event'    => 'change',
+          'wrapper'  => 'instrument_components_' . $delta,
+          'method'   => 'replaceWith',
+          'effect'   => 'fade',
         ],
-        'operations' => [
-          'top'   => ['#markup' => '<div class="pt-3 col-md-1 border border-white">'],
-          'remove'=> [
-            '#type' => 'submit',
-            '#name' => "instrument_remove_$delta",
-            '#value'=> $this->t('Remove'),
-            '#attributes' => [
-              'class' => ['remove-row','btn','btn-sm','btn-danger','delete-element-button'],
-            ],
+      ];
+
+      // Assemble the row.
+      $rows[] = [
+        "row$delta" => [
+          'instrument' => [
+            'top'   => ['#markup' => '<div class="pt-3 col border border-white">'],
+            'field' => $instrument_field,
+            'bottom'=> ['#markup' => '</div>'],
           ],
-          'bottom'=> ['#markup' => '</div>' . $separator],
+          'components' => [
+            'top'   => ['#markup' => '<div class="pt-3 col border border-white">'],
+            // Ensure '#tree' so selections persist:
+            'instrument_components_' . $delta => array_merge(
+              ['#type' => 'container', '#attributes' => ['id' => 'instrument_components_' . $delta], '#tree' => TRUE],
+              $component_table
+            ),
+            'bottom'=> ['#markup' => '</div>'],
+          ],
+          'operations' => [
+            'top'   => ['#markup' => '<div class="pt-3 col-md-1 border border-white">'],
+            'remove'=> [
+              '#type' => 'submit',
+              '#name' => "instrument_remove_$delta",
+              '#value'=> $this->t('Remove'),
+              '#attributes' => [
+                'class' => ['remove-row','btn','btn-sm','btn-danger','delete-element-button'],
+              ],
+            ],
+            'bottom'=> ['#markup' => '</div>' . $separator],
+          ],
         ],
-      ],
-    ];
+      ];
+    }
+
+    return $rows;
   }
 
-  return $rows;
-}
-
-
-  public function addDetectorCallback(array &$form, FormStateInterface $form_state) {
+  public function addComponentCallback(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $delta = str_replace('instrument_instrument_', '', $triggering_element['#name']);
-    $container_id = 'instrument_detectors_' . $delta;
-    $instrumentURI = $form_state->getValue('instrument_instrument_' . $delta) !== '' ? $form_state->getValue('instrument_instrument_' . $delta) : $form_state->getUserInput()['instrument_instrument_' . $delta];
+    $container_id = 'instrument_components_' . $delta;
+    // $instrumentURI = $form_state->getValue('instrument_instrument_' . $delta) !== '' ? $form_state->getValue('instrument_instrument_' . $delta) : $form_state->getUserInput()['instrument_instrument_' . $delta];
+    $input = $form_state->getUserInput();
+    $instrumentURI = $input['instrument_instrument_' . $delta] ?? '';
     $instrument_uri = Utils::uriFromAutocomplete($instrumentURI);
     $instruments = \Drupal::state()->get('my_form_instruments');
 
@@ -816,24 +685,29 @@ protected function renderInstrumentRows(array $instruments) {
     }
 
     // Check if container exists
-    if (!isset($form['instruments']['rows'][$delta]['row'.$delta]['detectors'][$container_id])) {
+    if (!isset($form['instruments']['rows'][$delta]['row'.$delta]['components'][$container_id])) {
         \Drupal::logger('custom_module')->error('Container not found for delta: @delta', ['@delta' => $delta]);
         return [
             '#markup' => $this->t('Error: Container not found for delta @delta.', ['@delta' => $delta]),
         ];
     }
 
-    // Get detectors from API
+    // Get components from API
     $components = $this->getComponents($instrument_uri);
 
-    // Add detectors to instrument
-    self::updateInstruments($form_state);
+    // Add components to instrument
+    $this->updateInstruments($form_state);
 
-    // Render detectors
-    $detectorTable = $this->buildDetectorTable($components, $container_id);
+    // Render components
+    // $componentTable = $this->buildComponentTable($components, $container_id);
+    $componentTable = $this->buildComponentTable(
+      $components,
+      $container_id,
+      \Drupal::state()->get('my_form_instruments')[$delta]['components'] ?? []
+    );
 
-    // Replace the existing detector container with the updated table
-    $response->addCommand(new ReplaceCommand('#' . $container_id, $detectorTable));
+    // Replace the existing component container with the updated table
+    $response->addCommand(new ReplaceCommand('#' . $container_id, $componentTable));
 
     return $response;
   }
@@ -848,12 +722,12 @@ protected function renderInstrumentRows(array $instruments) {
       foreach ($instruments as $instrument_id => $instrument) {
         if (isset($instrument_id) && isset($instrument)) {
           $instruments[$instrument_id]['instrument'] = $input['instrument_instrument_' . $instrument_id] ?? '';
-          $detector = [];
-          foreach ($input['instrument_detectors_' . $instrument_id]  as $key => $value) {
-            $detector[] = $value;
+          $component = [];
+          foreach ($input['instrument_components_' . $instrument_id]  as $key => $value) {
+            $component[] = $value;
           }
-          //$instruments[$instrument_id]['detectors'] = $input['instrument_detectors_' . $instrument_id] ?? '';
-          $instruments[$instrument_id]['detectors'] = $detector ?? [];
+          //$instruments[$instrument_id]['components'] = $input['instrument_components_' . $instrument_id] ?? '';
+          $instruments[$instrument_id]['components'] = $component ?? [];
         }
       }
     }
@@ -876,13 +750,13 @@ protected function renderInstrumentRows(array $instruments) {
 
         if ($instrumentUri) {
 
-            $detectors = isset($instrument->detectors) && is_array($instrument->detectors)
-                ? array_map(fn($detector) => $detector->uri, $instrument->detectors)
+            $components = isset($instrument->components) && is_array($instrument->components)
+                ? array_map(fn($component) => $component->uri, $instrument->components)
                 : [];
 
             $instrumentData[] = [
                 'instrument' => UTILS::fieldToAutocomplete($instrumentUri,$instrumentLabel),
-                'detectors' => $detectors
+                'components' => $components
             ];
         }
     }
@@ -908,18 +782,17 @@ protected function renderInstrumentRows(array $instruments) {
     foreach ($instruments as $instrument) {
         if (!empty($instrument['instrument'])) {
             $instrumentUri = Utils::uriFromAutocomplete($instrument['instrument']);
-            $detectors = [];
+            $components = [];
 
-            // Adiciona os detectores ao array se existirem
-            if (!empty($instrument['detectors'])) {
-                foreach ($instrument['detectors'] as $detector) {
-                    $detectors[] = $detector;
+            if (!empty($instrument['components'])) {
+                foreach ($instrument['components'] as $component) {
+                    $components[] = $component;
                 }
             }
 
             $requiredInstrumentation[] = [
                 'instrumentUri' => $instrumentUri,
-                'detectors' => $detectors
+                'components' => $components
             ];
         }
     }
@@ -942,7 +815,7 @@ protected function renderInstrumentRows(array $instruments) {
    */
   protected function addInstrumentRow(FormStateInterface $form_state) {
     $instruments = \Drupal::state()->get('my_form_instruments') ?? [];
-    $instruments[] = ['instrument'=>'', 'detectors'=>[]];
+    $instruments[] = ['instrument'=>'', 'components'=>[]];
     \Drupal::state()->set('my_form_instruments', $instruments);
     $form_state->setRebuild(TRUE);
   }
@@ -1348,7 +1221,7 @@ protected function renderInstrumentRows(array $instruments) {
 
           // In order to update the task it is necessary to
           // add the following to the task: the task itself, its
-          // instruments, its detectors and its codes
+          // instruments, its components and its codes
           $api->elementAdd('task',$taskJSON);
 
           // TODO: Save instruments API End-Point
@@ -1388,7 +1261,7 @@ protected function renderInstrumentRows(array $instruments) {
 
   public function getComponents($instrumentUri) {
     $root_url = \Drupal::request()->getBaseUrl();
-    // Call to get Detectors
+    // Call to get Components
     $api = \Drupal::service('rep.api_connector');
     $response = $api->componentListFromInstrument($instrumentUri);
 
@@ -1401,7 +1274,7 @@ protected function renderInstrumentRows(array $instruments) {
     // Decode Body
     $urls = json_decode($data['body'], true);
 
-    // Task detectors
+    // Task components
     $components = [];
     foreach ($urls as $url) {
       $componentData = $api->getUri($url);
@@ -1418,10 +1291,10 @@ protected function renderInstrumentRows(array $instruments) {
   }
 
   /**
-   * Build a detectors table grouped by their 'type' field.
+   * Build a components table grouped by their 'type' field.
    *
-   * @param array $detectors
-   *   A list of detector arrays, each containing:
+   * @param array $components
+   *   A list of component arrays, each containing:
    *     - name:   string label
    *     - uri:    string URI
    *     - type:   string type name
@@ -1434,7 +1307,7 @@ protected function renderInstrumentRows(array $instruments) {
    * @return array
    *   A renderable array for a Drupal table, wrapped in a container.
    */
-  protected function buildDetectorTable(array $detectors, $container_id, array $arraySelected = []) {
+  protected function buildComponentTable(array $components, $container_id, array $arraySelected = []) {
     // Build table header: checkbox + name + URI + type + status.
     $header = [
       $this->t('#'),
@@ -1444,8 +1317,8 @@ protected function renderInstrumentRows(array $instruments) {
       $this->t('Status'),
     ];
 
-    // Sort detectors by their 'type' so grouping works.
-    usort($detectors, function($a, $b) {
+    // Sort components by their 'type' so grouping works.
+    usort($components, function($a, $b) {
       return strcmp($a['type'], $b['type']);
     });
 
@@ -1456,10 +1329,10 @@ protected function renderInstrumentRows(array $instruments) {
     $rows = [];
     $current_type = NULL;
 
-    foreach ($detectors as $detector) {
+    foreach ($components as $component) {
       // Whenever the type changes, inject a full-width grouping row.
-      if ($detector['type'] !== $current_type) {
-        $current_type = $detector['type'];
+      if ($component['type'] !== $current_type) {
+        $current_type = $component['type'];
         $rows[] = [
           // The 'data' array holds a single cell with colspan == number of columns.
           'data' => [
@@ -1468,10 +1341,10 @@ protected function renderInstrumentRows(array $instruments) {
                 '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
               ],
               'colspan' => count($header),
-              'class' => ['detector-type-row'],
+              'class' => ['component-type-row'],
             ],
           ],
-          'class' => ['detector-type-header'],
+          'class' => ['component-type-header'],
         ];
       }
 
@@ -1479,8 +1352,8 @@ protected function renderInstrumentRows(array $instruments) {
       $checkbox = [
         '#type' => 'checkbox',
         '#name' => $container_id . '[]',
-        '#return_value' => $detector['uri'],
-        '#checked' => in_array($detector['uri'], $arraySelected),
+        '#return_value' => $component['uri'],
+        '#checked' => in_array($component['uri'], $arraySelected),
         // Ajax behavior to re-render this table on change.
         '#ajax' => [
           'callback' => '::ajaxAddInstrumentRow',
@@ -1489,27 +1362,27 @@ protected function renderInstrumentRows(array $instruments) {
           'progress' => ['type' => 'throbber'],
         ],
         '#executes_submit_callback' => TRUE,
-        '#attributes' => ['class' => ['instrument-detector-ajax']],
+        '#attributes' => ['class' => ['instrument-component-ajax']],
       ];
       $checkbox_rendered = $renderer->render($checkbox);
 
-      // Append the normal detector row.
+      // Append the normal component row.
       $rows[] = [
         'data' => [
           $checkbox_rendered,
           // Link to describe page.
           t('<a target="_new" href="@url">@name</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($detector['uri']),
-            '@name' => Html::escape($detector['name']),
+            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+            '@name' => Html::escape($component['name']),
           ]),
           // Link to URI.
           t('<a target="_new" href="@url">@uri</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($detector['uri']),
-            '@uri' => Html::escape(Utils::namespaceUri($detector['uri'])),
+            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+            '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
           ]),
           // Render type and status safely.
-          // Html::escape($detector['type']),
-          Html::escape($detector['status']),
+          // Html::escape($component['type']),
+          Html::escape($component['status']),
         ],
       ];
     }
@@ -1522,7 +1395,7 @@ protected function renderInstrumentRows(array $instruments) {
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $rows,
-        '#empty' => $this->t('No detectors found.'),
+        '#empty' => $this->t('No components found.'),
         '#attributes' => ['class' => ['table', 'table-striped']],
       ],
     ];
