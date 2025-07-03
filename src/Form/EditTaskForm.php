@@ -89,6 +89,12 @@ class EditTaskForm extends FormBase {
     }
 
     if ($state === 'init') {
+
+      // Release values cached in the editor because sometimes the form crash and old values keep in the cache
+      \Drupal::state()->delete('my_form_basic');
+      \Drupal::state()->delete('my_form_instruments');
+      \Drupal::state()->delete('my_form_tasks');
+
       // RESET STATE TO BASIC
       $state = 'basic';
 
@@ -1241,9 +1247,10 @@ class EditTaskForm extends FormBase {
           // instruments, its detectors and its codes
           $api->elementAdd('task',$taskJSON);
 
-          if (isset($instruments)) {
-            $this->saveInstruments($this->getTask()->uri,$instruments);
-          }
+          // TODO: Save instruments API End-Point
+          // if (isset($instruments)) {
+          //   $this->saveInstruments($this->getTask()->uri,$instruments);
+          // }
 
           // Release values cached in the editor
           \Drupal::state()->delete('my_form_basic');
