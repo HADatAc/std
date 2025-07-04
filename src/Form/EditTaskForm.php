@@ -129,7 +129,17 @@ class EditTaskForm extends FormBase {
 
     $form['task_title'] = [
       '#type' => 'markup',
-      '#markup' => '<h3 class="mt-5">Edit Task</h3><br>',
+      '#markup' => '<h3 class="mt-5">Edit Task Form</h3>',
+    ];
+
+    $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
+    $form['process_label'] = [
+      '#type' => 'markup',
+      '#markup' => '<h4 class="text-secondary"><span class="text-dark">Process: </span>' . $process->label . '</h4>',
+    ];
+
+    $form['breakcrumb'] = [
+      '#markup' => $this->buildBreadcrumb().'<br>',
     ];
 
     $form['current_state'] = [
@@ -183,9 +193,13 @@ class EditTaskForm extends FormBase {
 
     if ($this->getState() == 'basic') {
 
-      $taskstem = '';
-      if (isset($basic['taskstem'])) {
-        $taskstem = $basic['taskstem'];
+      $tasktype = '';
+      if (isset($basic['tasktype'])) {
+        $tasktype = $basic['tasktype'];
+      }
+      $tasktemporalddependency = '';
+      if (isset($basic['tasktemporaldependency'])) {
+        $tasktype = $basic['tasktemporaldependency'];
       }
       $name = '';
       if (isset($basic['name'])) {
@@ -216,28 +230,28 @@ class EditTaskForm extends FormBase {
         $typeuri = $basic['typeUri'];
       }
 
-      $form['task_taskstem_hid'] = [
+      $form['task_tasktype_hid'] = [
         'top' => [
           '#type' => 'markup',
           '#markup' => '<div class="pt-3 col border border-white">',
         ],
         'main' => [
           '#type' => 'textfield',
-          '#title' => $this->t('Task Stem'),
-          '#name' => 'task_taskstem',
-          '#default_value' => $taskstem,
-          '#id' => 'task_taskstem',
-          '#parents' => ['task_taskstem'],
+          '#title' => $this->t('Task Type'),
+          '#name' => 'task_tasktype',
+          '#default_value' => $tasktype,
+          '#id' => 'task_tasktype',
+          '#parents' => ['task_tasktype'],
           '#attributes' => [
             'class' => ['open-tree-modal'],
             'data-dialog-type' => 'modal',
             'data-dialog-options' => json_encode(['width' => 800]),
             'data-url' => Url::fromRoute('rep.tree_form', [
               'mode' => 'modal',
-              'elementtype' => 'taskstem',
-            ], ['query' => ['field_id' => 'task_taskstem']])->toString(),
-            'data-field-id' => 'task_taskstem',
-            'data-elementtype' => 'taskstem',
+              'elementtype' => 'tasktype',
+            ], ['query' => ['field_id' => 'task_tasktype']])->toString(),
+            'data-field-id' => 'task_tasktype',
+            'data-elementtype' => 'tasktype',
             'autocomplete' => 'off',
           ],
         ],
@@ -246,9 +260,47 @@ class EditTaskForm extends FormBase {
           '#markup' => '</div>',
         ],
       ];
-      $form['task_taskstem'] = [
+
+      $form['task_tasktype'] = [
         '#type' => 'hidden',
-        '#value' => $taskstem,
+        '#value' => $tasktype,
+      ];
+
+      // TODOPP Ainda não está impelmentado quandod é ou não visivel
+      $form['task_tasktemporaldependency_hid'] = [
+        'top' => [
+          '#type' => 'markup',
+          '#markup' => '<div class="pt-3 col border border-white">',
+        ],
+        'main' => [
+          '#type' => 'textfield',
+          '#title' => $this->t('Task Temporal Dependency'),
+          '#name' => 'task_tasktemporaldependency',
+          '#default_value' => $tasktemporalddependency,
+          '#id' => 'task_tasktemporaldependency',
+          '#parents' => ['task_tasktemporaldependency'],
+          '#attributes' => [
+            'class' => ['open-tree-modal'],
+            'data-dialog-type' => 'modal',
+            'data-dialog-options' => json_encode(['width' => 800]),
+            'data-url' => Url::fromRoute('rep.tree_form', [
+              'mode' => 'modal',
+              'elementtype' => 'tasktemporaldependency',
+            ], ['query' => ['field_id' => 'task_tasktemporaldependency']])->toString(),
+            'data-field-id' => 'task_tasktemporaldependency',
+            'data-elementtype' => 'tasktemporaldependency',
+            'autocomplete' => 'off',
+          ],
+        ],
+        'bottom' => [
+          '#type' => 'markup',
+          '#markup' => '</div>',
+        ],
+      ];
+
+      $form['task_tasktemporaldependency'] = [
+        '#type' => 'hidden',
+        '#value' => $tasktemporalddependency,
       ];
       $form['task_name'] = [
         '#type' => 'textfield',
@@ -379,9 +431,9 @@ class EditTaskForm extends FormBase {
       ];
 
       // Tell Drupal “this string is already safe HTML”
-      $form['subtasks']['header']['title'] = [
-        '#markup' => $this->buildBreadcrumb(),
-      ];
+      // $form['subtasks']['header']['title'] = [
+      //   '#markup' => $this->buildBreadcrumb(),
+      // ];
 
       // 2) Same for o mini-form
       $form['subtasks']['new_subtask_form'] = [
@@ -513,7 +565,8 @@ class EditTaskForm extends FormBase {
 
     if (isset($input) && is_array($input) &&
         isset($basic) && is_array($basic)) {
-      $basic['taskstem'] = $input['task_taskstem'] ?? $this->getTask()->typeUri;
+      $basic['tasktype'] = $input['task_tasktype'] ?? $this->getTask()->typeUri; // TODOPP alterar para a propriedade correcta
+      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? $this->getTask()->typeUri; // TODOPP alterar para a propriedade correcta
       $basic['name']        = $input['task_name'] ?? $this->getTask()->label;
       $basic['language']    = $input['task_language'] ?? $this->getTask()->hasLanguage;
       $basic['version']     = $input['task_version'] ?? $this->getTask()->hasVersion;
@@ -530,7 +583,8 @@ class EditTaskForm extends FormBase {
   public function populateBasic() {
     $basic = [
       'uri' => $this->getTask()->uri,
-      'taskstem' => UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel),
+      'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel), // TODOPP alterar para a propriedade correcta
+      'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel), // TODOPP alterar para a propriedade correcta
       'name' => $this->getTask()->label,
       'language' => $this->getTask()->hasLanguage,
       'version' => $this->getTask()->hasVersion,
@@ -653,7 +707,6 @@ class EditTaskForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $delta = str_replace('instrument_instrument_', '', $triggering_element['#name']);
     $container_id = 'instrument_components_' . $delta;
-    // $instrumentURI = $form_state->getValue('instrument_instrument_' . $delta) !== '' ? $form_state->getValue('instrument_instrument_' . $delta) : $form_state->getUserInput()['instrument_instrument_' . $delta];
     $input = $form_state->getUserInput();
     $instrumentURI = $input['instrument_instrument_' . $delta] ?? '';
     $instrument_uri = Utils::uriFromAutocomplete($instrumentURI);
@@ -765,6 +818,9 @@ class EditTaskForm extends FormBase {
     return $instruments;
   }
 
+  // TODOPP
+  // É necessário fazer o end-point no FusekiAPIConnector.php (taskInstrumentUpdate)
+  // está um TODOPP no local onde é para colocar o código
   protected function saveInstruments($taskUri, array $instruments) {
     if (!isset($taskUri)) {
         \Drupal::messenger()->addError(t("No task URI has been provided to save instruments."));
@@ -1159,7 +1215,7 @@ class EditTaskForm extends FormBase {
 
       if (!empty($basic)) {
 
-        if(strlen($basic['name']) < 1 || strlen($basic['taskstem']) < 1 ) {
+        if(strlen($basic['name']) < 1 || strlen($basic['tasktype']) < 1 ) {
           $errors = true;
           \Drupal::messenger()->addError(t("Mandatory fields are required to be filled! Check 'Basic Task Porperties Tab'"));
         }
@@ -1194,18 +1250,20 @@ class EditTaskForm extends FormBase {
           $useremail = \Drupal::currentUser()->getEmail();
 
           $taskData = [
-            'uri'               => $this->getTask()->uri,
-            'typeUri'           => UTILS::uriFromAutocomplete($basic['taskstem']),
-            'hascoTypeUri'      => VSTOI::TASK,
-            'hasStatus'         => $this->getTask()->hasStatus,
-            'label'             => $basic['name'],
-            'hasLanguage'       => $this->getTask()->hasLanguage,
-            'hasVersion'        => $this->getTask()->hasVersion,
-            'hasSupertaskUri'   => $this->getTask()->hasSupertaskUri,
-            'comment'           => $basic['description'],
-            'hasWebDocument'    => $basic['webdocument'],
-            'hasSubtaskUris'    => $this->getTask()->hasSubtaskUris,
-            'hasSIRManagerEmail'=> $useremail,
+            'uri'                   => $this->getTask()->uri,
+            'typeUri'               => UTILS::uriFromAutocomplete($basic['tasktype']), // TODOPP alterar para a propriedade correcta
+            // TODOPP alterar para a propriedade correcta e descomentar a linha abaixo
+            // 'temporalDependencyUri' => UTILS::uriFromAutocomplete($basic['tasktemporaldependency']),
+            'hascoTypeUri'          => VSTOI::TASK,
+            'hasStatus'             => $this->getTask()->hasStatus,
+            'label'                 => $basic['name'],
+            'hasLanguage'           => $this->getTask()->hasLanguage,
+            'hasVersion'            => $this->getTask()->hasVersion,
+            'hasSupertaskUri'       => $this->getTask()->hasSupertaskUri,
+            'comment'               => $basic['description'],
+            'hasWebDocument'        => $basic['webdocument'],
+            'hasSubtaskUris'        => $this->getTask()->hasSubtaskUris,
+            'hasSIRManagerEmail'    => $useremail,
           ];
 
           // dpm(json_encode($taskData)); return false;
@@ -1224,7 +1282,8 @@ class EditTaskForm extends FormBase {
           // instruments, its components and its codes
           $api->elementAdd('task',$taskJSON);
 
-          // TODO: Save instruments API End-Point
+          // TODOPP
+          // Save instruments API End-Point uncomment to save
           // if (isset($instruments)) {
           //   $this->saveInstruments($this->getTask()->uri,$instruments);
           // }
@@ -1451,6 +1510,14 @@ class EditTaskForm extends FormBase {
   }
 
   public function ajaxSubtasksCallback(array &$form, FormStateInterface $form_state) {
+    $trigger = $form_state->getTriggeringElement();
+    if (str_starts_with($trigger['#name'], 'subtask_remove_')) {
+      $encoded = substr($trigger['#name'], strlen('subtask_remove_'));
+      $uri     = base64_decode($encoded);
+      // chama o serviço que apaga no backend
+      \Drupal::service('rep.api_connector')->elementDel('task', $uri);
+      \Drupal::messenger()->addStatus($this->t('Sub-task removed.'));
+    }
     // Render the updated subtasks table / form.
     $response = new AjaxResponse();
     $response->addCommand(new ReplaceCommand(
@@ -1492,8 +1559,8 @@ class EditTaskForm extends FormBase {
     $labels = [];
 
     // 1) Start with the top‐level process.
-    $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
-    $labels[] = $process->label;
+    // $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
+    // $labels[] = $process->label;
 
     // 2) Then walk down the supertask chain.
     $currentTask = $this->getTask();
