@@ -199,7 +199,7 @@ class EditTaskForm extends FormBase {
       }
       $tasktemporalddependency = '';
       if (isset($basic['tasktemporaldependency'])) {
-        $tasktype = $basic['tasktemporaldependency'];
+        $tasktemporalddependency = $basic['tasktemporaldependency'];
       }
       $name = '';
       if (isset($basic['name'])) {
@@ -248,10 +248,10 @@ class EditTaskForm extends FormBase {
             'data-dialog-options' => json_encode(['width' => 800]),
             'data-url' => Url::fromRoute('rep.tree_form', [
               'mode' => 'modal',
-              'elementtype' => 'tasktype',
+              'elementtype' => 'task',
             ], ['query' => ['field_id' => 'task_tasktype']])->toString(),
             'data-field-id' => 'task_tasktype',
-            'data-elementtype' => 'tasktype',
+            'data-elementtype' => 'task',
             'autocomplete' => 'off',
           ],
         ],
