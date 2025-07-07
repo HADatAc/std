@@ -104,8 +104,8 @@ class Task {
       }
 
       // Counts
-      $totInst = is_array($element['hasRequiredInstrumentationUris'])
-        ? count($element['hasRequiredInstrumentationUris'])
+      $totInst = is_array($element['hasRequiredInstrumentUris'])
+        ? count($element['hasRequiredInstrumentUris'])
         : 0;
       $totDet = 0;
       if (!empty($element['requiredInstrument']) && is_array($element['requiredInstrument'])) {
