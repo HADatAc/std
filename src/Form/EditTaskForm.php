@@ -866,7 +866,7 @@ class EditTaskForm extends FormBase {
 
   protected function populateInstruments() {
 
-    $instruments = $this->getTask()->requiredInstrumentation;
+    $instruments = $this->getTask()->requiredInstrument;
 
     $instrumentData = [];
 
@@ -907,7 +907,7 @@ class EditTaskForm extends FormBase {
 
     $api = \Drupal::service('rep.api_connector');
 
-    $requiredInstrumentation = [];
+    $requiredInstrument = [];
 
     foreach ($instruments as $instrument) {
         if (!empty($instrument['instrument'])) {
@@ -920,7 +920,7 @@ class EditTaskForm extends FormBase {
                 }
             }
 
-            $requiredInstrumentation[] = [
+            $requiredInstrument[] = [
                 'instrumentUri' => $instrumentUri,
                 'components' => $components
             ];
@@ -929,7 +929,7 @@ class EditTaskForm extends FormBase {
 
     $taskData = [
         'taskuri' => $taskUri,
-        'requiredInstrumentation' => $requiredInstrumentation
+        'requiredInstrument' => $requiredInstrument
     ];
 
     $api->taskInstrumentUpdate($taskData);

@@ -1034,7 +1034,7 @@ class AddTaskForm extends FormBase {
 
     $api = \Drupal::service('rep.api_connector');
 
-    $requiredInstrumentation = [];
+    $requiredInstrument = [];
 
     foreach ($instruments as $instrument) {
         if (!empty($instrument['instrument'])) {
@@ -1049,7 +1049,7 @@ class AddTaskForm extends FormBase {
             }
 
             // Estrutura o array com o URI do instrumento e o array de detectores
-            $requiredInstrumentation[] = [
+            $requiredInstrument[] = [
                 'instrumentUri' => $instrumentUri,
                 'detectors' => $detectors
             ];
@@ -1059,7 +1059,7 @@ class AddTaskForm extends FormBase {
     // Estrutura final do objeto JSON
     $taskData = [
         'taskuri' => $taskUri,
-        'requiredInstrumentation' => $requiredInstrumentation
+        'requiredInstrument' => $requiredInstrument
     ];
 
     // Envia o objeto para a API
