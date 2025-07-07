@@ -89,6 +89,14 @@ class EditTaskForm extends FormBase {
       //dpm($this->getTask());
     }
 
+    // 1) Find Task Type
+    $taskTypeUri = $this->getTask()->hasTaskType;;
+    $isAbstract = ($taskTypeUri === VSTOI::ABSTRACT_TASK);
+
+    // 2) Define flags
+    $showSubTasks     = $isAbstract;
+    $showInstruments  = !$isAbstract;
+
     if ($state === 'init') {
 
       // Release values cached in the editor because sometimes the form crash and old values keep in the cache
@@ -165,6 +173,7 @@ class EditTaskForm extends FormBase {
     ];
 
     foreach ($states as $key => $label) {
+
       $form['pills_card'][$key] = [
         '#type' => 'button',
         '#value' => $label,
@@ -174,6 +183,9 @@ class EditTaskForm extends FormBase {
           'data-state' => $key,
           'role' => 'presentation',
         ],
+        '#access' => ($key === 'basic')
+                || ($key === 'tasks'      && $showSubTasks)
+                || ($key === 'instrument' && $showInstruments),
         '#ajax' => [
           'callback' => '::pills_card_callback',
           'event' => 'click',
@@ -350,7 +362,7 @@ class EditTaskForm extends FormBase {
 
     }
 
-    if ($this->getState() == 'instrument') {
+    if ($showInstruments && $this->getState() == 'instrument') {
 
       /*
       *      INSTRUMENTS
@@ -409,7 +421,7 @@ class EditTaskForm extends FormBase {
 
     /* ======================= TASKS ======================= */
 
-    if ($this->getState() == 'tasks') {
+    if ($showSubTasks && $this->getState() == 'tasks') {
 
       // *
       // *      TASKS
