@@ -466,34 +466,55 @@ class EditTaskForm extends FormBase {
         ],
       ];
 
+      // $form['subtasks']['new_subtask_form']['subtask_type'] = [
+      //   'top' => [
+      //     '#type' => 'markup',
+      //     '#markup' => '<div class="col-md-3 ms-3">',
+      //   ],
+      //   'main' => [
+      //     '#type' => 'textfield',
+      //     '#title' => $this->t('Task Type'),
+      //     // '#name' => 'subtask_type',
+      //     '#default_value' => '',
+      //     '#id' => 'subtask_type',
+      //     // '#parents' => ['subtask_type'],
+      //     '#attributes' => [
+      //       'class' => ['open-tree-modal'],
+      //       'data-dialog-type' => 'modal',
+      //       'data-dialog-options' => json_encode(['width' => 800]),
+      //       'data-url' => Url::fromRoute('rep.tree_form', [
+      //         'mode' => 'modal',
+      //         'elementtype' => 'task',
+      //       ], ['query' => ['field_id' => 'subtask_type']])->toString(),
+      //       'data-field-id' => 'subtask_type',
+      //       'data-elementtype' => 'task',
+      //       'autocomplete' => 'off',
+      //     ],
+      //   ],
+      //   'bottom' => [
+      //     '#type' => 'markup',
+      //     '#markup' => '</div>',
+      //   ],
+      // ];
       $form['subtasks']['new_subtask_form']['subtask_type'] = [
-        'top' => [
-          '#type' => 'markup',
-          '#markup' => '<div class="col-md-3 ms-3">',
-        ],
-        'main' => [
-          '#type' => 'textfield',
-          '#title' => $this->t('Task Type'),
-          // '#name' => 'subtask_type',
-          '#default_value' => '',
-          '#id' => 'subtask_type',
-          // '#parents' => ['subtask_type'],
-          '#attributes' => [
-            'class' => ['open-tree-modal'],
-            'data-dialog-type' => 'modal',
-            'data-dialog-options' => json_encode(['width' => 800]),
-            'data-url' => Url::fromRoute('rep.tree_form', [
-              'mode' => 'modal',
-              'elementtype' => 'task',
-            ], ['query' => ['field_id' => 'subtask_type']])->toString(),
-            'data-field-id' => 'subtask_type',
-            'data-elementtype' => 'task',
-            'autocomplete' => 'off',
-          ],
-        ],
-        'bottom' => [
-          '#type' => 'markup',
-          '#markup' => '</div>',
+        '#type'          => 'textfield',
+        '#title'         => $this->t('Task Type'),
+        '#prefix'        => '<div class="col-md-3 ms-3">',
+        '#suffix'        => '</div>',
+        '#default_value' => '',
+        '#id'            => 'subtask_type',
+        '#attributes'    => [
+          'class'               => ['open-tree-modal'],
+          'data-dialog-type'    => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url'            => Url::fromRoute('rep.tree_form', [
+                                    'mode'        => 'modal',
+                                    'elementtype' => 'task',
+                                  ], ['query' => ['field_id' => 'subtask_type']])
+                                  ->toString(),
+          'data-field-id'       => 'subtask_type',
+          'data-elementtype'    => 'task',
+          'autocomplete'        => 'off',
         ],
       ];
 
@@ -501,7 +522,8 @@ class EditTaskForm extends FormBase {
         '#type' => 'submit',
         '#value' => $this->t('Create Sub-Task'),
         '#limit_validation_errors' => [
-          ['subtasks', 'new_subtask_form', 'subtask_name', 'subtask_type'],
+          ['subtasks', 'new_subtask_form', 'subtask_name'],
+          ['subtasks', 'new_subtask_form', 'subtask_type'],
         ],
         '#validate' => ['::validateSubtaskName'],
         '#submit'   => ['::createSubtaskSubmit'],
@@ -515,7 +537,7 @@ class EditTaskForm extends FormBase {
           // Só habilita quando name **e** type estiverem “filled”
           'enabled' => [
             ':input[name="subtasks[new_subtask_form][subtask_name]"]' => ['filled' => TRUE],
-            ':input[name="subtasks[new_subtask_form][subtask_type][main]"]' => ['filled' => TRUE],
+            ':input[name="subtasks[new_subtask_form][subtask_type]"]' => ['filled' => TRUE],
           ],
         ],
         '#attributes' => [
@@ -1522,16 +1544,15 @@ class EditTaskForm extends FormBase {
     $name = $form_state->getValue(['subtasks', 'new_subtask_form', 'subtask_name']);
     if (trim($name) === '') {
       $form_state->setErrorByName(
-        'subtasks][new_subtask_form][subtask_name',
+        'subtasks][new_subtask_form][subtask_name]',
         $this->t('You must enter a name for the sub-task.')
       );
     }
-    $type_array = $form_state->getValue(['subtasks','new_subtask_form','subtask_type']);
-    $type = isset($type_array['main']) ? $type_array['main'] : '';
-    if (trim((string) $type) === '') {
+    $type = $form_state->getValue(['subtasks', 'new_subtask_form', 'subtask_type']);
+    if (trim($type) === '') {
       $form_state->setErrorByName(
-        'subtasks][new_subtask_form][subtask_type',
-        $this->t('You must choose a Type for the sub-task.')
+        'subtasks][new_subtask_form][subtask_type]',
+        $this->t('You must enter a Type for the sub-task.')
       );
     }
   }
@@ -1539,7 +1560,7 @@ class EditTaskForm extends FormBase {
   public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
     // Pull the new task name
     $name = $form_state->getValue(['subtasks','new_subtask_form','subtask_name']);
-    $type = $form_state->getValue(['subtasks','new_subtask_form','subtask_type', 'main']);
+    $type = $form_state->getValue(['subtasks','new_subtask_form','subtask_type']);
 
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
@@ -1564,7 +1585,7 @@ class EditTaskForm extends FormBase {
     $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
 
     $form_state->setValue(['subtasks','new_subtask_form','subtask_name'], '');
-    $form_state->setValue(['subtasks','new_subtask_form','subtask_name', 'subtask_type', 'main'], '');
+    $form_state->setValue(['subtasks','new_subtask_form','subtask_type'], '');
 
     $form_state->setRebuild(TRUE);
   }
@@ -1594,7 +1615,7 @@ class EditTaskForm extends FormBase {
     ));
 
     $response->addCommand(new InvokeCommand(
-      'input[name="subtasks[new_subtask_form][subtask_type][main]"]',
+      'input[name="subtasks[new_subtask_form][subtask_type]"]',
       'val',
       ['']
     ));

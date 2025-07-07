@@ -77,15 +77,17 @@ class Task {
     // 4) Build each row. We use array_values() so $delta is 0,1,2…
     foreach (array_values($parsed) as $delta => $element) {
       // --- a) Extract fields with safe defaults ---
-      $uri_raw       = $element['uri']                     ?? '';
+      $uri_raw       = $element['uri'] ?? '';
       $namespacedUri = Utils::namespaceUri($uri_raw);
-      $label         = $element['label']                   ?? '';
-      $lang_code     = $element['hasLanguage']             ?? NULL;
+      $label         = $element['label'] ?? '';
+      $lang_code     = $element['hasLanguage'] ?? NULL;
+      $taskType      = UTILS::labelFromAutocomplete($element['hasTaskType']) ?? '';
+      // $taskTemporalDependency = $element['hasTemporalDependency'] ?? NULL;
       $lang_label    = $lang_code && isset($languages[$lang_code])
                       ? $languages[$lang_code]
                       : '';
-      $version       = $element['hasVersion']              ?? '';
-      $topTaskRaw    = $element['hasSupertaskUri']         ?? '';
+      $version       = $element['hasVersion'] ?? '';
+      $topTaskRaw    = $element['hasSupertaskUri'] ?? '';
       $topTaskNs     = Utils::namespaceUri($topTaskRaw);
 
       // Human-readable status
@@ -166,8 +168,8 @@ class Task {
             ]
           ),
           'element_number'          => $delta + 1, // 1-based index
-          'element_tasktype'        => '',  // TODOPP fill in with correct attribut
-          'element_temporaldependency' => '', // TODOPP fill in with correct attribut
+          'element_tasktype'        => $taskType,
+          'element_temporaldependency' => $taskTemporalDependency ?? '',
           'element_name'            => $label,
           // 'element_top_task'        => t(
           //   '<a target="_new" href=":link">:top</a>',
