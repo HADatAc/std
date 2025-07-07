@@ -129,11 +129,51 @@ class AddProcessForm extends FormBase {
       '#required' => true,
     ];
 
-    $form['process_top_task'] = [
+    $form['top_task_row'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['row']],
+    ];
+
+    $form['top_task_row']['process_top_task'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Top Task Name'),
       '#default_value' => '',
-      '#required' => true,
+      '#required' => TRUE,
+      '#wrapper_attributes' => [
+        'class' => ['col-md-6'],
+      ],
+    ];
+
+    $form['top_task_row']['process_top_task_type'] = [
+      'top' => [
+        '#type' => 'markup',
+        '#markup' => '<div class="col-md-6">',
+      ],
+      'main' => [
+        '#type' => 'textfield',
+        '#title' => $this->t('Top Task Type'),
+        '#name' => 'process_top_task_type',
+        '#default_value' => '',
+        '#id' => 'process_top_task_type',
+        '#parents' => ['process_top_task_type'],
+        '#required' => TRUE,
+        '#attributes' => [
+          'class' => ['open-tree-modal'],
+          'data-dialog-type' => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url' => Url::fromRoute('rep.tree_form', [
+            'mode' => 'modal',
+            'elementtype' => 'task',
+          ], ['query' => ['field_id' => 'process_top_task_type']])->toString(),
+          'data-field-id' => 'process_top_task_type',
+          'data-elementtype' => 'task',
+          'autocomplete' => 'off',
+        ],
+      ],
+      'bottom' => [
+        '#type' => 'markup',
+        '#markup' => '</div>',
+      ],
     ];
 
     // Add a hidden field to persist the process URI between form rebuilds.
@@ -279,6 +319,9 @@ class AddProcessForm extends FormBase {
       if(strlen($form_state->getValue('process_top_task')) < 1) {
         $form_state->setErrorByName('process_top_task', $this->t('Please enter a valid Top Task Name'));
       }
+      if(strlen($form_state->getValue('process_top_task_type')) < 1) {
+        $form_state->setErrorByName('process_top_task_type', $this->t('Please enter a valid Top Task Type'));
+      }
     } else {
       self::backUrl();
     }
@@ -363,6 +406,7 @@ class AddProcessForm extends FormBase {
       $taskJSON = '{"uri":"' . $newTaskUri . '",'
         . '"typeUri":"' . VSTOI::TASK . '",'
         . '"hascoTypeUri":"' . VSTOI::TASK . '",'
+        . '"hasTaskType":"' . Utils::uriFromAutocomplete($form_state->getValue('process_top_task_type')) . '",'
         . '"hasStatus":"' . VSTOI::DRAFT . '",'
         . '"label":"' . $form_state->getValue('process_top_task') . '",'
         . '"hasLanguage":"' . $form_state->getValue('process_language') . '",'
