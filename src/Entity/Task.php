@@ -81,7 +81,7 @@ class Task {
       $namespacedUri = Utils::namespaceUri($uri_raw);
       $label         = $element['label'] ?? '';
       $lang_code     = $element['hasLanguage'] ?? NULL;
-      $taskType      = UTILS::labelFromAutocomplete($element['hasTaskType']) ?? '';
+      $taskType      = UTILS::labelFromAutocomplete($element['hasType']) ?? '';
       // $taskTemporalDependency = $element['hasTemporalDependency'] ?? NULL;
       $lang_label    = $lang_code && isset($languages[$lang_code])
                       ? $languages[$lang_code]
@@ -122,7 +122,7 @@ class Task {
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
         'processuri' => $processuri,
-        'state'      => 'tasks',
+        'state'      => $element['hasType'] === VSTOI::ABSTRACT_TASK ? 'tasks':'basic',
         'taskuri'    => base64_encode($uri_raw),
       ])->toString();
       $edit_button_html = t(

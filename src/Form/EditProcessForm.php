@@ -638,9 +638,12 @@ class EditProcessForm extends FormBase {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
 
+    $api = \Drupal::service('rep.api_connector');
+    $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
+
     $url = Url::fromRoute('std.edit_task', [
         'processuri' => base64_encode($this->getProcessUri()),
-        'state' => 'tasks',
+        'state' => $topTask->hasType === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
     ]);
 

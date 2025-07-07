@@ -90,7 +90,7 @@ class EditTaskForm extends FormBase {
     }
 
     // 1) Find Task Type
-    $taskTypeUri = $this->getTask()->hasTaskType;;
+    $taskTypeUri = $this->getTask()->hasType;;
     $isAbstract = ($taskTypeUri === VSTOI::ABSTRACT_TASK);
 
     // 2) Define flags
@@ -639,7 +639,7 @@ class EditTaskForm extends FormBase {
 
     if (isset($input) && is_array($input) &&
         isset($basic) && is_array($basic)) {
-      $basic['tasktype'] = $input['task_tasktype'] ?? $this->getTask()->hasTaskType;
+      $basic['tasktype'] = $input['task_tasktype'] ?? $this->getTask()->hasType;
       $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? $this->getTask()->typeUri; // TODOPP alterar para a propriedade correcta
       $basic['name']        = $input['task_name'] ?? $this->getTask()->label;
       $basic['language']    = $input['task_language'] ?? $this->getTask()->hasLanguage;
@@ -657,7 +657,7 @@ class EditTaskForm extends FormBase {
   public function populateBasic() {
     $basic = [
       'uri' => $this->getTask()->uri,
-      'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->hasTaskType, UTILS::getLabelFromURI($this->getTask()->hasTaskType)), // TODOPP alterar para a propriedade correcta
+      'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->hasType,$this->getTask()->hasType) , // TODOPP alterar para a propriedade correcta
       'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel), // TODOPP alterar para a propriedade correcta
       'name' => $this->getTask()->label,
       'language' => $this->getTask()->hasLanguage,
@@ -1327,7 +1327,7 @@ class EditTaskForm extends FormBase {
             'uri'                   => $this->getTask()->uri,
             'typeUri'               => VSTOI::TASK,
             'hascoTypeUri'          => VSTOI::TASK,
-            'hasTaskType'           => UTILS::uriFromAutocomplete($basic['tasktype']),
+            'hasType'           => UTILS::uriFromAutocomplete($basic['tasktype']),
             // TODOPP alterar para a propriedade correcta e descomentar a linha abaixo
             // 'temporalDependencyUri' => UTILS::uriFromAutocomplete($basic['tasktemporaldependency']),
             'hasStatus'             => $this->getTask()->hasStatus,
@@ -1572,7 +1572,7 @@ class EditTaskForm extends FormBase {
       'typeUri'           => VSTOI::TASK,
       'hascoTypeUri'      => VSTOI::TASK,
       'hasStatus'         => VSTOI::DRAFT,
-      'hasTaskType'       => $type,
+      'hasType'       => $type,
       // 'temporalDependencyUri' => '', // TODOPP
       'label'             => $name,
       'hasLanguage'       => $this->getTask()->hasLanguage,
