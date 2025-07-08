@@ -204,7 +204,7 @@ class EditProcessForm extends FormBase {
     // Add the Edit Task button next to the Top Task element
     $form['process_toptask_wrapper']['edit_task'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Edit Task'),
+      '#value' => $this->t('Edit Task Model'),
       '#submit' => ['::setBackUrl'],
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'edit-task-button', 'mt-2'],

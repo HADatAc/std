@@ -534,42 +534,6 @@ class EditTaskForm extends FormBase {
         ],
       ];
 
-      $form['subtasks']['new_subtask_form']['temporal_wrapper'] = [
-        '#type'       => 'container',
-        '#attributes' => ['class' => ['col-md-3','p-0']],
-        '#states'     => [
-          'visible' => [
-            ':input[name="subtasks[new_subtask_form][subtask_type]"]' => [
-              'value' => UTILS::fieldToAutocomplete(VSTOI::ABSTRACT_TASK, 'Abstract Task'),
-            ],
-          ],
-        ],
-      ];
-
-      $form['subtasks']['new_subtask_form']['temporal_wrapper']['subtask_temporal_dependency'] = [
-        '#type'          => 'textfield',
-        '#title'         => $this->t('Temporal Dependency'),
-        '#default_value' => '',
-        '#attributes'    => [
-          'class'               => ['open-tree-modal'],
-          'data-dialog-type'    => 'modal',
-          'data-dialog-options' => json_encode(['width' => 800]),
-          'data-url'            => Url::fromRoute('rep.tree_form', [
-                                    'mode'        => 'modal',
-                                    'elementtype' => 'tasktemporaldependency',
-                                  ], ['query' => ['field_id' => 'subtask_temporal_dependency']])
-                                  ->toString(),
-          'data-field-id'    => 'subtask_temporal_dependency',
-          'data-elementtype' => 'tasktemporaldependency',
-          'autocomplete'     => 'off',
-        ],
-      ];
-
-      $form['subtasks']['new_subtask_form']['subtask_type']['#ajax'] = [
-        'callback' => '::ajaxSubtaskTypeChanged',
-        'wrapper'  => 'subtasks-wrapper',
-      ];
-
       $form['subtasks']['new_subtask_form']['actions']['create_subtask'] = [
         '#type' => 'submit',
         '#value' => $this->t('Create Sub-Task'),
@@ -1625,21 +1589,12 @@ class EditTaskForm extends FormBase {
         $this->t('You must enter a Type for the sub-task.')
       );
     }
-    $dep  = $form_state->getValue(['subtasks','new_subtask_form','subtask_temporal_dependency']);
-    if (Utils::uriFromAutocomplete($type) === VSTOI::ABSTRACT_TASK && trim($dep) === '') {
-      $form_state->setErrorByName(
-        'subtasks][new_subtask_form][subtask_temporal_dependency]',
-        $this->t('Temporal Dependency is required for Abstract tasks.')
-      );
-    }
   }
 
   public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
     // Pull the new task name
     $name = $form_state->getValue(['subtasks','new_subtask_form','subtask_name']);
     $type = $form_state->getValue(['subtasks','new_subtask_form','subtask_type']);
-    $dependency = $form_state->getValue(['subtasks','new_subtask_form','subtask_temporal_dependency']);
-    $depUri     = Utils::uriFromAutocomplete($type) === VSTOI::ABSTRACT_TASK ? Utils::uriFromAutocomplete($dependency) : '';
 
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
@@ -1648,10 +1603,10 @@ class EditTaskForm extends FormBase {
     $newTaskUri = Utils::uriGen('task');
     $newSubtask = [
       'uri'                       => $newTaskUri,
-      'typeUri'                   => $type,
+      'typeUri'                   => UTILS::uriFromAutocomplete($type),
       'hascoTypeUri'              => VSTOI::TASK,
       'hasStatus'                 => VSTOI::DRAFT,
-      'hasTemporalDependencyUri'  => $depUri,
+      'hasTemporalDependency'     => '',
       'label'                     => $name,
       'hasLanguage'               => $this->getTask()->hasLanguage,
       'hasSupertaskUri'           => $parentUri,
@@ -1664,7 +1619,6 @@ class EditTaskForm extends FormBase {
 
     $form_state->setValue(['subtasks','new_subtask_form','subtask_name'], '');
     $form_state->setValue(['subtasks','new_subtask_form','subtask_type'], '');
-    $form_state->setValue(['subtasks','new_subtask_form','subtask_temporal_dependency'], '');
 
     $form_state->setRebuild(TRUE);
   }
@@ -1761,10 +1715,6 @@ class EditTaskForm extends FormBase {
   /**
    * AJAX CALLBACKS
    */
-
-  public function ajaxSubtaskTypeChanged(array &$form, FormStateInterface $form_state) {
-    return $form['subtasks'];
-  }
 
   /**
    * “Submit handler” create new line.

@@ -14,14 +14,15 @@ class Task {
 
     return $header = [
       'element_uri' => t('URI'),
+      'element_name' => t('Name'),
       'element_number' => t('Number'),
       'element_tasktype' => t('Task Type'),
-      'element_temporaldependency' => t('Temporal Dependency'),
-      'element_name' => t('Name'),
+      'element_details' => t('Details'),
+      // 'element_temporaldependency' => t('Temporal Dependency'),
       // 'element_top_task' => t('Top Task'),
       // 'element_language' => t('Language'),
-      'element_tot_instruments' => t('# Instruments'),
-      'element_tot_detectors' => t('# Components'),
+      // 'element_tot_instruments' => t('# Instruments'),
+      // 'element_tot_detectors' => t('# Components'),
       'element_status' => t('Status'),
       'element_actions' => t('Actions'),
     ];
@@ -78,11 +79,11 @@ class Task {
     foreach (array_values($parsed) as $delta => $element) {
       // --- a) Extract fields with safe defaults ---
       $uri_raw       = $element['uri'] ?? '';
-      $namespacedUri = Utils::namespaceUri($uri_raw);
+      $namespacedUri = Utils::namespaceUri($element['uri']);
       $label         = $element['label'] ?? '';
       $lang_code     = $element['hasLanguage'] ?? NULL;
-      $taskType      = UTILS::labelFromAutocomplete($element['typeUri']) ?? '';
-      // $taskTemporalDependency = $element['hasTemporalDependency'] ?? NULL;
+      $taskType      = $element['typeLabel'] ?? '';
+      $taskTemporalDependency = $element['temporalDependencyLabel'] ?? '';
       $lang_label    = $lang_code && isset($languages[$lang_code])
                       ? $languages[$lang_code]
                       : '';
@@ -118,6 +119,15 @@ class Task {
           }
         }
       }
+
+      $details = '';
+
+      if ($element['typeUri'] === VSTOI::ABSTRACT_TASK) {
+        $details .= 'Temporal Dependency: '.$taskTemporalDependency.'<br />';
+      }
+
+      $details .= '#Instruments: '.$totInst.'<br />';
+      $details .= '#Components: '.$totDet;
 
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
@@ -164,13 +174,14 @@ class Task {
             '<a target="_new" href=":link">:nsuri</a>',
             [
               ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri),
-              ':nsuri' => $namespacedUri,
+              ':nsuri' => UTILS::namespaceUri($element['uri']) ?? '',
             ]
           ),
+          'element_name'            => $label,
           'element_number'          => $delta + 1, // 1-based index
           'element_tasktype'        => $taskType,
-          'element_temporaldependency' => $taskTemporalDependency ?? '',
-          'element_name'            => $label,
+          'element_details'         => t($details),
+          // 'element_temporaldependency' => $taskTemporalDependency ?? '',
           // 'element_top_task'        => t(
           //   '<a target="_new" href=":link">:top</a>',
           //   [
@@ -179,8 +190,8 @@ class Task {
           //   ]
           // ),
           // 'element_language'        => $lang_label,
-          'element_tot_instruments' => $totInst,
-          'element_tot_detectors'   => $totDet,
+          // 'element_tot_instruments' => $totInst,
+          // 'element_tot_detectors'   => $totDet,
           'element_status'          => $status,
           'element_actions'         => [
             'data' => $action_container,
