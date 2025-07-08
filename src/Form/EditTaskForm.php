@@ -92,7 +92,7 @@ class EditTaskForm extends FormBase {
     }
 
     // 1) Find Task Type
-    $taskTypeUri = $this->getTask()->hasType;;
+    $taskTypeUri = $this->getTask()->typeUri;
     $isAbstract = ($taskTypeUri === VSTOI::ABSTRACT_TASK);
 
     // 2) Define flags
@@ -211,9 +211,8 @@ class EditTaskForm extends FormBase {
       if (isset($basic['tasktype'])) {
         $tasktype = $basic['tasktype'];
       }
-      $tasktemporalddependency = '';
       if (isset($basic['tasktemporaldependency'])) {
-        $tasktemporalddependency = $basic['tasktemporaldependency'];
+        $tasktemporalddependency = $basic['tasktemporaldependency'] ?? '';
       }
       $name = '';
       if (isset($basic['name'])) {
@@ -281,42 +280,40 @@ class EditTaskForm extends FormBase {
         '#value' => $tasktype,
       ];
 
-      // TODOPP Ainda não está impelmentado quandod é ou não visivel
-      $form['task_tasktemporaldependency_hid'] = [
-        'top' => [
-          '#type' => 'markup',
-          '#markup' => '<div class="col border border-white">',
-        ],
-        'main' => [
-          '#type' => 'textfield',
-          '#title' => $this->t('Task Temporal Dependency'),
-          '#name' => 'task_tasktemporaldependency',
-          '#default_value' => $tasktemporalddependency,
-          '#id' => 'task_tasktemporaldependency',
-          '#parents' => ['task_tasktemporaldependency'],
-          '#attributes' => [
-            'class' => ['open-tree-modal'],
-            'data-dialog-type' => 'modal',
-            'data-dialog-options' => json_encode(['width' => 800]),
-            'data-url' => Url::fromRoute('rep.tree_form', [
-              'mode' => 'modal',
-              'elementtype' => 'tasktemporaldependency',
-            ], ['query' => ['field_id' => 'task_tasktemporaldependency']])->toString(),
-            'data-field-id' => 'task_tasktemporaldependency',
-            'data-elementtype' => 'tasktemporaldependency',
-            'autocomplete' => 'off',
+      // Only If is Abstract Type
+      if ($isAbstract) {
+        $form['task_tasktemporaldependency'] = [
+          'top' => [
+            '#type' => 'markup',
+            '#markup' => '<div class="col border border-white">',
           ],
-        ],
-        'bottom' => [
-          '#type' => 'markup',
-          '#markup' => '</div>',
-        ],
-      ];
+          'main' => [
+            '#type' => 'textfield',
+            '#title' => $this->t('Task Temporal Dependency'),
+            '#name' => 'task_tasktemporaldependency',
+            '#default_value' => $tasktemporalddependency,
+            '#id' => 'task_tasktemporaldependency',
+            '#parents' => ['task_tasktemporaldependency'],
+            '#attributes' => [
+              'class' => ['open-tree-modal'],
+              'data-dialog-type' => 'modal',
+              'data-dialog-options' => json_encode(['width' => 800]),
+              'data-url' => Url::fromRoute('rep.tree_form', [
+                'mode' => 'modal',
+                'elementtype' => 'tasktemporaldependency',
+              ], ['query' => ['field_id' => 'task_tasktemporaldependency']])->toString(),
+              'data-field-id' => 'task_tasktemporaldependency',
+              'data-elementtype' => 'tasktemporaldependency',
+              'autocomplete' => 'off',
+            ],
+          ],
+          'bottom' => [
+            '#type' => 'markup',
+            '#markup' => '</div>',
+          ],
+        ];
+      }
 
-      $form['task_tasktemporaldependency'] = [
-        '#type' => 'hidden',
-        '#value' => $tasktemporalddependency,
-      ];
       $form['task_name'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Name'),
@@ -688,8 +685,8 @@ class EditTaskForm extends FormBase {
 
     if (isset($input) && is_array($input) &&
         isset($basic) && is_array($basic)) {
-      $basic['tasktype'] = $input['task_tasktype'] ?? $this->getTask()->hasType;
-      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? $this->getTask()->typeUri; // TODOPP alterar para a propriedade correcta
+      $basic['tasktype'] = $input['task_tasktype'] ?? UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel);
+      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? ($basic['tasktemporaldependency'] ?? $this->getTask()->hasTemporalDependency);
       $basic['name']        = $input['task_name'] ?? $this->getTask()->label;
       $basic['language']    = $input['task_language'] ?? $this->getTask()->hasLanguage;
       $basic['version']     = $input['task_version'] ?? $this->getTask()->hasVersion;
@@ -706,15 +703,14 @@ class EditTaskForm extends FormBase {
   public function populateBasic() {
     $basic = [
       'uri' => $this->getTask()->uri,
-      'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->hasType,$this->getTask()->hasType) , // TODOPP alterar para a propriedade correcta
-      'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel), // TODOPP alterar para a propriedade correcta
+      'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->typeUri,$this->getTask()->typeLabel),
+      'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->hasTemporalDependency, UTILS::plainTaskTemporalDependency($this->getTask()->hasTemporalDependency)),
       'name' => $this->getTask()->label,
       'language' => $this->getTask()->hasLanguage,
       'version' => $this->getTask()->hasVersion,
       'description' => $this->getTask()->comment,
       'webdocument' => $this->getTask()->hasWebDocument,
-      'status' => $this->getTask()->hasStatus,
-      'typeUri' => $this->getTask()->typeUri,
+      'status' => $this->getTask()->hasStatus
     ];
     \Drupal::state()->set('my_form_basic', $basic);
     return $basic;
@@ -1400,16 +1396,19 @@ class EditTaskForm extends FormBase {
           }
         }
 
+        // dpm($basic);return false;
+
         try {
           $useremail = \Drupal::currentUser()->getEmail();
 
           $taskData = [
             'uri'                   => $this->getTask()->uri,
-            'typeUri'               => VSTOI::TASK,
+            'typeUri'               => UTILS::uriFromAutocomplete($basic['tasktype']),
             'hascoTypeUri'          => VSTOI::TASK,
-            'hasType'               => UTILS::uriFromAutocomplete($basic['tasktype']),
-            // TODOPP alterar para a propriedade correcta e descomentar a linha abaixo
-            // 'temporalDependencyUri' => UTILS::uriFromAutocomplete($basic['tasktemporaldependency']),
+            'hasTemporalDependency' =>
+              ($this->getTask()->typeUri === VSTOI::ABSTRACT_TASK
+                ? Utils::uriFromAutocomplete($basic['tasktemporaldependency'])
+                : ''),
             'hasStatus'             => $this->getTask()->hasStatus,
             'label'                 => $basic['name'],
             'hasLanguage'           => $this->getTask()->hasLanguage,
@@ -1647,19 +1646,18 @@ class EditTaskForm extends FormBase {
 
     $newTaskUri = Utils::uriGen('task');
     $newSubtask = [
-      'uri'               => $newTaskUri,
-      'typeUri'           => VSTOI::TASK,
-      'hascoTypeUri'      => VSTOI::TASK,
-      'hasStatus'         => VSTOI::DRAFT,
-      'hasType'       => $type,
-      // 'temporalDependencyUri' => '', // TODOPP
-      'label'             => $name,
-      'hasLanguage'       => $this->getTask()->hasLanguage,
-      'hasSupertaskUri'   => $parentUri,
-      'hasVersion'        => "1",
-      'comment'           => "",
-      'hasWebDocument'    => "",
-      'hasSIRManagerEmail'=> $useremail,
+      'uri'                       => $newTaskUri,
+      'typeUri'                   => $type,
+      'hascoTypeUri'              => VSTOI::TASK,
+      'hasStatus'                 => VSTOI::DRAFT,
+      'hasTemporalDependencyUri'  => '', // TODOPP
+      'label'                     => $name,
+      'hasLanguage'               => $this->getTask()->hasLanguage,
+      'hasSupertaskUri'           => $parentUri,
+      'hasVersion'                => "1",
+      'comment'                   => "",
+      'hasWebDocument'            => "",
+      'hasSIRManagerEmail'        => $useremail,
     ];
     $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
 

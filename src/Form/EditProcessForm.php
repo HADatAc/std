@@ -192,9 +192,7 @@ class EditProcessForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Top Task Type'),
       '#default_value' => isset($topTaskType->uri)
-        ? UTILS::namespaceUri(
-            $topTaskType->hasType
-          )
+        ? UTILS::fieldToAutocomplete($topTaskType->typeUri, $topTaskType->typeLabel)
         : '',
       '#disabled' => TRUE,
       '#attributes'  => [
@@ -659,7 +657,7 @@ class EditProcessForm extends FormBase {
 
     $url = Url::fromRoute('std.edit_task', [
         'processuri' => base64_encode($this->getProcessUri()),
-        'state' => $topTask->hasType === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
+        'state' => $topTask->typeUri === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
     ]);
 
