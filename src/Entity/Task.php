@@ -124,10 +124,10 @@ class Task {
 
       if ($element['typeUri'] === VSTOI::ABSTRACT_TASK) {
         $details .= 'Temporal Dependency: '.$taskTemporalDependency.'<br />';
+      } else {
+        $details .= '#Instruments: '.$totInst.'<br />';
+        $details .= '#Components: '.$totDet;
       }
-
-      $details .= '#Instruments: '.$totInst.'<br />';
-      $details .= '#Components: '.$totDet;
 
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
