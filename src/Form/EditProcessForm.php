@@ -187,6 +187,22 @@ class EditProcessForm extends FormBase {
       ],
     ];
 
+    $topTaskType = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
+    $form['process_toptask_wrapper']['process_toptask_type'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Top Task Type'),
+      '#default_value' => isset($topTaskType->uri)
+        ? UTILS::namespaceUri(
+            $topTaskType->hasType
+          )
+        : '',
+      '#disabled' => TRUE,
+      '#attributes'  => [
+        // make it take up remaining space
+        'style' => 'flex: 1 1 0;',
+      ],
+    ];
+
     // Add the Edit Task button next to the Top Task element
     $form['process_toptask_wrapper']['edit_task'] = [
       '#type' => 'submit',

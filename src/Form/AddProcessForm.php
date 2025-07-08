@@ -406,7 +406,7 @@ class AddProcessForm extends FormBase {
       $taskJSON = '{"uri":"' . $newTaskUri . '",'
         . '"typeUri":"' . VSTOI::TASK . '",'
         . '"hascoTypeUri":"' . VSTOI::TASK . '",'
-        . '"hasTaskType":"' . Utils::uriFromAutocomplete($form_state->getValue('process_top_task_type')) . '",'
+        . '"hasType":"' . Utils::uriFromAutocomplete($form_state->getValue('process_top_task_type')) . '",'
         . '"hasStatus":"' . VSTOI::DRAFT . '",'
         . '"label":"' . $form_state->getValue('process_top_task') . '",'
         . '"hasLanguage":"' . $form_state->getValue('process_language') . '",'
