@@ -19,6 +19,8 @@ use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\std\Entity\Task;
 use Drupal\Core\Ajax\HtmlCommand;
+use Drupal\Core\Render\Markup;
+use Drupal\file\Entity\File;
 
 class EditTaskForm extends FormBase {
 
@@ -344,13 +346,60 @@ class EditTaskForm extends FormBase {
         '#default_value' => $description,
         // '#required' => true
       ];
-      $form['task_webdocument'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Web Document'),
-        '#default_value' => $webDocument,
-        '#attributes' => [
-          'placeholder' => 'http://',
-        ]
+      // -------------- WebDocument --------------
+      $task_webdocument = $webDocument ?? '';
+      $webdocument_type = '';
+      if ($task_webdocument && str_starts_with(trim($task_webdocument),'http')) {
+        $webdocument_type = 'url';
+      }
+      elseif ($task_webdocument) {
+        $webdocument_type = 'upload';
+      }
+
+      $form['task_webdocument_type'] = [
+        '#type'   => 'select',
+        '#title'  => $this->t('Web Document Type'),
+        '#options'=> [
+          ''       => $this->t('Select Document Type'),
+          'url'    => $this->t('URL'),
+          'upload' => $this->t('Upload'),
+        ],
+        '#default_value' => $webdocument_type,
+      ];
+
+      $form['task_webdocument_url'] = [
+        '#type'   => 'textfield',
+        '#title'  => $this->t('Web Document'),
+        '#default_value' => $webdocument_type === 'url' ? $task_webdocument : '',
+        '#attributes' => ['placeholder' => 'http://'],
+        '#states' => [
+          'visible' => [
+            ':input[name="task_webdocument_type"]' => ['value' => 'url'],
+          ],
+        ],
+      ];
+
+      $form['task_webdocument_upload_wrapper'] = [
+        '#type' => 'container',
+        '#states' => [
+          'visible' => [
+            ':input[name="task_webdocument_type"]' => ['value' => 'upload'],
+          ],
+        ],
+      ];
+
+      $form['task_webdocument_upload_wrapper']['task_webdocument_upload'] = [
+        '#type'            => 'managed_file',
+        '#title'           => $this->t('Upload Document'),
+        '#upload_location' => 'private://resources/'. Utils::namespaceUri($this->getProcessUri()) .'/webdoc',
+        '#upload_validators' => [
+          'file_validate_extensions' => ['pdf doc docx txt xls xlsx'],
+          'file_validate_size'       => [2097152],
+        ],
+        '#description' => Markup::create(
+          '<span style="color:red;">pdf, doc, docx, txt, xls, xlsx. '.
+          $this->t('Selecting a new document will remove the previous one.').'</span>'
+        ),
       ];
       $form['task_status'] = [
         '#type' => 'hidden',
@@ -1320,6 +1369,37 @@ class EditTaskForm extends FormBase {
 
       } else {
 
+        $api = \Drupal::service('rep.api_connector');
+
+        // ------------------------------------------------ WebDocument
+        $doc_type = $form_state->getValue('task_webdocument_type');
+        $task_webdocument = $basic['webdocument'];   // valor actual
+
+        if ($doc_type === 'url') {
+          // ficou tudo no campo de URL
+          $task_webdocument = $form_state->getValue('task_webdocument_url');
+
+        } elseif ($doc_type === 'upload') {
+          $fids = $form_state->getValue('task_webdocument_upload');
+          if ($fids) {
+            $file = File::load(reset($fids));
+            if ($file) {
+              $file->setPermanent();
+              $file->save();
+              \Drupal::service('file.usage')->add($file, 'sir', 'task', 1);
+              $task_webdocument = $file->getFilename();
+
+              // envia o binário para o backend se mudou
+              if ($task_webdocument !== $this->getTask()->hasWebDocument) {
+                $api->parseObjectResponse(
+                  $api->uploadFile($this->getTask()->uri, $file->id()),
+                  'uploadFile'
+                );
+              }
+            }
+          }
+        }
+
         try {
           $useremail = \Drupal::currentUser()->getEmail();
 
@@ -1327,7 +1407,7 @@ class EditTaskForm extends FormBase {
             'uri'                   => $this->getTask()->uri,
             'typeUri'               => VSTOI::TASK,
             'hascoTypeUri'          => VSTOI::TASK,
-            'hasType'           => UTILS::uriFromAutocomplete($basic['tasktype']),
+            'hasType'               => UTILS::uriFromAutocomplete($basic['tasktype']),
             // TODOPP alterar para a propriedade correcta e descomentar a linha abaixo
             // 'temporalDependencyUri' => UTILS::uriFromAutocomplete($basic['tasktemporaldependency']),
             'hasStatus'             => $this->getTask()->hasStatus,
@@ -1336,7 +1416,7 @@ class EditTaskForm extends FormBase {
             'hasVersion'            => $this->getTask()->hasVersion,
             'hasSupertaskUri'       => $this->getTask()->hasSupertaskUri,
             'comment'               => $basic['description'],
-            'hasWebDocument'        => $basic['webdocument'],
+            'hasWebDocument'        => $task_webdocument,
             'hasSubtaskUris'        => $this->getTask()->hasSubtaskUris,
             'hasSIRManagerEmail'    => $useremail,
           ];
@@ -1345,7 +1425,6 @@ class EditTaskForm extends FormBase {
 
           $taskJSON = json_encode($taskData);
 
-          $api = \Drupal::service('rep.api_connector');
           // Delete the task before updating it
           // This is necessary because the task is not updated
           // dpm($taskJSON);
