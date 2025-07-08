@@ -512,36 +512,6 @@ class EditTaskForm extends FormBase {
         ],
       ];
 
-      // $form['subtasks']['new_subtask_form']['subtask_type'] = [
-      //   'top' => [
-      //     '#type' => 'markup',
-      //     '#markup' => '<div class="col-md-3 ms-3">',
-      //   ],
-      //   'main' => [
-      //     '#type' => 'textfield',
-      //     '#title' => $this->t('Task Type'),
-      //     // '#name' => 'subtask_type',
-      //     '#default_value' => '',
-      //     '#id' => 'subtask_type',
-      //     // '#parents' => ['subtask_type'],
-      //     '#attributes' => [
-      //       'class' => ['open-tree-modal'],
-      //       'data-dialog-type' => 'modal',
-      //       'data-dialog-options' => json_encode(['width' => 800]),
-      //       'data-url' => Url::fromRoute('rep.tree_form', [
-      //         'mode' => 'modal',
-      //         'elementtype' => 'task',
-      //       ], ['query' => ['field_id' => 'subtask_type']])->toString(),
-      //       'data-field-id' => 'subtask_type',
-      //       'data-elementtype' => 'task',
-      //       'autocomplete' => 'off',
-      //     ],
-      //   ],
-      //   'bottom' => [
-      //     '#type' => 'markup',
-      //     '#markup' => '</div>',
-      //   ],
-      // ];
       $form['subtasks']['new_subtask_form']['subtask_type'] = [
         '#type'          => 'textfield',
         '#title'         => $this->t('Task Type'),
@@ -562,6 +532,42 @@ class EditTaskForm extends FormBase {
           'data-elementtype'    => 'task',
           'autocomplete'        => 'off',
         ],
+      ];
+
+      $form['subtasks']['new_subtask_form']['temporal_wrapper'] = [
+        '#type'       => 'container',
+        '#attributes' => ['class' => ['col-md-3','p-0']],
+        '#states'     => [
+          'visible' => [
+            ':input[name="subtasks[new_subtask_form][subtask_type]"]' => [
+              'value' => UTILS::fieldToAutocomplete(VSTOI::ABSTRACT_TASK, 'Abstract Task'),
+            ],
+          ],
+        ],
+      ];
+
+      $form['subtasks']['new_subtask_form']['temporal_wrapper']['subtask_temporal_dependency'] = [
+        '#type'          => 'textfield',
+        '#title'         => $this->t('Temporal Dependency'),
+        '#default_value' => '',
+        '#attributes'    => [
+          'class'               => ['open-tree-modal'],
+          'data-dialog-type'    => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url'            => Url::fromRoute('rep.tree_form', [
+                                    'mode'        => 'modal',
+                                    'elementtype' => 'tasktemporaldependency',
+                                  ], ['query' => ['field_id' => 'subtask_temporal_dependency']])
+                                  ->toString(),
+          'data-field-id'    => 'subtask_temporal_dependency',
+          'data-elementtype' => 'tasktemporaldependency',
+          'autocomplete'     => 'off',
+        ],
+      ];
+
+      $form['subtasks']['new_subtask_form']['subtask_type']['#ajax'] = [
+        'callback' => '::ajaxSubtaskTypeChanged',
+        'wrapper'  => 'subtasks-wrapper',
       ];
 
       $form['subtasks']['new_subtask_form']['actions']['create_subtask'] = [
@@ -704,7 +710,7 @@ class EditTaskForm extends FormBase {
     $basic = [
       'uri' => $this->getTask()->uri,
       'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->typeUri,$this->getTask()->typeLabel),
-      'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->hasTemporalDependency, UTILS::plainTaskTemporalDependency($this->getTask()->hasTemporalDependency)),
+      'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->hasTemporalDependency, $this->getTask()->temporalDependencyLabel),
       'name' => $this->getTask()->label,
       'language' => $this->getTask()->hasLanguage,
       'version' => $this->getTask()->hasVersion,
@@ -1294,10 +1300,6 @@ class EditTaskForm extends FormBase {
       $this->updateInstruments($form_state);
     }
 
-    // if ($this->getState() === 'tasks') {
-    //   $this->updateCodes($form_state);
-    // }
-
     // Get the latest cached versions of values in the editor
 
     $basic = \Drupal::state()->get('my_form_basic');
@@ -1314,16 +1316,6 @@ class EditTaskForm extends FormBase {
       $this->removeInstrumentRow($button_name);
       return;
     }
-
-    // if ($button_name === 'new_code') {
-    //   $this->addCodeRow();
-    //   return;
-    // }
-
-    // if (str_starts_with($button_name,'code_remove_')) {
-    //   $this->removeCodeRow($button_name);
-    //   return;
-    // }
 
     if ($button_name === 'save') {
 
@@ -1633,12 +1625,21 @@ class EditTaskForm extends FormBase {
         $this->t('You must enter a Type for the sub-task.')
       );
     }
+    $dep  = $form_state->getValue(['subtasks','new_subtask_form','subtask_temporal_dependency']);
+    if (Utils::uriFromAutocomplete($type) === VSTOI::ABSTRACT_TASK && trim($dep) === '') {
+      $form_state->setErrorByName(
+        'subtasks][new_subtask_form][subtask_temporal_dependency]',
+        $this->t('Temporal Dependency is required for Abstract tasks.')
+      );
+    }
   }
 
   public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
     // Pull the new task name
     $name = $form_state->getValue(['subtasks','new_subtask_form','subtask_name']);
     $type = $form_state->getValue(['subtasks','new_subtask_form','subtask_type']);
+    $dependency = $form_state->getValue(['subtasks','new_subtask_form','subtask_temporal_dependency']);
+    $depUri     = Utils::uriFromAutocomplete($type) === VSTOI::ABSTRACT_TASK ? Utils::uriFromAutocomplete($dependency) : '';
 
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
@@ -1650,7 +1651,7 @@ class EditTaskForm extends FormBase {
       'typeUri'                   => $type,
       'hascoTypeUri'              => VSTOI::TASK,
       'hasStatus'                 => VSTOI::DRAFT,
-      'hasTemporalDependencyUri'  => '', // TODOPP
+      'hasTemporalDependencyUri'  => $depUri,
       'label'                     => $name,
       'hasLanguage'               => $this->getTask()->hasLanguage,
       'hasSupertaskUri'           => $parentUri,
@@ -1663,6 +1664,7 @@ class EditTaskForm extends FormBase {
 
     $form_state->setValue(['subtasks','new_subtask_form','subtask_name'], '');
     $form_state->setValue(['subtasks','new_subtask_form','subtask_type'], '');
+    $form_state->setValue(['subtasks','new_subtask_form','subtask_temporal_dependency'], '');
 
     $form_state->setRebuild(TRUE);
   }
@@ -1759,6 +1761,10 @@ class EditTaskForm extends FormBase {
   /**
    * AJAX CALLBACKS
    */
+
+  public function ajaxSubtaskTypeChanged(array &$form, FormStateInterface $form_state) {
+    return $form['subtasks'];
+  }
 
   /**
    * “Submit handler” create new line.
