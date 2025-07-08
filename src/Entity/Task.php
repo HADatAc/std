@@ -146,16 +146,16 @@ class Task {
         '#type'                    => 'submit',
         '#name'                    => "subtask_remove_$encoded",
         '#value'                   => t('Delete'),
-        '#limit_validation_errors' => [],        // não valida o form todo
+        '#limit_validation_errors' => [],
         '#ajax' => [
           'callback' => '::ajaxSubtasksCallback',
-          'wrapper'  => 'subtasks-wrapper',     // o ID container inteiro
+          'wrapper'  => 'subtasks-wrapper',
           'event'    => 'click',
         ],
         '#attributes' => [
           'class'   => ['btn','btn-sm','btn-danger','ms-2', 'delete-button'],
           'onclick' => "return confirm('Are you sure you want to delete this sub-task?');",
-          'disabled' => TRUE, // TODO: falta terminal o callback no FORM
+          'disabled' => TRUE,
         ],
       ];
 
