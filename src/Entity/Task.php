@@ -67,6 +67,17 @@ class Task {
       }
     }
 
+    // 2.b) Para cada elemento, converte o array requiredInstrument de stdClass → array
+    foreach ($parsed as &$element) {
+      if (isset($element['requiredInstrument']) && is_array($element['requiredInstrument'])) {
+        $element['requiredInstrument'] = array_map(
+          fn($instr) => is_object($instr) ? (array) $instr : $instr,
+          $element['requiredInstrument']
+        );
+      }
+    }
+    unset($element);
+
     // 3) Prepare some helpers.
     $root_url  = \Drupal::request()->getBaseUrl();
     $tables    = new Tables();
@@ -132,7 +143,7 @@ class Task {
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
         'processuri' => $processuri,
-        'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'basic',
+        'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
         'taskuri'    => base64_encode($uri_raw),
       ])->toString();
       $edit_button_html = t(

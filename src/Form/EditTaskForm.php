@@ -115,13 +115,8 @@ class EditTaskForm extends FormBase {
       $tasks = $this->getTask()->hasSubtaskUris;
 
     } else {
-
-      // $basic = \Drupal::state()->get('my_form_basic') ?? $this->populateBasic();;
-      // $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
-      // $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
       $basic = $this->populateBasic();;
-      $instruments = \Drupal::state()->get('my_form_instruments')
-               ?? $this->populateInstruments();
+      $instruments = \Drupal::state()->get('my_form_instruments', []);
       $tasks = $this->getTask()->hasSubtaskUris;
 
     }
@@ -855,82 +850,62 @@ class EditTaskForm extends FormBase {
   }
 
   protected function updateInstruments(FormStateInterface $form_state) {
-    $instruments = \Drupal::state()->get('my_form_instruments');
-
+    $instruments = \Drupal::state()->get('my_form_instruments', []);
     $input = $form_state->getUserInput();
-    if (isset($input) && is_array($input) &&
-        isset($instruments) && is_array($instruments)) {
 
-      foreach ($instruments as $instrument_id => $instrument) {
-        if (isset($instrument_id) && isset($instrument)) {
-          $instruments[$instrument_id]['instrument'] = $input['instrument_instrument_' . $instrument_id] ?? '';
-          $component = [];
-          foreach ($input['instrument_components_' . $instrument_id]  as $key => $value) {
-            $component[] = $value;
-          }
-          //$instruments[$instrument_id]['components'] = $input['instrument_components_' . $instrument_id] ?? '';
-          $instruments[$instrument_id]['components'] = $component ?? [];
-        }
+    foreach ($instruments as $instrument_id => $instrument) {
+      $instruments[$instrument_id]['instrument'] =
+        $input['instrument_instrument_' . $instrument_id] ?? '';
+
+      $compKey = 'instrument_components_' . $instrument_id;
+
+      $selectedComponents = [];
+      if (isset($input[$compKey]) && is_array($input[$compKey])) {
+        $selectedComponents = $input[$compKey];
       }
+
+      $instruments[$instrument_id]['components'] = $selectedComponents;
     }
 
-    //dpm($instruments);
     \Drupal::state()->set('my_form_instruments', $instruments);
-    return;
   }
 
   protected function populateInstruments() {
-
-    $instruments = $this->getTask()->requiredInstrument;
-
+    $required = $this->getTask()->requiredInstrument;
     $instrumentData = [];
-
-    foreach ($instruments as $instrument) {
-
-        $instrumentUri = $instrument->instrument->uri ?? null;
-        $instrumentLabel = $instrument->instrument->label ?? 'Unknown Instrument';
-
-        if ($instrumentUri) {
-
-            $components = isset($instrument->components) && is_array($instrument->components)
-                ? array_map(fn($component) => $component->uri, $instrument->components)
-                : [];
-
-            $instrumentData[] = [
-                'instrument' => UTILS::fieldToAutocomplete($instrumentUri,$instrumentLabel),
-                'components' => $components
-            ];
+    foreach ($required as $reqInstr) {
+      $uri   = $reqInstr->instrument->uri;
+      $label = $reqInstr->instrument->label;
+      $components = [];
+      if (!empty($reqInstr->components) && is_array($reqInstr->components)) {
+        foreach ($reqInstr->components as $c) {
+          $components[] = $c->uri;
         }
+      }
+      $instrumentData[] = [
+        'instrument' => UTILS::fieldToAutocomplete($uri, $label),
+        'components' => $components,
+      ];
     }
-
     \Drupal::state()->set('my_form_instruments', $instrumentData);
-    return $instruments;
+    return $instrumentData;
   }
 
   protected function saveInstruments(string $taskUri, array $instruments) {
-    if (empty($instruments)) {
-      // Nada a enviar.
-      return;
-    }
-
-    // Monta payload no formato da TaskAPI.setRequiredInstruments
     $requiredInstrument = [];
     foreach ($instruments as $inst) {
-      // extrai URI limpa da autocomplete
       $instrumentUri = Utils::uriFromAutocomplete($inst['instrument']);
       if (!$instrumentUri) {
+        \Drupal::logger('std')->warning('Ignorando instrumento sem URI: @label', ['@label' => $inst['instrument']]);
         continue;
       }
-
-      // componentes no formato { requireComponentUri: ... }
-      $requiredComponents = [];
-      foreach ($inst['components'] as $compUri) {
-        $requiredComponents[] = ['requireComponentUri' => $compUri];
-      }
-
+      $requiredComponents = array_map(
+        fn($compUri) => ['requiredComponentUri' => $compUri],
+        $inst['components'] ?? []
+      );
       $requiredInstrument[] = [
         'instrumentUri'      => $instrumentUri,
-        'requiredComponents' => $requiredComponents,
+        'requiredComponent' => $requiredComponents,
       ];
     }
 
@@ -939,14 +914,31 @@ class EditTaskForm extends FormBase {
       'requiredInstrument' => $requiredInstrument,
     ];
 
+    \Drupal::logger('std')->notice('» saveInstruments payload: <pre>@json</pre>', [
+      '@json' => json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+    ]);
+
     /** @var \Drupal\std\FusekiAPIConnector $api */
-    $api = \Drupal::service('std.api_connector');
+    $api = \Drupal::service('rep.api_connector');
+
     try {
-      $api->taskSetRequiredInstruments($payload);
-      \Drupal::messenger()->addStatus($this->t('Successefully saved instruments.'));
+      $response = $api->taskSetRequiredInstruments($payload);
+
+      // 3) Log da resposta decodificada e crua
+      \Drupal::logger('std')->notice('« API response (decoded): <pre>@resp</pre>', [
+        '@resp' => print_r($response, TRUE),
+      ]);
+
+      // Se vier string, log também
+      if (is_string($response)) {
+        \Drupal::logger('std')->notice('« API raw response: @raw', ['@raw' => $response]);
+      }
+
+      \Drupal::messenger()->addStatus($this->t('Instrumentos enviados, verifique logs para detalhes.'));
     }
     catch (\Exception $e) {
-      \Drupal::messenger()->addError($this->t('Error saving instruments: @msg', ['@msg' => $e->getMessage()]));
+      \Drupal::logger('std')->error('Erro em saveInstruments(): @msg', ['@msg' => $e->getMessage()]);
+      \Drupal::messenger()->addError($this->t('Falha ao guardar instrumentos, veja os logs.'));
     }
   }
 
@@ -1326,7 +1318,6 @@ class EditTaskForm extends FormBase {
         $task_webdocument = $basic['webdocument'];   // valor actual
 
         if ($doc_type === 'url') {
-          // ficou tudo no campo de URL
           $task_webdocument = $form_state->getValue('task_webdocument_url');
 
         } elseif ($doc_type === 'upload') {
@@ -1339,7 +1330,6 @@ class EditTaskForm extends FormBase {
               \Drupal::service('file.usage')->add($file, 'sir', 'task', 1);
               $task_webdocument = $file->getFilename();
 
-              // envia o binário para o backend se mudou
               if ($task_webdocument !== $this->getTask()->hasWebDocument) {
                 $api->parseObjectResponse(
                   $api->uploadFile($this->getTask()->uri, $file->id()),
@@ -1394,7 +1384,7 @@ class EditTaskForm extends FormBase {
           $instruments = \Drupal::state()->get('my_form_instruments');
 
           // Save instruments on API
-          if ($this->getTask()->typeUri === VSTOI::ABSTRACT_TASK) {
+          if ($this->getTask()->typeUri !== VSTOI::ABSTRACT_TASK) {
             // If the task is an Abstract Task, save instruments
             $this->saveInstruments($this->getTask()->uri, $instruments);
           } else {
