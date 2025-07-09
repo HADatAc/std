@@ -387,7 +387,7 @@ class AddTaskForm extends FormBase {
         '#type' => 'markup',
         '#markup' =>
           '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Detectors</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">Components</div>' .
           '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
       );
 
@@ -1034,7 +1034,7 @@ class AddTaskForm extends FormBase {
 
     $api = \Drupal::service('rep.api_connector');
 
-    $requiredInstrumentation = [];
+    $requiredInstrument = [];
 
     foreach ($instruments as $instrument) {
         if (!empty($instrument['instrument'])) {
@@ -1049,7 +1049,7 @@ class AddTaskForm extends FormBase {
             }
 
             // Estrutura o array com o URI do instrumento e o array de detectores
-            $requiredInstrumentation[] = [
+            $requiredInstrument[] = [
                 'instrumentUri' => $instrumentUri,
                 'detectors' => $detectors
             ];
@@ -1059,7 +1059,7 @@ class AddTaskForm extends FormBase {
     // Estrutura final do objeto JSON
     $taskData = [
         'taskuri' => $taskUri,
-        'requiredInstrumentation' => $requiredInstrumentation
+        'requiredInstrument' => $requiredInstrument
     ];
 
     // Envia o objeto para a API

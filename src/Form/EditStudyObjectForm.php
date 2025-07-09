@@ -50,6 +50,10 @@ class EditStudyObjectForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyobjecturi = NULL) {
 
+    // MODAL
+    $form['#attached']['library'][] = 'rep/rep_modal';
+    $form['#attached']['library'][] = 'core/drupal.dialog';
+
     # SET CONTEXT
     $uri=base64_decode($studyobjecturi);
 
@@ -121,20 +125,36 @@ class EditStudyObjectForm extends FormBase {
       '#title' => $this->t('Original ID (required)'),
       '#default_value' => $this->getStudyObject()->originalId,
     ];
-    if (\Drupal::moduleHandler()->moduleExists('sem')) {
-      $form['studyobject_entity'] = [
+    $form['studyobject_entity'] = [
+      'top' => [
+        '#type' => 'markup',
+        '#markup' => '<div class="pt-3 col border border-white">',
+      ],
+      'main' => [
         '#type' => 'textfield',
-        '#title' => $this->t('Entity (required)'),
-        '#autocomplete_route_name' => 'sem.semanticvariable_entity_autocomplete',
-        '#default_value' => $entityContent,
-      ];
-    } else {
-      $form['studyobject_entity'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Entity (required)'),
-        '#default_value' => $entityContent,
-      ];
-    }
+        '#title' => t('Entity (required)'),
+        '#name' => 'studyobject_entity',
+        '#default_value' => '',
+        '#id' => 'studyobject_entity',
+        '#parents' => ['studyobject_entity'],
+        '#attributes' => [
+          'class' => ['open-tree-modal'],
+          'data-dialog-type' => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url' => Url::fromRoute('rep.tree_form', [
+            'mode' => 'modal',
+            'elementtype' => 'entity',
+          ], ['query' => ['field_id' => 'studyobject_entity']])->toString(),
+          'data-field-id' => 'studyobject_entity',
+          'data-elementtype' => 'entity',
+          'autocomplete' => 'off',
+        ],
+      ],
+      'bottom' => [
+        '#type' => 'markup',
+        '#markup' => '</div>',
+      ],
+    ];
     $form['studyobject_domainscope_object'] = [
       '#type' => 'textfield',
       '#title' => $this->t("Domain Scope's Object (if required)"),

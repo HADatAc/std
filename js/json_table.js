@@ -9,7 +9,8 @@
   const updateTotal = function () {
     const total = totals.daFiles + totals.publications + totals.media;
     if ($("#total_elements_count").length) {
-      $("#total_elements_count").text("Study Content (" + total + ")");
+      // $("#total_elements_count").text("Study Content (" + total + ")");
+      $("#total_elements_count").text("Study Content");
     } else {
       showToast("#total_elements_count not found on DOM.", "danger");
     }
@@ -40,6 +41,33 @@
       url: url,
       type: "GET",
       success: function (response) {
+
+        if (Array.isArray(response.headers) && Array.isArray(response.output) && response.output.length === 0) {
+          // build an “empty” table with header + one row
+          let colCount = response.headers.length;
+          let table  = '<table class="table table-striped table-bordered">';
+          // header
+          table += '<thead><tr>';
+          response.headers.forEach(h => {
+            table += `<th>${h}</th>`;
+          });
+          table += '</tr></thead>';
+          // body with one “no results” row
+          table += '<tbody>';
+          table += `<tr><td colspan="${colCount}" class="text-center text-muted">No results found.</td></tr>`;
+          table += '</tbody></table>';
+          // inject
+          $("#json-table-container").html(table);
+
+          // reset count + pagination
+          $("#data_files_count").text("Study Data Files (0)");
+          totals.daFiles = 0;
+          updateTotal();
+          $("#json-table-pager").empty();
+          $("#json-table-stream-pager").empty();
+          return;
+        }
+
         if (response.headers && response.output) {
           // Render table
           let table = '<table class="table table-striped table-bordered">';
@@ -63,7 +91,7 @@
           // Atualiza o número total de elementos
           if (response.pagination && response.pagination.items) {
             $("#data_files_count").text(
-              "Data Files (" + response.pagination.items + ")"
+              "Study Data Files (" + response.pagination.items + ")"
             );
 
             totals.daFiles = parseInt(response.pagination.items, 10) || 0;
@@ -81,7 +109,8 @@
           $("#json-table-container").html(
             "<p>No data available to display.</p>"
           );
-          $("#json-table-pager").empty(); // Limpa a paginação se não houver dados
+          $("#json-table-pager").empty();
+          $("#json-table-stream-pager").empty();
         }
       },
       error: function () {
@@ -199,57 +228,229 @@
       }
     });
 
-    $(document).on("click", ".download-url", function (e) {
+    $(document).on("click", ".download-media-url", function (e) {
       e.preventDefault();
+      const $link = $(this);
 
-      const viewUrl =
-        drupalSettings.path.baseUrl + `std` + $(this).data("download-url");
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
 
+      const viewUrl = $link.data("download-url");
       if (!viewUrl) {
         showToast("URL not found.", "danger");
-        return;
+        $link.removeData('downloading');
+        return false;
       }
 
       fetch(viewUrl, { method: "GET" })
-        .then((response) => {
+        .then(response => {
           if (!response.ok) {
             throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
           }
-
-          const contentDisposition = response.headers.get(
-            "Content-Disposition"
-          );
+          const contentDisposition = response.headers.get("Content-Disposition");
           let filename = "arquivo";
-
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
               filename = matches[1];
             }
           }
-
-          return response.blob().then((blob) => ({ blob, filename }));
+          return response.blob().then(blob => ({ blob, filename }));
         })
         .then(({ blob, filename }) => {
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.style.display = "none";
           a.href = url;
-
           a.download = filename;
-
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
-
           showToast(`Download started: ${filename}`, "success");
         })
-        .catch((error) => {
-          showToast(error, "danger");
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
         });
+
+      return false;
     });
+
+    $(document).on("click", ".download-publications-url", function (e) {
+      e.preventDefault();
+      const $link = $(this);
+
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
+
+      const viewUrl = $link.data("download-url");
+      if (!viewUrl) {
+        showToast("URL not found.", "danger");
+        $link.removeData('downloading');
+        return false;
+      }
+
+      fetch(viewUrl, { method: "GET" })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+          }
+          const contentDisposition = response.headers.get("Content-Disposition");
+          let filename = "arquivo";
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?(.+?)"?$/);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+          return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          showToast(`Download started: ${filename}`, "success");
+        })
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
+        });
+
+      return false;
+    });
+
+    $(document).on("click", ".download-associated-url", function (e) {
+      e.preventDefault();
+      const $link = $(this);
+
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
+
+      const viewUrl = $link.data("download-url");
+      if (!viewUrl) {
+        showToast("URL not found.", "danger");
+        $link.removeData('downloading');
+        return false;
+      }
+
+      fetch(viewUrl, { method: "GET" })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+          }
+          const contentDisposition = response.headers.get("Content-Disposition");
+          let filename = "arquivo";
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?(.+?)"?$/);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+          return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          showToast(`Download started: ${filename}`, "success");
+        })
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
+        });
+
+      return false;
+    });
+
+    $(document).on("click", ".download-unassociated-url", function (e) {
+      e.preventDefault();
+      const $link = $(this);
+
+      // Se já estiver baixando, ignora cliques repetidos.
+      if ($link.data('downloading')) {
+        return false;
+      }
+      $link.data('downloading', true);
+
+      const viewUrl = $link.data("download-url");
+      if (!viewUrl) {
+        showToast("URL not found.", "danger");
+        $link.removeData('downloading');
+        return false;
+      }
+
+      fetch(viewUrl, { method: "GET" })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+          }
+          const contentDisposition = response.headers.get("Content-Disposition");
+          let filename = "arquivo";
+          if (contentDisposition) {
+            const matches = contentDisposition.match(/filename="?(.+?)"?$/);
+            if (matches && matches[1]) {
+              filename = matches[1];
+            }
+          }
+          return response.blob().then(blob => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          showToast(`Download started: ${filename}`, "success");
+        })
+        .catch(error => {
+          showToast(error.message || error, "danger");
+        })
+        .finally(() => {
+          // Libera o link para futuros cliques somente após o término/falha do fetch
+          $link.removeData('downloading');
+        });
+
+      return false;
+    });
+
   };
+
+  // This function creates a toast notification with a message and type
 
   const attachDragAndDropEvents = function () {
     const dropCard = document.querySelector("#drop-card");
@@ -264,7 +465,6 @@
       e.stopPropagation();
     };
 
-    // Eventos de arrastar
     dropCard.addEventListener("dragenter", preventDefault);
     dropCard.addEventListener("dragover", (e) => {
       preventDefault(e);
@@ -274,81 +474,124 @@
       preventDefault(e);
       dropCard.classList.remove("drag-over");
     });
+
     dropCard.addEventListener("drop", async (e) => {
       preventDefault(e);
       dropCard.classList.remove("drag-over");
 
       const files = e.dataTransfer.files;
+      if (!files.length) {
+        return;
+      }
 
-      if (files.length > 0) {
-        const file = files[0];
-        const originalFileName = file.name;
-        const fileExtension = originalFileName.split(".").pop().toLowerCase();
+      const file = files[0];
+      const originalFileName = file.name;
+      const fileExtension = originalFileName.split(".").pop().toLowerCase();
+      const studyuri = drupalSettings.std.studyuri;
 
-        const studyuri = drupalSettings.std.studyuri;
+      try {
+        // 1) Check filename
+        const checkUrl = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
+        const checkResponse = await fetch(checkUrl, { method: "GET" });
+        if (!checkResponse.ok) throw new Error(`HTTP ${checkResponse.status}`);
+        const json = await checkResponse.json();
 
-        try {
-          const response = await fetch(
-            drupalSettings.path.baseUrl +
-              `std/check-file-name/${encodeURIComponent(
-                studyuri
-              )}/${encodeURIComponent(originalFileName)}`,
-            {
-              method: "GET",
-            }
-          );
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const json = await response.json();
-
-          if (json && json.suggestedFileName) {
-            const newFileName = `${json.suggestedFileName}.${fileExtension}`;
-            const newFile = new File([file], newFileName, { type: file.type });
-
-            const formData = new FormData();
-            formData.append("files[mt_filename]", newFile);
-
-            const uploadUrl =
-              drupalSettings.path.baseUrl +
-              "std/file-upload/mt_filename/" +
-              studyuri;
-
-            $.ajax({
-              url: uploadUrl,
-              type: "POST",
-              data: formData,
-              processData: false,
-              contentType: false,
-              success: function (response) {
-                if (response.fid) {
-                  const currentPage = drupalSettings.std.page || 1;
-                  const currentPubPage = drupalSettings.pub.page || 1;
-                  const currentMediaPage = drupalSettings.media.page || 1;
-
-                  showToast("File uploaded successfully!", "success");
-                  loadTableData(currentPage);
-                  loadPublicationFiles(currentPubPage);
-                  loadMediaFiles(currentMediaPage);
-                } else {
-                  showToast(
-                    "Failed to upload file. Please try again.",
-                    "danger"
-                  );
-                }
-              },
-              error: function () {
-                showToast("Error uploading file.", "danger");
-              },
-            });
-          } else {
-            showToast("Error generating file name.", "danger");
-          }
-        } catch (error) {
-          showToast("Error communicating with the server.", "danger");
+        if (!(json && json.suggestedFileName)) {
+          showToast("Error generating file name.", "danger");
+          return;
         }
+
+        // 2) Rename and prepare upload
+        const newFileName = `${json.suggestedFileName}.${fileExtension}`;
+        const newFile = new File([file], newFileName, { type: file.type });
+
+        const formData = new FormData();
+        formData.append("files[mt_filename]", newFile);
+
+        // 3) Upload
+        const uploadUrl = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${studyuri}`;
+        $.ajax({
+          url: uploadUrl,
+          type: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function (response) {
+            if (!response.fid) {
+              showToast("Failed to upload file. Please try again.", "danger");
+              return;
+            }
+
+            // Refresh other tables
+            showToast("File uploaded successfully!", "success");
+            loadTableData(drupalSettings.std.page || 1);
+            loadPublicationFiles(drupalSettings.pub.page || 1);
+            loadMediaFiles(drupalSettings.media.page || 1);
+
+            // 4) If streamKey present, refresh streams table
+            if (response.streamKey) {
+              $.ajax({
+                url: window.location.href,
+                type: "GET",
+                dataType: "html",
+                cache: false,
+                success: function (pageHtml) {
+                  const tmp = $('<div>').append($.parseHTML(pageHtml));
+
+                  // Find only the real streams table (with radios)
+                  const newTable = tmp
+                    .find('#dpl-streams-table')
+                    .filter(function () {
+                      const hasRadios = $(this).find('input[type=radio]').length > 0;
+                      return hasRadios;
+                    })
+                    .first();
+
+                  if (!newTable.length) {
+                    showToast("Streams table not found in refresh.", "danger");
+                    return;
+                  }
+
+                  // Replace old table
+                  $('#dpl-streams-table').replaceWith(newTable);
+
+                  // *** Crucial: reset the binding flag so we can rebind events ***
+                  newTable.removeData('dpl-bound');
+
+                  // Re-attach only our streamSelection behavior
+                  Drupal.behaviors.streamSelection.attach(
+                    newTable.closest('.card').get(0),
+                    drupalSettings
+                  );
+
+                  // Select the new radio and trigger change
+                  const radio = $(`#dpl-streams-table input[type=radio][value="${response.streamKey}"]`);
+                  if (radio.length) {
+                    radio
+                      .closest('table').find('input[type=radio]')
+                      .prop('checked', false).data('waschecked', false)
+                      .closest('tr').removeClass('selected');
+
+                    // 4a) Mark checked + data
+                    radio.prop('checked', true).data('waschecked', true);
+
+                    // 4b) Fire both click AND change, to hit both handlers
+                    radio.trigger('click');
+                    radio.trigger('change');
+                  }
+                },
+                error: function () {
+                  showToast("Failed to refresh streams table.", "danger");
+                }
+              });
+            }
+          },
+          error: function (xhr, status, error) {
+            showToast("Error uploading file.", "danger");
+          }
+        });
+      } catch (err) {
+        showToast("Error communicating with the server.", "danger");
       }
     });
   };
@@ -394,6 +637,25 @@
       url: url,
       type: "GET",
       success: function (response) {
+        // se não houver arquivos
+        if (Array.isArray(response.files) && response.files.length === 0) {
+          // define os headers fixos da tabela de publicações
+          const headers = ['Filename','Operations'];
+          let table = '<table class="table table-striped table-bordered">';
+          table += '<thead><tr>';
+          headers.forEach(h => table += `<th>${h}</th>`);
+          table += '</tr></thead>';
+          table += '<tbody>';
+          table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
+          table += '</tbody></table>';
+          $("#publication-table-container").html(table);
+          totals.publications = 0;
+          updateTotal();
+          // limpa paginação
+          $("#publication-table-pager").empty();
+          return;
+        }
+
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
@@ -413,10 +675,11 @@
                       <i class="fa-solid fa-eye"></i>
                   </a>`;
             let fDownload = `<a href="#"
-                      class="btn btn-sm btn-secondary download-url"
+                      class="btn btn-sm btn-secondary download-publications-url"
                       data-download-url="${file.download_url}"
-                      style="margin-right:5px">
-                      <i class="fa-solid fa-save"></i>
+                      style="margin-right:5px"
+                      title="Download file">
+                      <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
                     file.delete_url
@@ -440,7 +703,8 @@
           if (response.files && response.pagination) {
             if (response.pagination) {
               $("#publication_files_count").text(
-                "Publications (" + response.pagination.total_files + ")"
+                // "Publications (" + response.pagination.total_files + ")"
+                "Publications"
               );
 
               totals.publications =
@@ -452,8 +716,6 @@
           } else {
             showToast("Files or pagination missing in response.", "danger");
           }
-        } else {
-          $("#publication-table-container").html("<p>No files available.</p>");
         }
       },
       error: function () {
@@ -587,6 +849,24 @@
       url: url,
       type: "GET",
       success: function (response) {
+
+      // se não houver arquivos de mídia
+      if (Array.isArray(response.files) && response.files.length === 0) {
+        const headers = ['Filename','Operations'];
+        let table = '<table class="table table-striped table-bordered">';
+        table += '<thead><tr>';
+        headers.forEach(h => table += `<th>${h}</th>`);
+        table += '</tr></thead>';
+        table += '<tbody>';
+        table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
+        table += '</tbody></table>';
+        $("#media-table-container").html(table);
+        totals.media = 0;
+        updateTotal();
+        $("#media-table-pager").empty();
+        return;
+      }
+
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
@@ -601,10 +881,11 @@
                      <i class="fa-solid fa-eye"></i>
                   </a>`;
             let fDownload = `<a href="#"
-                      class="btn btn-sm btn-secondary download-url"
+                      class="btn btn-sm btn-secondary download-media-url"
                       data-download-url="${file.download_url}"
-                      style="margin-right:5px">
-                      <i class="fa-solid fa-save"></i>
+                      style="margin-right:5px"
+                      title="Download file">
+                      <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#"
                      class="btn btn-sm btn-danger delete-media-button"
@@ -628,7 +909,8 @@
           if (response.files && response.pagination) {
             if (response.pagination) {
               $("#media_files_count").text(
-                "Media (" + response.pagination.total_files + ")"
+                // "Media (" + response.pagination.total_files + ")"
+                "Media"
               );
 
               totals.media = parseInt(response.pagination.total_files, 10) || 0;
@@ -639,8 +921,6 @@
           } else {
             showToast("Files or pagination missing in response.", "danger");
           }
-        } else {
-          $("#media-table-container").html("<p>No files available.</p>");
         }
       },
       error: function () {
@@ -698,7 +978,7 @@
       }
 
       pdfjsLib.GlobalWorkerOptions.workerSrc =
-        drupalSettings.path.baseUrl + "modules/custom/std/js/pdf.worker.min.js";
+        drupalSettings.path.baseUrl + "modules/custom/rep/js/pdf.worker.min.js";
 
       const renderImage = (modalUrl) => {
         const newContent = `<img src="${modalUrl}" alt="Imagem" style="max-width:100%; height:auto;">`;
@@ -716,7 +996,7 @@
             container.style.display = "flex";
             container.style.flexDirection = "column";
             container.style.gap = "20px";
-            container.style.overflowY = "auto";
+            container.style.overflowY = "visible";
             container.style.maxHeight = "90vh";
 
             for (let i = 1; i <= pdf.numPages; i++) {

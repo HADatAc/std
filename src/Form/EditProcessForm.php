@@ -187,10 +187,24 @@ class EditProcessForm extends FormBase {
       ],
     ];
 
+    $topTaskType = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
+    $form['process_toptask_wrapper']['process_toptask_type'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Top Task Type'),
+      '#default_value' => isset($topTaskType->uri)
+        ? UTILS::fieldToAutocomplete($topTaskType->typeUri, $topTaskType->typeLabel)
+        : '',
+      '#disabled' => TRUE,
+      '#attributes'  => [
+        // make it take up remaining space
+        'style' => 'flex: 1 1 0;',
+      ],
+    ];
+
     // Add the Edit Task button next to the Top Task element
     $form['process_toptask_wrapper']['edit_task'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Edit Task'),
+      '#value' => $this->t('Edit Task Model'),
       '#submit' => ['::setBackUrl'],
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'edit-task-button', 'mt-2'],
@@ -563,6 +577,7 @@ class EditProcessForm extends FormBase {
           '"hasReviewNote":"'.$this->getProcess()->hasReviewNote.'",'.
           '"hasEditorEmail":"'.$this->getProcess()->hasEditorEmail.'"}';
 
+        // dpm($processJSON, 'Process JSON');return false;
         // UPDATE BY DELETING AND CREATING
         $api->elementDel('process',$this->getProcessUri());
         $message = $api->elementAdd('process',$processJSON);
@@ -637,9 +652,12 @@ class EditProcessForm extends FormBase {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
 
+    $api = \Drupal::service('rep.api_connector');
+    $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
+
     $url = Url::fromRoute('std.edit_task', [
         'processuri' => base64_encode($this->getProcessUri()),
-        'state' => 'tasks',
+        'state' => $topTask->typeUri === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
     ]);
 

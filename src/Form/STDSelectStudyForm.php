@@ -331,12 +331,10 @@ class STDSelectStudyForm extends FormBase
       // Ensure uri is a string; if it's an object, access the desired property or default to an empty string
       $uri = is_string($element->uri) ? $element->uri : '';
       $label = $element->label ?? '';
-      $title = $element->title ?? '';
+      $title = $element->title !== NULL ? $element->title : $label;
 
-      // Acessa o nome do PI se for um objeto
       $pi = is_object($element->pi) ? $element->pi->name : $element->pi ?? '';
 
-      // Acessa o nome da instituição se for um objeto
       $ins = is_object($element->institution) ? $element->institution->name : $element->institution ?? '';
       $desc = $element->comment ?? '';
 
@@ -432,14 +430,14 @@ class STDSelectStudyForm extends FormBase
               'class' => ['col-md-7'],
             ],
             'text' => [
-              '#markup' => '<p class="card-text">
-                <strong>Name:</strong> ' . $title . '
-                <br><strong>URI:</strong> ' . $outputUri . '
-                <br><strong>PI: </strong>' . $pi . '
-                <br><strong>Institution: </strong>' . $ins . '
-                <br><strong>Description: </strong>' . $short_desc . '...
-                <a href="#" data-bs-toggle="modal" data-bs-target="#' . $modal_id . '">read more</a>
-              </p>',
+              '#markup' =>
+                '<p class="card-text">
+                  <strong>Name:</strong> ' . $title . '
+                  <br><strong>URI:</strong> ' . $outputUri .
+                  ($pi !== '' ? '<br><strong>PI: </strong>' . $pi : '') .
+                  ($ins !== '' ? '<br><strong>Institution: </strong>' . $ins : '').
+                  (strlen($short_desc) > 0 ? '<br><strong>Description: </strong>' . $short_desc . '... <a href="#" data-bs-toggle="modal" data-bs-target="#' . $modal_id . '">read more</a>' : '') .
+                '</p>',
             ],
           ],
         ],

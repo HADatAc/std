@@ -69,6 +69,11 @@ class EditStudyForm extends FormBase {
       '#title' => $this->t('Long Name'),
       '#default_value' => $this->getStudy()->title,
     ];
+    $form['study_pi'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('PI'),
+      '#default_value' => $this->getStudy()->pi,
+    ];
     $form['study_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
@@ -356,6 +361,7 @@ class EditStudyForm extends FormBase {
         '"label":"'.$form_state->getValue('study_short_name').'",'.
         '"title":"'.$form_state->getValue('study_name').'",'.
         '"comment":"'.$form_state->getValue('study_description').'",'.
+        // '"pi":"'.$form_state->getValue('study_pi').'",'.
         '"hasWebDocument":"' . $study_webdocument . '",' .
         '"hasImageUri":"' . $study_image . '",' .
         '"hasSIRManagerEmail":"'.$useremail.'"}';
