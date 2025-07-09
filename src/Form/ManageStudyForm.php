@@ -24,6 +24,8 @@ class ManageStudyForm extends FormBase
 
   protected $streamList;
 
+  protected $outStreamList;
+
   public function getStreamList()
   {
     return $this->streamList;
@@ -31,6 +33,15 @@ class ManageStudyForm extends FormBase
   public function setStreamList($list)
   {
     return $this->streamList = $list;
+  }
+
+  public function getOutStreamList()
+  {
+    return $this->outStreamList;
+  }
+  public function setSOutStreamList($list)
+  {
+    return $this->outStreamList = $list;
   }
 
   public function getStudyUri()
@@ -92,20 +103,19 @@ class ManageStudyForm extends FormBase
     //Dá erro 404, $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
     // $totalPUBs = self::extractValue($api->parseObjectResponse($api->getTotalStudyPUBs($this->getStudy()->uri), 'getTotalStudyPUBs'));
     $totalSTREAMs = self::extractValue($api->parseObjectResponse($api->streamSizeByStudyState($this->getStudy()->uri, HASCO::ACTIVE), 'streamSizeByStudyState'));
+    $totalOutSTREAMs = 0; // self::extractValue($api->parseObjectResponse($api->streamSizeByStudyState($this->getStudy()->uri, HASCO::ACTIVE), 'streamSizeByStudyState'));
     $totalSTRs = self::extractValue($api->parseObjectResponse($api->listSizeByManagerEmailByStudy($this->getStudy()->uri, 'str', $this->getStudy()->hasSIRManagerEmail), 'getTotalStudySTRRs'));
     $totalRoles = self::extractValue($api->parseObjectResponse($api->getTotalStudyRoles($this->getStudy()->uri), 'getTotalStudyRoles'));
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
+    $totalPRCs = 0; // TODO
 
-    // DEBBUG
-    // kint([
-    //   'studyUri' => $this->getStudy()->uri,
-    //   'stateUri' => HASCO::ALL_STATUSES,
-    //   'resultAPI' => $api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ALL_STATUSES,99,0), 'streamByStudyState'),
-    //   'totalSTREAMs' => $totalSTREAMs,
-    // ]);
+    // SET STREAM LIST
     $this->setStreamList($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ACTIVE,9999,0), 'streamByStudyState'));
+
+    // TODO - SET OUT STREAM LIST
+    $this->setSOutStreamList([]);
 
     // Example data for cards
     $cards = array(
@@ -118,7 +128,7 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
-        'head' => 'Streams (' . $totalSTREAMs . ')',
+        'head' => 'Streams IN (' . $totalSTREAMs . ')',
         'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
@@ -140,8 +150,15 @@ class ManageStudyForm extends FormBase
       ),
       11 => array('value' => 'Message Stream'),
       12 => array('value' => 'Unassociated Data Files'),
-      //10 => array('value' => '<h1>'.$totalSOs.'</h1><h3>Objects<br>&nbsp;</h3>',
-      //           'link' => self::urlSelectByStudy($this->getStudy()->uri,'studyobject')),
+      13 => array(
+        'head' => 'Streams OUT (' . $totalOutSTREAMs . ')',
+        'value' => '<h1>' . $totalOutSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
+      ),
+      14 => array(
+        'value' => '<h1>' . $totalPRCs . '</h1><h3>Process<br>&nbsp;</h3>',
+        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'prc',),
+      ),
     );
 
     // First row with 1 filler and 1 card
@@ -190,9 +207,10 @@ class ManageStudyForm extends FormBase
     $form['#attached']['library'][] = 'std/stream_selection';
     $form['#attached']['library'][] = 'dpl/stream_recorder';
     $form['#attached']['drupalSettings']['std'] = [
-      'studyUri' => base64_encode($this->studyUri),
-      'streamDataUrl' => Url::fromRoute('std.stream_data_ajax')->toString(),
-      'ajaxUrl'  => Url::fromRoute('std.stream_data_ajax')->toString(),
+      'studyUri'        => base64_encode($this->studyUri),
+      'streamDataUrl'   => Url::fromRoute('std.stream_data_ajax')->toString(),
+      'ajaxUrl'         => Url::fromRoute('std.stream_data_ajax')->toString(),
+      'latestUrl'       => \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/dpl/streamtopic/latest_message/',
     ];
     $form['#attached']['drupalSettings']['std']['fileIngestUrl']   = Url::fromRoute('dpl.file_ingest_ajax')->toString();
     $form['#attached']['drupalSettings']['std']['fileUningestUrl'] = Url::fromRoute('dpl.file_uningest_ajax')->toString();
@@ -247,11 +265,6 @@ class ManageStudyForm extends FormBase
     // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
     if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
       // User is the owner: enable drag & drop functionality.
-      // $markup = '<div class="card drop-area" id="drop-card">' .
-      //           ' <div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-      //           '   <div class="info-card">You can drag&drop files directly into this card</div>
-      //             </div>' .
-      //             \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
       $markup = '<div class="card drop-area" id="drop-card" style="position: relative;">'
         . '  <div class="card-header text-center" style="position: relative;">'
         . '    <h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>'
@@ -333,8 +346,7 @@ class ManageStudyForm extends FormBase
       ),
     );
 
-    // Row 3, Card 6
-
+    // Card 6 STREAMS IN
     $header = Stream::generateHeaderStudy();
     $output = Stream::generateOutputStudy($this->getStreamList());
 
@@ -384,7 +396,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['card6']['card']['card_footer'] = [
       '#type'   => 'markup',
       '#markup' => '<div class="card-footer text-center">'
-        . '<div id="json-table-pager" class="pagination"></div>'
+        . '<div id="json-table-stream-pager" class="pagination"></div>'
         . '</div>',
     ];
 
@@ -399,6 +411,7 @@ class ManageStudyForm extends FormBase
         'class' => ['col-md-12', 'mb-4'],  // span entire width, with bottom margin
       ],
     ];
+
     // inner row for the two AJAX cards
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row'] = [
       '#type' => 'container',
@@ -406,13 +419,39 @@ class ManageStudyForm extends FormBase
         'class' => ['row'],
       ],
     ];
+
+    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_topic_list'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-md-12'],
+        'id'    => 'stream-topic-list-container',
+      ],
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3 id="topic-list-count">Stream Topic List</h3>
+              <div class="info-card">Cards data is refreshed every 20 seconds</div>
+            </div>
+            <div class="card-body">
+              <div id="topic-list-table">Loading…</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="topic-list-pager" class="pagination"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
     // Stream Data Files card (left half)
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-6'],        // half width of the parent row
+        'class' => ['col-md-7', 'mt-3'],
         'id'    => 'stream-data-files-container',
-        'style' => 'display:none;',     // hidden until AJAX kicks in
+        'style' => 'display:none;',
       ],
       'card' => [
         '#type' => 'markup',
@@ -425,7 +464,8 @@ class ManageStudyForm extends FormBase
               <div id="data-files-table">Loading…</div>
             </div>
             <div class="card-footer text-center">
-              <div id="data-files-pager" class="pagination"></div>
+              <div id="data-files-pager" class="pagination stream-only-pager"></div>
+              <div id="topic-files-pager" class="pagination topic-only-pager" style="display:none;"></div>
             </div>
           </div>
         ',
@@ -435,9 +475,9 @@ class ManageStudyForm extends FormBase
     $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['col-md-6'],
+        'class' => ['col-md-5', 'mt-3'],
         'id'    => 'message-stream-container',
-        'style' => 'display:block;',
+        'style' => 'display:none!important;',
       ],
       'card' => [
         '#type' => 'markup',
@@ -457,7 +497,61 @@ class ManageStudyForm extends FormBase
           </div>
         ',
       ],
-    ];    
+    ];
+
+    // STREAMS OUT card (card 13)
+    $headerOut = Stream::generateHeaderOutStream();
+    $outputOut = Stream::generateOutputStream($this->getOutStreamList());
+    $form['row2']['card1']['inner_row']['card13'] = [
+      '#type'       => 'container',
+      '#attributes' => [
+        'class' => ['col-md-12', 'mt-4'],
+      ],
+    ];
+
+    $form['row2']['card1']['inner_row']['card13']['card'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['col-md-12', 'mb-4']],
+      '#prefix'     => '<div class="card">',
+      '#suffix'     => '</div>',
+    ];
+
+    // 3) Header
+    $form['row2']['card1']['inner_row']['card13']['card']['card_header'] = [
+      '#type'   => 'markup',
+      '#markup' => '<div class="card-header text-center">'
+        . '<h3 id="stream_files_count">' . $cards[13]['head'] . '</h3>'
+        . '</div>',
+    ];
+
+    // 4) Body + tabela
+    $form['row2']['card1']['inner_row']['card13']['card']['card_body'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['card-body', 'p-2']],
+    ];
+    $form['row2']['card1']['inner_row']['card13']['card']['card_body']['element_table'] = [
+      '#type'          => 'tableselect',
+      '#header'        => $headerOut,
+      '#options'          => $outputOut,
+      // '#default_value' => [],
+      '#empty'         => t('No stream has been found'),
+      '#attributes' => [
+        'id' => 'dpl-streamsout-table',
+      ],
+      // forca seleção única (radio) — ajuste se quiser usar checkbox:
+      '#multiple'   => FALSE,
+    ];
+
+    // 5) Footer
+    $form['row2']['card1']['inner_row']['card13']['card']['card_footer'] = [
+      '#type'   => 'markup',
+      '#markup' => '<div class="card-footer text-center">'
+        . '<div id="json-table-stream-pager" class="pagination"></div>'
+        . '</div>',
+    ];
+
+
+
 
     /**
       * 2) Fixed cards (Study Data Files, Publications, Media)
@@ -547,7 +641,6 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
-
     // Third row with 5 cards (card 6 to card 10)
     $form['row3']['row3_wrapper'] = [
       '#type' => 'container',
@@ -560,13 +653,34 @@ class ManageStudyForm extends FormBase
     $form['row3']['row3_wrapper']['row3'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['row', 'row-cols-4', 'g-3'],
+        'class' => ['row', 'row-cols-5', 'g-3'],
         // row-cols-4: 4 equal columns
         // g-3: standard gutter spacing
       ],
     ];
 
     // 3) Now each card is just one of those 4 columns:
+
+    // Card 7: STR
+    $form['row3']['row3_wrapper']['row3']['card14'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['col']],     // `col` is fine inside row-cols-4
+      'card' => [
+        '#type' => 'markup',
+        '#markup' => '
+          <div class="card h-100 text-center">
+            <div class="card-body">
+              <h1>' . $cards[14]['value'] . '</h1>
+            </div>
+            <div class="card-footer">
+              <a href="' . $cards[14]['link'] . '" class="btn btn-primary disabled">
+                <i class="fa-solid fa-list-check"></i> Manage Process
+              </a>
+            </div>
+          </div>
+        ',
+      ],
+    ];
 
     // Card 7: STR
     $form['row3']['row3_wrapper']['row3']['card7'] = [
@@ -578,7 +692,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[7]['value'] . '</h1>
-              <p>STR</p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[7]['link'] . '" class="btn btn-primary">
@@ -600,7 +713,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[8]['value'] . '</h1>
-              <p>Roles</p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[8]['link'] . '" class="btn btn-secondary disabled">
@@ -622,7 +734,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[9]['value'] . '</h1>
-              <p>Virtual Columns<br><small>(Entities)</small></p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[9]['link'] . '" class="btn btn-primary">
@@ -644,7 +755,6 @@ class ManageStudyForm extends FormBase
           <div class="card h-100 text-center">
             <div class="card-body">
               <h1>' . $cards[10]['value'] . '</h1>
-              <p>Object Collections<br><small>(' . ($cards[10]['value_objects'] ?? '0') . ' Objects)</small></p>
             </div>
             <div class="card-footer">
               <a href="' . $cards[10]['link'] . '" class="btn btn-primary">
@@ -659,9 +769,9 @@ class ManageStudyForm extends FormBase
     // Bottom part of the form
     $form['row4'] = array(
       '#type' => 'container',
-      '#attributes' => array('class' => array('row')),
+      '#attributes' => ['class' => ['row']],
       '#type' => 'markup',
-      '#markup' => '<p><b>Note</b>: Data Dictionaires (DD) and Semantic Data Dictionaires (SDD) are added' .
+      '#markup' => '<p><br /><b>Note</b>: Data Dictionaires (DD) and Semantic Data Dictionaires (SDD) are added' .
         ' to studies through their corresponding data files.</p><br>',
     );
 

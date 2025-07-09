@@ -17,8 +17,11 @@ use Drupal\Core\File\FileSystemInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
+use Drupal\rep\Entity\Stream;
 use Drupal\Component\Utility\Html;
 use Drupal\dpl\Controller\StreamController;
+
+use function PHPUnit\Framework\isArray;
 
 class JsonDataController extends ControllerBase
 {
@@ -396,6 +399,8 @@ class JsonDataController extends ControllerBase
 
             $streamUri = null;
             foreach ($streamList as $stream) {
+
+              if ($stream->method === 'files') {
                 $rawPattern = $stream->datasetPattern;
                 if (empty($rawPattern)) {
                     continue;
@@ -422,11 +427,12 @@ class JsonDataController extends ControllerBase
                 }
 
                 if ($res === 1) {
-                    // \Drupal::logger('std')
-                    //     ->info("Filename “{$filename}” matched regex “{$regex}”");
+                    \Drupal::logger('std')
+                        ->info("Filename “{$filename}” matched regex “{$regex}”");
                     $streamUri = $stream->uri;
                     break;
                 }
+              }
             }
 
             if ($streamUri === null) {
@@ -934,19 +940,19 @@ class JsonDataController extends ControllerBase
      *   - pagesize   (optional) items per page, default 10
      */
     public function streamDataAjax(Request $request) {
+      $api = \Drupal::service('rep.api_connector');
       // 1) Decode study & stream from base64.
       $studyKey  = $request->query->get('studyUri');
       $streamKey = $request->query->get('streamUri');
+      $topicKey = $request->query->get('topicUri');
       $studyUri  = base64_decode($studyKey);
       $streamUri = base64_decode($streamKey);
+      $topicUri = base64_decode($topicKey);
 
       // 2) Fetch the stream object to determine its type (e.g., 'files' vs. 'messages').
-      $stream = \Drupal::service('rep.api_connector')
-        ->parseObjectResponse(
-          \Drupal::service('rep.api_connector')
-            ->getUri($streamUri),
-          'getUri'
-        );
+      if (!empty($streamUri))
+        $stream = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getUri($streamUri),'getUri');
+
       // If the 'method' property exists, use it; otherwise default to 'unknown'.
       $streamType = isset($stream->method) ? strtolower($stream->method) : 'unknown';
 
@@ -955,106 +961,169 @@ class JsonDataController extends ControllerBase
       $pagerHtml  = '';
       $messagesHtml = '';
 
-      // 3) If this stream is file-based, build the file listing and pager.
       if ($streamType === 'files') {
-        // 3a) Pagination parameters.
-        $page     = max(1, (int) $request->query->get('page', 0));
+        $page     = max(1, (int) $request->query->get('page',     1));
         $pageSize = max(1, (int) $request->query->get('pagesize', 10));
         $offset   = ($page - 1) * $pageSize;
 
-        // 3c) Fetch total count of data attachments (DAs) for this study.
-        $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($streamUri), 'getTotalStudyDAsByStream');
-        $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
-
-        // 3d) Fetch the raw page of DAs for this study.
-        $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, $pageSize, $offset), 'getStudyDAsByStream');
-
+        $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, 9999999, 0), 'getStudyDAsByStream');
         if (!is_array($rawList)) {
           $rawList = [];
         }
 
-        // 3e) Filter only those DAs that belong to this streamUri.
-        $filtered = array_filter($rawList, function ($element) use ($streamUri) {
-          return isset($element->hasDataFile->streamUri)
-            && $element->hasDataFile->streamUri === $streamUri;
-        });
-        $filtered = array_values($filtered);
+        $filteredAll = array_values(array_filter($rawList, function ($el) use ($streamUri) {
+          return isset($el->hasDataFile->streamUri)
+            && $el->hasDataFile->streamUri === $streamUri;
+        }));
 
-        // 3f) Build table header and rows using DataFile helper methods.
+        $totalDAs  = count($filteredAll);
+        $pagedList = array_slice($filteredAll, $offset, $pageSize);
+
         $header = DataFile::generateStreamHeader($stream->method);
-        $rows   = DataFile::generateStreamOutputCompact($stream->method, $filtered);
+        $rows   = DataFile::generateStreamOutputCompact($stream->method, $pagedList);
 
-        // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
-        foreach ($rows as $key => &$row) {
-          if (isset($row['element_log'])) {
-            $html = $row['element_log'];
-            $row['element_log'] = [
-              'data' => [
-                '#markup' => $html,
-              ],
-            ];
-          }
-          if (isset($row['element_operations'])) {
-            $html = $row['element_operations'];
-            $row['element_operations'] = [
-              'data' => [
-                '#markup' => $html,
-              ],
-            ];
-          }
-        }
-        unset($row);
-
-        // 3h) Render the table to a string.
         $tableBuild = [
           '#theme'      => 'table',
           '#header'     => $header,
           '#rows'       => $rows,
           '#attributes' => ['class' => ['table', 'table-sm']],
         ];
-        $filesHtml = \Drupal::service('renderer')->renderRoot($tableBuild);
-        $filesHtml = Html::decodeEntities($filesHtml);
+        $filesHtml = Html::decodeEntities(
+          \Drupal::service('renderer')->renderRoot($tableBuild)
+        );
 
-        // 3i) Build a simple pager for the file listing.
         $totalPages = (int) ceil($totalDAs / $pageSize);
         $pagerHtml  = '<nav><ul class="pagination">';
         for ($p = 1; $p <= $totalPages; $p++) {
-          $active = ($p === $page) ? ' active' : '';
-          $pagerHtml .= '<li class="page-item' . $active . '">'
-            . '<a href="#" class="page-link dpl-files-page" data-page="' . $p . '">'
-            . $p . '</a></li>';
+          $active = $p === $page ? ' active' : '';
+          $pagerHtml .= sprintf(
+            '<li class="page-item%s"><a href="#" class="page-link dpl-files-page" data-page="%d" data-pagesize="%d">%d</a></li>',
+            $active, $p, $pageSize, $p
+          );
         }
         $pagerHtml .= '</ul></nav>';
 
-        // 3j) Since this is a files-only stream, do NOT fetch MQTT messages.
-        $messagesHtml = '<div class="mqtt-messages"><em>No messages for file-only stream.</em></div>';
+        return new JsonResponse([
+          'streamType' => $streamType,
+          'files'      => $filesHtml,
+          'filesPager' => $pagerHtml,
+          'messages'   => $messagesHtml,
+        ]);
       }
       // 4) Otherwise, if this stream is message-based (or any other type), load only messages.
       else {
 
-        $page     = max(1, (int) $request->query->get('page', 0));
-        $pageSize = max(1, (int) $request->query->get('pagesize', 10));
+        $page     = max(1, (int) $request->query->get('page',  1));
+        $pageSize = max(1, (int) $request->query->get('pagesize', 5));
         $offset   = ($page - 1) * $pageSize;
 
-        // 3c) Fetch total count of data attachments (DAs) for this study.
-        $totalArr = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getTotalStudyDAsByStream($streamUri), 'getTotalStudyDAsByStream');
-        $totalDAs = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
-        // 3d) Fetch the raw page of DAs for this study.
-        $rawList = \Drupal::service('rep.api_connector')->parseObjectResponse(\Drupal::service('rep.api_connector')->getStudyDAsByStream($streamUri, $pageSize, $offset), 'getStudyDAsByStream');
-        if (!is_array($rawList)) {
-          $rawList = [];
+        if (!empty($topicUri)) {
+          $totalTopicArr = \Drupal::service('rep.api_connector')
+            ->parseObjectResponse(\Drupal::service('rep.api_connector')
+                ->getTotalDAsByStreamTopic($topicUri), 'getTotalDAsByStreamTopic');
+          $body = json_decode($totalTopicArr, TRUE)['total'];
+          $totalDAsTopic = !empty($body) ? (int) $body : 0;
+
+          $totalPages = (int) ceil($totalDAsTopic / $pageSize);
+
+          $allForTopic = \Drupal::service('rep.api_connector')
+            ->parseObjectResponse(
+              \Drupal::service('rep.api_connector')
+                ->getDAsByStreamTopic($topicUri, $pageSize, $offset),
+              'getDAsByStreamTopic'
+            );
+          $dasFromTopic = is_array($allForTopic) ? $allForTopic : [];
+        }
+        else {
+          $totalArr = \Drupal::service('rep.api_connector')
+            ->parseObjectResponse(
+              \Drupal::service('rep.api_connector')
+                ->getTotalStudyDAsByStream($streamUri),
+              'getTotalStudyDAsByStream'
+            );
+          $totalDAs  = !empty($totalArr['total']) ? (int) $totalArr['total'] : 0;
+          $totalPages = (int) ceil($totalDAs / $pageSize);
+
+          // e, se quiseres também, podes buscar a página de DAs do stream inteiro:
+          $rawList = \Drupal::service('rep.api_connector')
+            ->parseObjectResponse(
+              \Drupal::service('rep.api_connector')
+                ->getStudyDAsByStream($streamUri, $pageSize, $offset),
+              'getStudyDAsByStream'
+            );
+          if (!is_array($rawList)) {
+            $rawList = [];
+          }
+          $dasFromTopic = $rawList;
         }
 
-        // 3e) Filter only those DAs that belong to this streamUri.
-        $filtered = array_filter($rawList, function ($element) use ($streamUri) {
-          return isset($element->hasDataFile->streamUri)
-            && $element->hasDataFile->streamUri === $streamUri;
-        });
-        $filtered = array_values($filtered);
+        $pagerHtml  = '<nav><ul class="pagination">';
+        for ($p = 1; $p <= $totalPages; $p++) {
+          $active = ($p === $page) ? ' active' : '';
+          $pagerHtml .= sprintf(
+            '<li class="page-item%s"><a href="#" class="page-link dpl-files-page" data-page="%d" data-pagesize="%d">%d</a></li>',
+            $active, $p, $pageSize, $p
+          );
+        }
+        $pagerHtml .= '</ul></nav>';
+
+        // RENDER TOPIC LIST
+        $filteredTopics = [];
+        // dpm($stream->topics);
+        if (isset($stream->topics) && is_array($stream->topics)) {
+          $filteredTopics = $stream->topics;
+        }
+
+        // 3f) Build table header and rows using DataFile helper methods.
+        $headerTopics = Stream::generateHeaderTopic();
+        $rowsTopics   = Stream::generateOutputTopic($filteredTopics, $stream->uri);
+
+        foreach ($rowsTopics as $key => &$row) {
+          // transforma o deployment num render-array com classe
+          $row['element_deployment'] = [
+            'data' => $row['element_deployment'],
+            'class'=> ['text-center'],
+          ];
+          $row['element_sdd'] = [
+            'data' => $row['element_sdd'],
+            'class'=> ['text-center'],
+          ];
+          $row['element_operations'] = [
+            'data' => $row['element_operations'],
+            'class'=> ['text-center'],
+          ];
+        }
+        unset($row);
+
+        // 3h) Render the table to a string.
+        $tableTopicBuild = [
+          '#theme'             => 'table',
+          '#header'            => $headerTopics,
+          '#rows'              => $rowsTopics,
+          '#attributes'        => [
+            'class' => ['table','table-sm','table-hover','selectable'],
+          ],
+          '#column_attributes' => [
+            // keys devem bater com as chaves do header:
+            'element_select' => ['class' => ['text-center']],
+            'element_deployment' => ['class' => ['text-center']],
+            'element_sdd'        => ['class' => ['text-center']],
+            'element_operations' => ['class' => ['text-center']],
+          ],
+          '#header_attributes' => [
+            'element_deployment' => ['class' => ['text-center']],
+            'element_sdd'        => ['class' => ['text-center']],
+            'element_operations' => ['class' => ['text-center']],
+          ],
+        ];
+
+        $topicList = \Drupal::service('renderer')->renderRoot($tableTopicBuild);
+
+        $topicList = Html::decodeEntities($topicList);
+
         // 3f) Build table header and rows using DataFile helper methods.
         $header = DataFile::generateStreamHeader('messages');
-        $rows   = DataFile::generateStreamOutputCompact('messages', $filtered);
-
+        $rows   = DataFile::generateStreamOutputCompact('messages', $dasFromTopic);
 
         // 3g) Convert any raw HTML strings in each row into renderable markup arrays.
         foreach ($rows as $key => &$row) {
@@ -1087,99 +1156,16 @@ class JsonDataController extends ControllerBase
         $filesHtml = \Drupal::service('renderer')->renderRoot($tableBuild);
         $filesHtml = Html::decodeEntities($filesHtml);
 
-        // 3i) Build a simple pager for the file listing.
-        $totalPages = (int) ceil($totalDAs / $pageSize);
-        $pagerHtml  = '<nav><ul class="pagination">';
-        for ($p = 1; $p <= $totalPages; $p++) {
-          $active = ($p === $page) ? ' active' : '';
-          $pagerHtml .= '<li class="page-item' . $active . '">'
-            . '<a href="#" class="page-link dpl-files-page" data-page="' . $p . '">'
-            . $p . '</a></li>';
-        }
-        $pagerHtml .= '</ul></nav>';
-
-        // 3j) Since this is a files-only stream, do NOT fetch MQTT messages.
-        $messagesHtml = '<div class="mqtt-messages"><em>No messages for file-only stream.</em></div>';
-
-        // 4a) Prepare connection parameters for MQTT (if available).
-        $filename    = $stream->messageArchiveId ?? NULL;
-
-        $result   = StreamController::readMessages($filename);
-        $messages = $result['messages'];
-
-        // 4c) Build HTML output for received messages.
-        $messagesHtml = '<div class="mqtt-messages">';
-        if (empty($messages)) {
-          $messagesHtml .= '<em>No messages received.</em>';
-        }
-        else {
-          foreach ($messages as $msg) {
-            // Remove any escaped quotes before attempting to JSON-decode.
-            $cleanMsg = stripslashes($msg);
-            $decoded  = json_decode($cleanMsg, true);
-
-            $messagesHtml .= '<div class="mqtt-card" style="border:1px solid #ccc; margin-bottom:10px; padding:15px; border-radius:8px; background:#fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">';
-
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-              // Build a styled header with topic and timestamp (if available).
-              $messagesHtml .= '<div style="margin-bottom:10px; font-weight:bold; font-size:1.1em; color:#333;">';
-              if (!empty($decoded['timestamp'])) {
-                $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $decoded['timestamp']);
-                if ($dt) {
-                  $messagesHtml .= ' | Date: ' . $dt->format('d/m/Y H:i:s');
-                }
-              }
-              $messagesHtml .= '</div>';
-
-              // Render the rest of the JSON fields (excluding 'timestamp') as a list.
-              $messagesHtml .= '<ul style="list-style:none; padding-left:0; margin:0;">';
-              foreach ($decoded as $key => $value) {
-                if ($key === 'timestamp') {
-                  continue;
-                }
-                // Transform field names into more readable labels.
-                $label = str_replace(
-                  ['_', 'Pa', 'C', 'percent', 'ID', 'V'],
-                  [' ', '', ' °C', '%', 'ID', ' V'],
-                  $key
-                );
-                $label = ucfirst($label);
-
-                $messagesHtml .= '<li style="padding:5px 0; border-bottom:1px solid #eee; color:#555;">';
-                $messagesHtml .= '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars((string) $value);
-                $messagesHtml .= '</li>';
-              }
-              $messagesHtml .= '</ul>';
-            }
-            else {
-                $messagesHtml .= '<div class="mqtt-raw" style="color:#000; font-family: monospace; text-align: left;">';
-                $formatted = trim($cleanMsg, "{}");
-                $lines = explode(',', $formatted);
-                foreach ($lines as $line) {
-                  $messagesHtml .= '<div style="margin-bottom:3px;">' . htmlspecialchars(trim($line)) . '</div>';
-                }
-                $messagesHtml .= '</div>';
-            }
-
-            $messagesHtml .= '</div>';
-          }
-        }
-        $messagesHtml .= '</div>';
-
-        // 4d) Since this is a messages-only stream, do NOT fetch or build any file HTML.
-        $filesHtml = '';
-        $pagerHtml = '';
+        // 5) Return a JSON response with exactly three keys: streamType, files, filesPager, and messages.
+        return new JsonResponse([
+          'streamType'  => $streamType,
+          'topics'   => $topicList,
+          'files'       => $filesHtml,
+          'filesPager'  => $pagerHtml,
+          'messages'    => $messagesHtml,
+        ]);
       }
-
-      // 5) Return a JSON response with exactly three keys: streamType, files, filesPager, and messages.
-      return new JsonResponse([
-        'streamType' => $streamType,
-        'files'      => $filesHtml,
-        'filesPager' => $pagerHtml,
-        'messages'   => $messagesHtml,
-      ]);
     }
-
 
     # TO BE CHECKED IF NEEDED
     public function backUrl()

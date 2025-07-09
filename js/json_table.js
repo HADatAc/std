@@ -64,6 +64,7 @@
           totals.daFiles = 0;
           updateTotal();
           $("#json-table-pager").empty();
+          $("#json-table-stream-pager").empty();
           return;
         }
 
@@ -108,7 +109,8 @@
           $("#json-table-container").html(
             "<p>No data available to display.</p>"
           );
-          $("#json-table-pager").empty(); // Limpa a paginação se não houver dados
+          $("#json-table-pager").empty();
+          $("#json-table-stream-pager").empty();
         }
       },
       error: function () {
@@ -635,6 +637,25 @@
       url: url,
       type: "GET",
       success: function (response) {
+        // se não houver arquivos
+        if (Array.isArray(response.files) && response.files.length === 0) {
+          // define os headers fixos da tabela de publicações
+          const headers = ['Filename','Operations'];
+          let table = '<table class="table table-striped table-bordered">';
+          table += '<thead><tr>';
+          headers.forEach(h => table += `<th>${h}</th>`);
+          table += '</tr></thead>';
+          table += '<tbody>';
+          table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
+          table += '</tbody></table>';
+          $("#publication-table-container").html(table);
+          totals.publications = 0;
+          updateTotal();
+          // limpa paginação
+          $("#publication-table-pager").empty();
+          return;
+        }
+
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
@@ -695,8 +716,6 @@
           } else {
             showToast("Files or pagination missing in response.", "danger");
           }
-        } else {
-          $("#publication-table-container").html("<p>No files available.</p>");
         }
       },
       error: function () {
@@ -830,6 +849,24 @@
       url: url,
       type: "GET",
       success: function (response) {
+
+      // se não houver arquivos de mídia
+      if (Array.isArray(response.files) && response.files.length === 0) {
+        const headers = ['Filename','Operations'];
+        let table = '<table class="table table-striped table-bordered">';
+        table += '<thead><tr>';
+        headers.forEach(h => table += `<th>${h}</th>`);
+        table += '</tr></thead>';
+        table += '<tbody>';
+        table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
+        table += '</tbody></table>';
+        $("#media-table-container").html(table);
+        totals.media = 0;
+        updateTotal();
+        $("#media-table-pager").empty();
+        return;
+      }
+
         if (response.files && response.pagination) {
           let table = '<table class="table table-striped table-bordered">';
           table +=
@@ -884,8 +921,6 @@
           } else {
             showToast("Files or pagination missing in response.", "danger");
           }
-        } else {
-          $("#media-table-container").html("<p>No files available.</p>");
         }
       },
       error: function () {

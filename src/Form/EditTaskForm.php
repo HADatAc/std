@@ -7,6 +7,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\RedirectCommand;
 use Drupal\Core\Url;
+use Drupal\Component\Utility\Html;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
 use Drupal\rep\Entity\Tables;
@@ -18,6 +19,8 @@ use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\std\Entity\Task;
 use Drupal\Core\Ajax\HtmlCommand;
+use Drupal\Core\Render\Markup;
+use Drupal\file\Entity\File;
 
 class EditTaskForm extends FormBase {
 
@@ -60,6 +63,11 @@ class EditTaskForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $processuri=NULL, $state=NULL, $taskuri=NULL) {
 
+    if (!isset($processuri) || !isset($state) || !isset($taskuri)) {
+      \Drupal::messenger()->addMessage(t("Invalid parameters for Edit Task Form."), 'error');
+      self::backUrl();
+      return;
+    }
 
     // INITIALIZE NS TABLE
     $tables = new Tables;
@@ -83,7 +91,21 @@ class EditTaskForm extends FormBase {
       //dpm($this->getTask());
     }
 
+    // 1) Find Task Type
+    $taskTypeUri = $this->getTask()->typeUri;
+    $isAbstract = ($taskTypeUri === VSTOI::ABSTRACT_TASK);
+
+    // 2) Define flags
+    $showSubTasks     = $isAbstract;
+    $showInstruments  = !$isAbstract;
+
     if ($state === 'init') {
+
+      // Release values cached in the editor because sometimes the form crash and old values keep in the cache
+      \Drupal::state()->delete('my_form_basic');
+      \Drupal::state()->delete('my_form_instruments');
+      \Drupal::state()->delete('my_form_tasks');
+
       // RESET STATE TO BASIC
       $state = 'basic';
 
@@ -98,7 +120,8 @@ class EditTaskForm extends FormBase {
       // $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
       // $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
       $basic = $this->populateBasic();;
-      $instruments = $this->populateInstruments();
+      $instruments = \Drupal::state()->get('my_form_instruments')
+               ?? $this->populateInstruments();
       $tasks = $this->getTask()->hasSubtaskUris;
 
     }
@@ -116,7 +139,17 @@ class EditTaskForm extends FormBase {
 
     $form['task_title'] = [
       '#type' => 'markup',
-      '#markup' => '<h3 class="mt-5">Edit Task</h3><br>',
+      '#markup' => '<h3 class="mt-5">Edit Task Form</h3>',
+    ];
+
+    $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
+    $form['process_label'] = [
+      '#type' => 'markup',
+      '#markup' => '<h4 class="text-secondary"><span class="text-dark">Process: </span>' . $process->label . '</h4>',
+    ];
+
+    $form['breakcrumb'] = [
+      '#markup' => $this->buildBreadcrumb().'<br>',
     ];
 
     $form['current_state'] = [
@@ -138,10 +171,11 @@ class EditTaskForm extends FormBase {
     $states = [
       'basic' => 'Basic task properties',
       'tasks' => 'Sub-Tasks',
-      'instrument' => 'Instruments and detectors',
+      'instrument' => 'Instruments and Components',
     ];
 
     foreach ($states as $key => $label) {
+
       $form['pills_card'][$key] = [
         '#type' => 'button',
         '#value' => $label,
@@ -151,6 +185,9 @@ class EditTaskForm extends FormBase {
           'data-state' => $key,
           'role' => 'presentation',
         ],
+        '#access' => ($key === 'basic')
+                || ($key === 'tasks'      && $showSubTasks)
+                || ($key === 'instrument' && $showInstruments),
         '#ajax' => [
           'callback' => '::pills_card_callback',
           'event' => 'click',
@@ -170,9 +207,12 @@ class EditTaskForm extends FormBase {
 
     if ($this->getState() == 'basic') {
 
-      $taskstem = '';
-      if (isset($basic['taskstem'])) {
-        $taskstem = $basic['taskstem'];
+      $tasktype = '';
+      if (isset($basic['tasktype'])) {
+        $tasktype = $basic['tasktype'];
+      }
+      if (isset($basic['tasktemporaldependency'])) {
+        $tasktemporalddependency = $basic['tasktemporaldependency'] ?? '';
       }
       $name = '';
       if (isset($basic['name'])) {
@@ -203,28 +243,29 @@ class EditTaskForm extends FormBase {
         $typeuri = $basic['typeUri'];
       }
 
-      $form['task_taskstem_hid'] = [
+      $form['task_tasktype_hid'] = [
         'top' => [
           '#type' => 'markup',
           '#markup' => '<div class="pt-3 col border border-white">',
         ],
         'main' => [
           '#type' => 'textfield',
-          '#title' => $this->t('Task Stem'),
-          '#name' => 'task_taskstem',
-          '#default_value' => $taskstem,
-          '#id' => 'task_taskstem',
-          '#parents' => ['task_taskstem'],
+          '#title' => $this->t('Task Type'),
+          '#name' => 'task_tasktype',
+          '#default_value' => $tasktype,
+          '#id' => 'task_tasktype',
+          '#parents' => ['task_tasktype'],
           '#attributes' => [
+            'disabled' => true,
             'class' => ['open-tree-modal'],
             'data-dialog-type' => 'modal',
             'data-dialog-options' => json_encode(['width' => 800]),
             'data-url' => Url::fromRoute('rep.tree_form', [
               'mode' => 'modal',
-              'elementtype' => 'taskstem',
-            ], ['query' => ['field_id' => 'task_taskstem']])->toString(),
-            'data-field-id' => 'task_taskstem',
-            'data-elementtype' => 'taskstem',
+              'elementtype' => 'task',
+            ], ['query' => ['field_id' => 'task_tasktype']])->toString(),
+            'data-field-id' => 'task_tasktype',
+            'data-elementtype' => 'task',
             'autocomplete' => 'off',
           ],
         ],
@@ -233,10 +274,46 @@ class EditTaskForm extends FormBase {
           '#markup' => '</div>',
         ],
       ];
-      $form['task_taskstem'] = [
+
+      $form['task_tasktype'] = [
         '#type' => 'hidden',
-        '#value' => $taskstem,
+        '#value' => $tasktype,
       ];
+
+      // Only If is Abstract Type
+      if ($isAbstract) {
+        $form['task_tasktemporaldependency'] = [
+          'top' => [
+            '#type' => 'markup',
+            '#markup' => '<div class="col border border-white">',
+          ],
+          'main' => [
+            '#type' => 'textfield',
+            '#title' => $this->t('Task Temporal Dependency'),
+            '#name' => 'task_tasktemporaldependency',
+            '#default_value' => $tasktemporalddependency,
+            '#id' => 'task_tasktemporaldependency',
+            '#parents' => ['task_tasktemporaldependency'],
+            '#attributes' => [
+              'class' => ['open-tree-modal'],
+              'data-dialog-type' => 'modal',
+              'data-dialog-options' => json_encode(['width' => 800]),
+              'data-url' => Url::fromRoute('rep.tree_form', [
+                'mode' => 'modal',
+                'elementtype' => 'tasktemporaldependency',
+              ], ['query' => ['field_id' => 'task_tasktemporaldependency']])->toString(),
+              'data-field-id' => 'task_tasktemporaldependency',
+              'data-elementtype' => 'tasktemporaldependency',
+              'autocomplete' => 'off',
+            ],
+          ],
+          'bottom' => [
+            '#type' => 'markup',
+            '#markup' => '</div>',
+          ],
+        ];
+      }
+
       $form['task_name'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Name'),
@@ -266,13 +343,60 @@ class EditTaskForm extends FormBase {
         '#default_value' => $description,
         // '#required' => true
       ];
-      $form['task_webdocument'] = [
-        '#type' => 'textfield',
-        '#title' => $this->t('Web Document'),
-        '#default_value' => $webDocument,
-        '#attributes' => [
-          'placeholder' => 'http://',
-        ]
+      // -------------- WebDocument --------------
+      $task_webdocument = $webDocument ?? '';
+      $webdocument_type = '';
+      if ($task_webdocument && str_starts_with(trim($task_webdocument),'http')) {
+        $webdocument_type = 'url';
+      }
+      elseif ($task_webdocument) {
+        $webdocument_type = 'upload';
+      }
+
+      $form['task_webdocument_type'] = [
+        '#type'   => 'select',
+        '#title'  => $this->t('Web Document Type'),
+        '#options'=> [
+          ''       => $this->t('Select Document Type'),
+          'url'    => $this->t('URL'),
+          'upload' => $this->t('Upload'),
+        ],
+        '#default_value' => $webdocument_type,
+      ];
+
+      $form['task_webdocument_url'] = [
+        '#type'   => 'textfield',
+        '#title'  => $this->t('Web Document'),
+        '#default_value' => $webdocument_type === 'url' ? $task_webdocument : '',
+        '#attributes' => ['placeholder' => 'http://'],
+        '#states' => [
+          'visible' => [
+            ':input[name="task_webdocument_type"]' => ['value' => 'url'],
+          ],
+        ],
+      ];
+
+      $form['task_webdocument_upload_wrapper'] = [
+        '#type' => 'container',
+        '#states' => [
+          'visible' => [
+            ':input[name="task_webdocument_type"]' => ['value' => 'upload'],
+          ],
+        ],
+      ];
+
+      $form['task_webdocument_upload_wrapper']['task_webdocument_upload'] = [
+        '#type'            => 'managed_file',
+        '#title'           => $this->t('Upload Document'),
+        '#upload_location' => 'private://resources/'. Utils::namespaceUri($this->getProcessUri()) .'/webdoc',
+        '#upload_validators' => [
+          'file_validate_extensions' => ['pdf doc docx txt xls xlsx'],
+          'file_validate_size'       => [2097152],
+        ],
+        '#description' => Markup::create(
+          '<span style="color:red;">pdf, doc, docx, txt, xls, xlsx. '.
+          $this->t('Selecting a new document will remove the previous one.').'</span>'
+        ),
       ];
       $form['task_status'] = [
         '#type' => 'hidden',
@@ -285,7 +409,7 @@ class EditTaskForm extends FormBase {
 
     }
 
-    if ($this->getState() == 'instrument') {
+    if ($showInstruments && $this->getState() == 'instrument') {
 
       /*
       *      INSTRUMENTS
@@ -296,52 +420,55 @@ class EditTaskForm extends FormBase {
       //   '#markup' => 'Instruments',
       // ];
 
-      $form['instruments'] = array(
+      // Wrap the instruments block in a container with an ID we can replace.
+      $form['instruments'] = [
         '#type' => 'container',
-        '#title' => $this->t('instruments'),
-        '#attributes' => array(
-          'class' => array('p-3', 'bg-light', 'text-dark', 'row', 'border', 'border-secondary', 'rounded'),
-          'id' => 'custom-table-wrapper',
-        ),
-      );
-
-      $form['instruments']['header'] = array(
-        '#type' => 'markup',
-        '#markup' =>
-          '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Detectors</div>' .
-          '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
-      );
-
-      $form['instruments']['rows'] = $this->renderInstrumentRows($instruments);
-
-      $form['instruments']['space_3'] = [
-        '#type' => 'markup',
-        '#markup' => $separator,
+        '#tree' => TRUE,
+        '#attributes' => [
+          'class' => ['p-3','bg-light','text-dark','row','border','border-secondary','rounded'],
+          'id' => 'instrument-wrapper',
+        ],
       ];
 
-      $form['instruments']['actions']['top'] = array(
+      // 1) Header row
+      $form['instruments']['header'] = [
         '#type' => 'markup',
-        '#markup' => '<div class="p-3 col">',
-      );
+        '#markup' =>
+          '<div class="row mb-2">' .
+            '<div class="col bg-secondary text-white p-2">Instrument</div>' .
+            '<div class="col bg-secondary text-white p-2 ps-4">Components</div>' .
+            '<div class="col-md-1 bg-secondary text-white p-2 ps-4">Operations</div>' .
+          '</div>',
+      ];
 
-      $form['instruments']['actions']['add_row'] = [
+      // 2) Data rows
+      $form['instruments']['rows'] = $this->renderInstrumentRows($instruments);
+
+      // 3) Button numa nova row full-width
+      $form['instruments']['add_row'] = [
         '#type' => 'submit',
         '#value' => $this->t('New Instrument'),
         '#name' => 'new_instrument',
-        '#attributes' => array('class' => array('btn', 'btn-sm', 'save-button')),
+        '#limit_validation_errors' => [],
+        '#submit' => ['::onAddInstrumentRow'],
+        '#ajax' => [
+          'callback' => '::ajaxAddInstrumentRow',
+          'wrapper'  => 'instrument-wrapper',
+          'effect'   => 'fade',
+        ],
+        '#attributes' => ['class' => ['btn','btn-primary', 'col-1', 'mt-2','add-element-button']],
       ];
 
-      $form['instruments']['actions']['bottom'] = array(
-        '#type' => 'markup',
-        '#markup' => '</div>' . $separator,
-      );
+      $form['instruments']['actions']['bottom_space'] = [
+        '#type'   => 'markup',
+        '#markup' => '<div class="w-100"></div>',
+      ];
 
     }
 
     /* ======================= TASKS ======================= */
 
-    if ($this->getState() == 'tasks') {
+    if ($showSubTasks && $this->getState() == 'tasks') {
 
       // *
       // *      TASKS
@@ -363,9 +490,9 @@ class EditTaskForm extends FormBase {
       ];
 
       // Tell Drupal “this string is already safe HTML”
-      $form['subtasks']['header']['title'] = [
-        '#markup' => $this->buildBreadcrumb(),
-      ];
+      // $form['subtasks']['header']['title'] = [
+      //   '#markup' => $this->buildBreadcrumb(),
+      // ];
 
       // 2) Same for o mini-form
       $form['subtasks']['new_subtask_form'] = [
@@ -385,21 +512,52 @@ class EditTaskForm extends FormBase {
         ],
       ];
 
+      $form['subtasks']['new_subtask_form']['subtask_type'] = [
+        '#type'          => 'textfield',
+        '#title'         => $this->t('Task Type'),
+        '#prefix'        => '<div class="col-md-3 ms-3">',
+        '#suffix'        => '</div>',
+        '#default_value' => '',
+        '#id'            => 'subtask_type',
+        '#attributes'    => [
+          'class'               => ['open-tree-modal'],
+          'data-dialog-type'    => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url'            => Url::fromRoute('rep.tree_form', [
+                                    'mode'        => 'modal',
+                                    'elementtype' => 'task',
+                                  ], ['query' => ['field_id' => 'subtask_type']])
+                                  ->toString(),
+          'data-field-id'       => 'subtask_type',
+          'data-elementtype'    => 'task',
+          'autocomplete'        => 'off',
+        ],
+      ];
+
       $form['subtasks']['new_subtask_form']['actions']['create_subtask'] = [
         '#type' => 'submit',
         '#value' => $this->t('Create Sub-Task'),
         '#limit_validation_errors' => [
           ['subtasks', 'new_subtask_form', 'subtask_name'],
+          ['subtasks', 'new_subtask_form', 'subtask_type'],
         ],
         '#validate' => ['::validateSubtaskName'],
-        '#submit' => ['::createSubtaskSubmit'],
+        '#submit'   => ['::createSubtaskSubmit'],
         '#ajax' => [
           'callback' => '::ajaxSubtasksCallback',
           'wrapper'  => 'subtasks-wrapper',
           'effect'   => 'fade',
         ],
+        // DESATIVA o botão até as duas condições serem verdadeiras.
+        '#states' => [
+          // Só habilita quando name **e** type estiverem “filled”
+          'enabled' => [
+            ':input[name="subtasks[new_subtask_form][subtask_name]"]' => ['filled' => TRUE],
+            ':input[name="subtasks[new_subtask_form][subtask_type]"]' => ['filled' => TRUE],
+          ],
+        ],
         '#attributes' => [
-          'class' => ['mt-2', 'ms-2', 'add-element-button']
+          'class' => ['mt-2', 'ms-2', 'add-element-button'],
         ],
       ];
 
@@ -497,7 +655,8 @@ class EditTaskForm extends FormBase {
 
     if (isset($input) && is_array($input) &&
         isset($basic) && is_array($basic)) {
-      $basic['taskstem'] = $input['task_taskstem'] ?? $this->getTask()->typeUri;
+      $basic['tasktype'] = $input['task_tasktype'] ?? UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel);
+      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? ($basic['tasktemporaldependency'] ?? $this->getTask()->hasTemporalDependency);
       $basic['name']        = $input['task_name'] ?? $this->getTask()->label;
       $basic['language']    = $input['task_language'] ?? $this->getTask()->hasLanguage;
       $basic['version']     = $input['task_version'] ?? $this->getTask()->hasVersion;
@@ -514,14 +673,14 @@ class EditTaskForm extends FormBase {
   public function populateBasic() {
     $basic = [
       'uri' => $this->getTask()->uri,
-      'taskstem' => UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel),
+      'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->typeUri,$this->getTask()->typeLabel),
+      'tasktemporaldependency' => UTILS::fieldToAutocomplete($this->getTask()->hasTemporalDependency, $this->getTask()->temporalDependencyLabel),
       'name' => $this->getTask()->label,
       'language' => $this->getTask()->hasLanguage,
       'version' => $this->getTask()->hasVersion,
       'description' => $this->getTask()->comment,
       'webdocument' => $this->getTask()->hasWebDocument,
-      'status' => $this->getTask()->hasStatus,
-      'typeUri' => $this->getTask()->typeUri,
+      'status' => $this->getTask()->hasStatus
     ];
     \Drupal::state()->set('my_form_basic', $basic);
     return $basic;
@@ -533,142 +692,112 @@ class EditTaskForm extends FormBase {
    *
    ******************************/
 
-   protected function renderInstrumentRows(array $instruments) {
-    //dpm($instruments);
-
-    $form_rows = [];
+  /**
+   * Render all instrument rows, always showing the full component list,
+   * with any previously selected components still checked.
+   *
+   * @param array $instruments
+   *   Array of instruments, each item:
+   *     - instrument: autocomplete label
+   *     - components:   array of URIs that were selected
+   *
+   * @return array
+   *   Render array for the rows.
+   */
+  protected function renderInstrumentRows(array $instruments) {
+    $rows = [];
     $separator = '<div class="w-100"></div>';
+
     foreach ($instruments as $delta => $instrument) {
+      // Decode URI from autocomplete label.
+      $instrument_uri = Utils::uriFromAutocomplete($instrument['instrument']);
 
-      $detectors_component = [];
-      if (empty($instrument['detectors'])) {
-        $detectors_component['table'] = [
-          '#type' => 'table',
-          '#header' => [
-            $this->t('#'),
-            $this->t('Name'),
-            $this->t('URI'),
-            $this->t('Status'),
-          ],
-          '#rows' => [],
-          '#empty' => $this->t('No detectors yet.'),
-        ];
-      }
-      else {
-        //WHEN THERE ARE DETECTORS, MUST GET ALL AND SELECT ONLY THE ONES IN ARRAY
-        $intURI = UTILS::uriFromAutocomplete($instrument['instrument']);
+      // Always fetch full component list.
+      $components = $instrument_uri
+        ? $this->getComponents($instrument_uri)
+        : [];
 
-        $detectorsList = [];
-        foreach ($instruments as $inst) {
-            $instrumentUri = UTILS::uriFromAutocomplete($inst['instrument']);
-            if ($instrumentUri === $intURI) {
-                $detectorsList = $inst['detectors'] ?? [];
-                break;
-            }
-        }
+      // Load persisted selections.
+      $selected = $instrument['components'] ?? [];
 
-        $detectors_component = $this->buildDetectorTable($this->getComponents($intURI), 'instrument_detectors_' . $delta, $detectorsList);
-
-      }
-
-      $form_row = array(
-        'instrument' => array(
-          'top' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="pt-3 col border border-white">',
-          ),
-          'instrument_instrument_'. $delta => array(
-            '#type' => 'textfield',
-            '#name' => 'instrument_instrument_' . $delta,
-            '#id' => 'instrument_instrument_' . $delta,
-            '#value' => $instrument['instrument'],
-            '#attributes' => [
-             'class' => ['open-tree-modal'],
-             'data-dialog-type' => 'modal',
-             'data-dialog-options' => json_encode(['width' => 800]),
-             'data-url' => Url::fromRoute(
-               'rep.tree_form',
-               [
-                 'mode' => 'modal',
-                 'elementtype' => 'instrument',
-               ],
-               [
-                 'query' => ['field_id' => 'instrument_instrument_' . $delta]
-               ])->toString(),
-             'data-field-id' => 'instrument_instrument_' . $delta,
-             'data-search-value' => UTILS::uriFromAutocomplete($instrument['instrument']),
-             'data-elementtype' => 'instrument',
-            "autocomplete" => 'off',
-            ],
-            "#autocomplete" => 'off',
-            '#ajax' => [
-             'callback' => '::addDetectorCallback',
-             'event' => 'change',
-             'wrapper' => 'instrument_detectors_' . $delta,
-             'method' => 'replaceWith',
-             'effect' => 'fade',
-            ],
-
-          ),
-          'bottom' => array(
-            '#type' => 'markup',
-            '#markup' => '</div>',
-          ),
-        ),
-
-        'detectors' => [
-          'top' => [
-            '#type' => 'markup',
-            '#markup' => '<div class="pt-3 col border border-white">',
-          ],
-          // Mescla a configuração básica do container com o array condicional.
-          'instrument_detectors_' . $delta => array_merge([
-            '#type' => 'container',
-            '#attributes' => [
-              'id' => 'instrument_detectors_' . $delta,
-            ],
-          ], $detectors_component),
-          'bottom' => [
-            '#type' => 'markup',
-            '#markup' => '</div>',
-          ],
-        ],
-
-        'operations' => array(
-          'top' => array(
-            '#type' => 'markup',
-            '#markup' => '<div class="pt-3 col-md-1 border border-white">',
-          ),
-          'main' => array(
-            '#type' => 'submit',
-            '#name' => 'instrument_remove_' . $delta,
-            '#value' => $this->t('Remove'),
-            '#attributes' => array(
-              'class' => array('remove-row', 'btn', 'btn-sm', 'btn-danger' , 'delete-element-button'),
-              'id' => 'instrument-' . $delta,
-            ),
-          ),
-          'bottom' => array(
-            '#type' => 'markup',
-            '#markup' => '</div>' . $separator,
-          ),
-        ),
+      // Build the component table (always, even if $selected is empty).
+      $component_table = $this->buildComponentTable(
+        $components,
+        'instrument_components_' . $delta,
+        $selected
       );
 
-      $rowId = 'row' . $delta;
-      $form_rows[] = [
-        $rowId => $form_row,
+      // Build the instrument field with your existing modal settings.
+      $instrument_field = [
+        '#type' => 'textfield',
+        '#name' => "instrument_instrument_$delta",
+        '#id' => "instrument_instrument_$delta",
+        '#value' => $instrument['instrument'],
+        '#attributes' => [
+          'class' => ['open-tree-modal'],
+          'data-dialog-type' => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url' => Url::fromRoute('rep.tree_form', [
+            'mode' => 'modal',
+            'elementtype' => 'instrument',
+          ], ['query' => ['field_id' => "instrument_instrument_$delta"]])->toString(),
+          'data-field-id' => "instrument_instrument_$delta",
+          'data-search-value' => Html::escape($instrument_uri),
+          'data-elementtype' => 'instrument',
+          'autocomplete' => 'off',
+        ],
+        '#autocomplete' => 'off',
+        '#ajax' => [
+          'callback' => '::addComponentCallback',
+          'event'    => 'change',
+          'wrapper'  => 'instrument_components_' . $delta,
+          'method'   => 'replaceWith',
+          'effect'   => 'fade',
+        ],
       ];
 
+      // Assemble the row.
+      $rows[] = [
+        "row$delta" => [
+          'instrument' => [
+            'top'   => ['#markup' => '<div class="pt-3 col border border-white">'],
+            'field' => $instrument_field,
+            'bottom'=> ['#markup' => '</div>'],
+          ],
+          'components' => [
+            'top'   => ['#markup' => '<div class="pt-3 col border border-white">'],
+            // Ensure '#tree' so selections persist:
+            'instrument_components_' . $delta => array_merge(
+              ['#type' => 'container', '#attributes' => ['id' => 'instrument_components_' . $delta], '#tree' => TRUE],
+              $component_table
+            ),
+            'bottom'=> ['#markup' => '</div>'],
+          ],
+          'operations' => [
+            'top'   => ['#markup' => '<div class="pt-3 col-md-1 border border-white">'],
+            'remove'=> [
+              '#type' => 'submit',
+              '#name' => "instrument_remove_$delta",
+              '#value'=> $this->t('Remove'),
+              '#attributes' => [
+                'class' => ['remove-row','btn','btn-sm','btn-danger','delete-element-button'],
+              ],
+            ],
+            'bottom'=> ['#markup' => '</div>' . $separator],
+          ],
+        ],
+      ];
     }
-    return $form_rows;
+
+    return $rows;
   }
 
-  public function addDetectorCallback(array &$form, FormStateInterface $form_state) {
+  public function addComponentCallback(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $delta = str_replace('instrument_instrument_', '', $triggering_element['#name']);
-    $container_id = 'instrument_detectors_' . $delta;
-    $instrumentURI = $form_state->getValue('instrument_instrument_' . $delta) !== '' ? $form_state->getValue('instrument_instrument_' . $delta) : $form_state->getUserInput()['instrument_instrument_' . $delta];
+    $container_id = 'instrument_components_' . $delta;
+    $input = $form_state->getUserInput();
+    $instrumentURI = $input['instrument_instrument_' . $delta] ?? '';
     $instrument_uri = Utils::uriFromAutocomplete($instrumentURI);
     $instruments = \Drupal::state()->get('my_form_instruments');
 
@@ -698,24 +827,29 @@ class EditTaskForm extends FormBase {
     }
 
     // Check if container exists
-    if (!isset($form['instruments']['rows'][$delta]['row'.$delta]['detectors'][$container_id])) {
+    if (!isset($form['instruments']['rows'][$delta]['row'.$delta]['components'][$container_id])) {
         \Drupal::logger('custom_module')->error('Container not found for delta: @delta', ['@delta' => $delta]);
         return [
             '#markup' => $this->t('Error: Container not found for delta @delta.', ['@delta' => $delta]),
         ];
     }
 
-    // Get detectors from API
+    // Get components from API
     $components = $this->getComponents($instrument_uri);
 
-    // Add detectors to instrument
-    self::updateInstruments($form_state);
+    // Add components to instrument
+    $this->updateInstruments($form_state);
 
-    // Render detectors
-    $detectorTable = $this->buildDetectorTable($components, $container_id);
+    // Render components
+    // $componentTable = $this->buildComponentTable($components, $container_id);
+    $componentTable = $this->buildComponentTable(
+      $components,
+      $container_id,
+      \Drupal::state()->get('my_form_instruments')[$delta]['components'] ?? []
+    );
 
-    // Replace the existing detector container with the updated table
-    $response->addCommand(new ReplaceCommand('#' . $container_id, $detectorTable));
+    // Replace the existing component container with the updated table
+    $response->addCommand(new ReplaceCommand('#' . $container_id, $componentTable));
 
     return $response;
   }
@@ -730,12 +864,12 @@ class EditTaskForm extends FormBase {
       foreach ($instruments as $instrument_id => $instrument) {
         if (isset($instrument_id) && isset($instrument)) {
           $instruments[$instrument_id]['instrument'] = $input['instrument_instrument_' . $instrument_id] ?? '';
-          $detector = [];
-          foreach ($input['instrument_detectors_' . $instrument_id]  as $key => $value) {
-            $detector[] = $value;
+          $component = [];
+          foreach ($input['instrument_components_' . $instrument_id]  as $key => $value) {
+            $component[] = $value;
           }
-          //$instruments[$instrument_id]['detectors'] = $input['instrument_detectors_' . $instrument_id] ?? '';
-          $instruments[$instrument_id]['detectors'] = $detector ?? [];
+          //$instruments[$instrument_id]['components'] = $input['instrument_components_' . $instrument_id] ?? '';
+          $instruments[$instrument_id]['components'] = $component ?? [];
         }
       }
     }
@@ -747,7 +881,7 @@ class EditTaskForm extends FormBase {
 
   protected function populateInstruments() {
 
-    $instruments = $this->getTask()->requiredInstrumentation;
+    $instruments = $this->getTask()->requiredInstrument;
 
     $instrumentData = [];
 
@@ -758,13 +892,13 @@ class EditTaskForm extends FormBase {
 
         if ($instrumentUri) {
 
-            $detectors = isset($instrument->detectors) && is_array($instrument->detectors)
-                ? array_map(fn($detector) => $detector->uri, $instrument->detectors)
+            $components = isset($instrument->components) && is_array($instrument->components)
+                ? array_map(fn($component) => $component->uri, $instrument->components)
                 : [];
 
             $instrumentData[] = [
                 'instrument' => UTILS::fieldToAutocomplete($instrumentUri,$instrumentLabel),
-                'detectors' => $detectors
+                'components' => $components
             ];
         }
     }
@@ -773,6 +907,9 @@ class EditTaskForm extends FormBase {
     return $instruments;
   }
 
+  // TODOPP
+  // É necessário fazer o end-point no FusekiAPIConnector.php (taskInstrumentUpdate)
+  // está um TODOPP no local onde é para colocar o código
   protected function saveInstruments($taskUri, array $instruments) {
     if (!isset($taskUri)) {
         \Drupal::messenger()->addError(t("No task URI has been provided to save instruments."));
@@ -785,30 +922,29 @@ class EditTaskForm extends FormBase {
 
     $api = \Drupal::service('rep.api_connector');
 
-    $requiredInstrumentation = [];
+    $requiredInstrument = [];
 
     foreach ($instruments as $instrument) {
         if (!empty($instrument['instrument'])) {
             $instrumentUri = Utils::uriFromAutocomplete($instrument['instrument']);
-            $detectors = [];
+            $components = [];
 
-            // Adiciona os detectores ao array se existirem
-            if (!empty($instrument['detectors'])) {
-                foreach ($instrument['detectors'] as $detector) {
-                    $detectors[] = $detector;
+            if (!empty($instrument['components'])) {
+                foreach ($instrument['components'] as $component) {
+                    $components[] = $component;
                 }
             }
 
-            $requiredInstrumentation[] = [
+            $requiredInstrument[] = [
                 'instrumentUri' => $instrumentUri,
-                'detectors' => $detectors
+                'components' => $components
             ];
         }
     }
 
     $taskData = [
         'taskuri' => $taskUri,
-        'requiredInstrumentation' => $requiredInstrumentation
+        'requiredInstrument' => $requiredInstrument
     ];
 
     $api->taskInstrumentUpdate($taskData);
@@ -816,19 +952,17 @@ class EditTaskForm extends FormBase {
     return;
   }
 
-  public function addInstrumentRow() {
+  /**
+   * Push a new empty instrument into storage and flag a rebuild.
+   *
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   */
+  protected function addInstrumentRow(FormStateInterface $form_state) {
     $instruments = \Drupal::state()->get('my_form_instruments') ?? [];
-
-    // Add a new row to the table.
-    $instruments[] = [
-      'instrument' => '',
-      'detectors' => '',
-    ];
+    $instruments[] = ['instrument'=>'', 'components'=>[]];
     \Drupal::state()->set('my_form_instruments', $instruments);
-
-    // Rebuild the table rows.
-    $form['instruments']['rows'] = $this->renderInstrumentRows($instruments);
-    return;
+    $form_state->setRebuild(TRUE);
   }
 
   public function removeInstrumentRow($button_name) {
@@ -1130,10 +1264,6 @@ class EditTaskForm extends FormBase {
       $this->updateInstruments($form_state);
     }
 
-    // if ($this->getState() === 'tasks') {
-    //   $this->updateCodes($form_state);
-    // }
-
     // Get the latest cached versions of values in the editor
 
     $basic = \Drupal::state()->get('my_form_basic');
@@ -1141,25 +1271,15 @@ class EditTaskForm extends FormBase {
     $instruments = \Drupal::state()->get('my_form_instruments');
     $tasks = \Drupal::state()->get('my_form_tasks');
 
-    if ($button_name === 'new_instrument') {
-      $this->addInstrumentRow();
-      return;
-    }
+    // if ($button_name === 'new_instrument') {
+    //   $this->addInstrumentRow($form_state);
+    //   return;
+    // }
 
     if (str_starts_with($button_name,'instrument_remove_')) {
       $this->removeInstrumentRow($button_name);
       return;
     }
-
-    // if ($button_name === 'new_code') {
-    //   $this->addCodeRow();
-    //   return;
-    // }
-
-    // if (str_starts_with($button_name,'code_remove_')) {
-    //   $this->removeCodeRow($button_name);
-    //   return;
-    // }
 
     if ($button_name === 'save') {
 
@@ -1170,7 +1290,7 @@ class EditTaskForm extends FormBase {
 
       if (!empty($basic)) {
 
-        if(strlen($basic['name']) < 1 || strlen($basic['taskstem']) < 1 ) {
+        if(strlen($basic['name']) < 1 || strlen($basic['tasktype']) < 1 ) {
           $errors = true;
           \Drupal::messenger()->addError(t("Mandatory fields are required to be filled! Check 'Basic Task Porperties Tab'"));
         }
@@ -1201,29 +1321,65 @@ class EditTaskForm extends FormBase {
 
       } else {
 
+        $api = \Drupal::service('rep.api_connector');
+
+        // ------------------------------------------------ WebDocument
+        $doc_type = $form_state->getValue('task_webdocument_type');
+        $task_webdocument = $basic['webdocument'];   // valor actual
+
+        if ($doc_type === 'url') {
+          // ficou tudo no campo de URL
+          $task_webdocument = $form_state->getValue('task_webdocument_url');
+
+        } elseif ($doc_type === 'upload') {
+          $fids = $form_state->getValue('task_webdocument_upload');
+          if ($fids) {
+            $file = File::load(reset($fids));
+            if ($file) {
+              $file->setPermanent();
+              $file->save();
+              \Drupal::service('file.usage')->add($file, 'sir', 'task', 1);
+              $task_webdocument = $file->getFilename();
+
+              // envia o binário para o backend se mudou
+              if ($task_webdocument !== $this->getTask()->hasWebDocument) {
+                $api->parseObjectResponse(
+                  $api->uploadFile($this->getTask()->uri, $file->id()),
+                  'uploadFile'
+                );
+              }
+            }
+          }
+        }
+
+        // dpm($basic);return false;
+
         try {
           $useremail = \Drupal::currentUser()->getEmail();
 
           $taskData = [
-            'uri'               => $this->getTask()->uri,
-            'typeUri'           => UTILS::uriFromAutocomplete($basic['taskstem']),
-            'hascoTypeUri'      => VSTOI::TASK,
-            'hasStatus'         => $this->getTask()->hasStatus,
-            'label'             => $basic['name'],
-            'hasLanguage'       => $this->getTask()->hasLanguage,
-            'hasVersion'        => $this->getTask()->hasVersion,
-            'hasSupertaskUri'   => $this->getTask()->hasSupertaskUri,
-            'comment'           => $basic['description'],
-            'hasWebDocument'    => $basic['webdocument'],
-            'hasSubtaskUris'    => $this->getTask()->hasSubtaskUris,
-            'hasSIRManagerEmail'=> $useremail,
+            'uri'                   => $this->getTask()->uri,
+            'typeUri'               => UTILS::uriFromAutocomplete($basic['tasktype']),
+            'hascoTypeUri'          => VSTOI::TASK,
+            'hasTemporalDependency' =>
+              ($this->getTask()->typeUri === VSTOI::ABSTRACT_TASK
+                ? Utils::uriFromAutocomplete($basic['tasktemporaldependency'])
+                : ''),
+            'hasStatus'             => $this->getTask()->hasStatus,
+            'label'                 => $basic['name'],
+            'hasLanguage'           => $this->getTask()->hasLanguage,
+            'hasVersion'            => $this->getTask()->hasVersion,
+            'hasSupertaskUri'       => $this->getTask()->hasSupertaskUri,
+            'comment'               => $basic['description'],
+            'hasWebDocument'        => $task_webdocument,
+            'hasSubtaskUris'        => $this->getTask()->hasSubtaskUris,
+            'hasSIRManagerEmail'    => $useremail,
           ];
 
           // dpm(json_encode($taskData)); return false;
 
           $taskJSON = json_encode($taskData);
 
-          $api = \Drupal::service('rep.api_connector');
           // Delete the task before updating it
           // This is necessary because the task is not updated
           // dpm($taskJSON);
@@ -1232,12 +1388,14 @@ class EditTaskForm extends FormBase {
 
           // In order to update the task it is necessary to
           // add the following to the task: the task itself, its
-          // instruments, its detectors and its codes
+          // instruments, its components and its codes
           $api->elementAdd('task',$taskJSON);
 
-          if (isset($instruments)) {
-            $this->saveInstruments($this->getTask()->uri,$instruments);
-          }
+          // TODOPP
+          // Save instruments API End-Point uncomment to save
+          // if (isset($instruments)) {
+          //   $this->saveInstruments($this->getTask()->uri,$instruments);
+          // }
 
           // Release values cached in the editor
           \Drupal::state()->delete('my_form_basic');
@@ -1267,19 +1425,11 @@ class EditTaskForm extends FormBase {
     if (!empty($trigger['#name']) && $trigger['#name'] === 'back') {
       return;
     }
-
-    // manual “required” check:
-    // $desc = $form_state->getValue('task_description');
-    // if (strlen(trim($desc)) === 0 && $trigger['#name'] === 'save') {
-    //   $form_state->setErrorByName('task_description', $this->t('Description is required.'));
-    // }
-
-    // and any other manual checks you need…
   }
 
   public function getComponents($instrumentUri) {
     $root_url = \Drupal::request()->getBaseUrl();
-    // Call to get Detectors
+    // Call to get Components
     $api = \Drupal::service('rep.api_connector');
     $response = $api->componentListFromInstrument($instrumentUri);
 
@@ -1292,7 +1442,7 @@ class EditTaskForm extends FormBase {
     // Decode Body
     $urls = json_decode($data['body'], true);
 
-    // Task detectors
+    // Task components
     $components = [];
     foreach ($urls as $url) {
       $componentData = $api->getUri($url);
@@ -1300,6 +1450,7 @@ class EditTaskForm extends FormBase {
       $components[] = [
         'name' => isset($obj->body->label) ? $obj->body->label : '',
         'uri' => isset($obj->body->uri) ? $obj->body->uri : '',
+        'type' => isset($obj->body->hascoTypeUri) ? Utils::namespaceUri($obj->body->hascoTypeUri) : '',
         'status' => isset($obj->body->hasStatus) ? Utils::plainStatus($obj->body->hasStatus) : '',
         'hasStatus' => isset($obj->body->hasStatus) ? $obj->body->hasStatus : null,
       ];
@@ -1307,60 +1458,104 @@ class EditTaskForm extends FormBase {
     return $components;
   }
 
-  protected function buildDetectorTable(array $detectors, $container_id, $arraySelected = []) {
-
-    $root_url = \Drupal::request()->getBaseUrl();
-
+  /**
+   * Build a components table grouped by their 'type' field.
+   *
+   * @param array $components
+   *   A list of component arrays, each containing:
+   *     - name:   string label
+   *     - uri:    string URI
+   *     - type:   string type name
+   *     - status: string status label
+   * @param string $container_id
+   *   The HTML id attribute for the outer container.
+   * @param array $arraySelected
+   *   An array of URIs that should be pre-checked.
+   *
+   * @return array
+   *   A renderable array for a Drupal table, wrapped in a container.
+   */
+  protected function buildComponentTable(array $components, $container_id, array $arraySelected = []) {
+    // Build table header: checkbox + name + URI + type + status.
     $header = [
-      $this->t("#"),
+      $this->t('#'),
       $this->t('Name'),
       $this->t('URI'),
+      // $this->t('Type'),
       $this->t('Status'),
     ];
 
-    // Get the renderer service.
+    // Sort components by their 'type' so grouping works.
+    usort($components, function($a, $b) {
+      return strcmp($a['type'], $b['type']);
+    });
+
+    /** @var \Drupal\Core\Render\RendererInterface $renderer */
     $renderer = \Drupal::service('renderer');
+    $root_url = \Drupal::request()->getBaseUrl();
 
     $rows = [];
-    foreach ($detectors as $detector) {
+    $current_type = NULL;
 
-      // Build an inline template render array for the checkbox.
+    foreach ($components as $component) {
+      // Whenever the type changes, inject a full-width grouping row.
+      if ($component['type'] !== $current_type) {
+        $current_type = $component['type'];
+        $rows[] = [
+          // The 'data' array holds a single cell with colspan == number of columns.
+          'data' => [
+            [
+              'data'    => [
+                '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
+              ],
+              'colspan' => count($header),
+              'class' => ['component-type-row'],
+            ],
+          ],
+          'class' => ['component-type-header'],
+        ];
+      }
+
+      // Build the checkbox render array.
       $checkbox = [
         '#type' => 'checkbox',
         '#name' => $container_id . '[]',
-        '#return_value' => $detector['uri'],
-        '#checked' => !empty($arraySelected) ? in_array($detector['uri'], $arraySelected) : 1,
+        '#return_value' => $component['uri'],
+        '#checked' => in_array($component['uri'], $arraySelected),
+        // Ajax behavior to re-render this table on change.
         '#ajax' => [
-          'callback' => '::addNewInstrumentRow',
-          'event' => 'change', // Garante que está ouvindo o evento correto
+          'callback' => '::ajaxAddInstrumentRow',
+          'event' => 'change',
           'wrapper' => $container_id,
-          'progress' => [
-            'type' => 'throbber',
-            'message' => NULL,
-          ],
-          'method' => 'replace', // Use replace para garantir atualização
+          'progress' => ['type' => 'throbber'],
         ],
-        '#executes_submit_callback' => TRUE, // Força o submit para garantir o disparo
-        '#attributes' => [
-          'class' => ['instrument-detector-ajax'],
-          //'data-container-id' => 'body'
-        ],
+        '#executes_submit_callback' => TRUE,
+        '#attributes' => ['class' => ['instrument-component-ajax']],
       ];
-
-
-      // Manually render the inline template.
       $checkbox_rendered = $renderer->render($checkbox);
 
+      // Append the normal component row.
       $rows[] = [
         'data' => [
           $checkbox_rendered,
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . $detector['name'] . '</a>'),
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . UTILS::namespaceUri($detector['uri']) . '</a>'),
-          $detector['status'],
+          // Link to describe page.
+          t('<a target="_new" href="@url">@name</a>', [
+            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+            '@name' => Html::escape($component['name']),
+          ]),
+          // Link to URI.
+          t('<a target="_new" href="@url">@uri</a>', [
+            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+            '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
+          ]),
+          // Render type and status safely.
+          // Html::escape($component['type']),
+          Html::escape($component['status']),
         ],
       ];
     }
 
+    // Wrap the table in a container so AJAX can replace it cleanly.
     return [
       '#type' => 'container',
       '#attributes' => ['id' => $container_id],
@@ -1368,10 +1563,12 @@ class EditTaskForm extends FormBase {
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $rows,
-        '#empty' => $this->t('No detectors found.'),
+        '#empty' => $this->t('No components found.'),
+        '#attributes' => ['class' => ['table', 'table-striped']],
       ],
     ];
   }
+
 
   /**
    * Validates befor submit sub-task.
@@ -1381,8 +1578,15 @@ class EditTaskForm extends FormBase {
     $name = $form_state->getValue(['subtasks', 'new_subtask_form', 'subtask_name']);
     if (trim($name) === '') {
       $form_state->setErrorByName(
-        'subtasks][new_subtask_form][subtask_name',
+        'subtasks][new_subtask_form][subtask_name]',
         $this->t('You must enter a name for the sub-task.')
+      );
+    }
+    $type = $form_state->getValue(['subtasks', 'new_subtask_form', 'subtask_type']);
+    if (trim($type) === '') {
+      $form_state->setErrorByName(
+        'subtasks][new_subtask_form][subtask_type]',
+        $this->t('You must enter a Type for the sub-task.')
       );
     }
   }
@@ -1390,6 +1594,7 @@ class EditTaskForm extends FormBase {
   public function createSubtaskSubmit(array &$form, FormStateInterface $form_state) {
     // Pull the new task name
     $name = $form_state->getValue(['subtasks','new_subtask_form','subtask_name']);
+    $type = $form_state->getValue(['subtasks','new_subtask_form','subtask_type']);
 
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
@@ -1397,31 +1602,36 @@ class EditTaskForm extends FormBase {
 
     $newTaskUri = Utils::uriGen('task');
     $newSubtask = [
-      'uri'               => $newTaskUri,
-      'typeUri'           => VSTOI::TASK,
-      'hascoTypeUri'      => VSTOI::TASK,
-      'hasStatus'         => VSTOI::DRAFT,
-      'label'             => $name,
-      'hasLanguage'       => $this->getTask()->hasLanguage,
-      'hasSupertaskUri'   => $parentUri,
-      'hasVersion'        => "1",
-      'comment'           => "",
-      'hasWebDocument'    => "",
-      'hasSIRManagerEmail'=> $useremail,
+      'uri'                       => $newTaskUri,
+      'typeUri'                   => UTILS::uriFromAutocomplete($type),
+      'hascoTypeUri'              => VSTOI::TASK,
+      'hasStatus'                 => VSTOI::DRAFT,
+      'hasTemporalDependency'     => '',
+      'label'                     => $name,
+      'hasLanguage'               => $this->getTask()->hasLanguage,
+      'hasSupertaskUri'           => $parentUri,
+      'hasVersion'                => "1",
+      'comment'                   => "",
+      'hasWebDocument'            => "",
+      'hasSIRManagerEmail'        => $useremail,
     ];
     $api->parseObjectResponse($api->elementAdd('task', json_encode($newSubtask)), 'getUri');
-    // \Drupal::logger('std')->debug('Created subtask message: <pre>@r</pre>', ['@r' => print_r($newSubtask, TRUE)]);
 
     $form_state->setValue(['subtasks','new_subtask_form','subtask_name'], '');
-
-    // Feedback + rebuild
-    // \Drupal::messenger()->addStatus($this->t('Sub‑Task “@name” created.', ['@name' => $name]));
+    $form_state->setValue(['subtasks','new_subtask_form','subtask_type'], '');
 
     $form_state->setRebuild(TRUE);
-    // return $form['subtasks'];
   }
 
   public function ajaxSubtasksCallback(array &$form, FormStateInterface $form_state) {
+    $trigger = $form_state->getTriggeringElement();
+    if (str_starts_with($trigger['#name'], 'subtask_remove_')) {
+      $encoded = substr($trigger['#name'], strlen('subtask_remove_'));
+      $uri     = base64_decode($encoded);
+      // chama o serviço que apaga no backend
+      \Drupal::service('rep.api_connector')->elementDel('task', $uri);
+      \Drupal::messenger()->addStatus($this->t('Sub-task removed.'));
+    }
     // Render the updated subtasks table / form.
     $response = new AjaxResponse();
     $response->addCommand(new ReplaceCommand(
@@ -1433,6 +1643,12 @@ class EditTaskForm extends FormBase {
     // Adjust the selector to exactly match your field's name attribute.
     $response->addCommand(new InvokeCommand(
       'input[name="subtasks[new_subtask_form][subtask_name]"]',
+      'val',
+      ['']
+    ));
+
+    $response->addCommand(new InvokeCommand(
+      'input[name="subtasks[new_subtask_form][subtask_type]"]',
       'val',
       ['']
     ));
@@ -1463,8 +1679,8 @@ class EditTaskForm extends FormBase {
     $labels = [];
 
     // 1) Start with the top‐level process.
-    $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
-    $labels[] = $process->label;
+    // $process = $api->parseObjectResponse($api->getUri($this->getProcessUri()), 'getUri');
+    // $labels[] = $process->label;
 
     // 2) Then walk down the supertask chain.
     $currentTask = $this->getTask();
@@ -1496,6 +1712,30 @@ class EditTaskForm extends FormBase {
   }
 
 
+  /**
+   * AJAX CALLBACKS
+   */
+
+  /**
+   * “Submit handler” create new line.
+   */
+  public function onAddInstrumentRow(array &$form, FormStateInterface $form_state) {
+    $this->updateInstruments($form_state);
+    $this->addInstrumentRow($form_state);
+    $form_state->setRebuild(TRUE);
+  }
+
+  /**
+   * AJAX callback to add one blank instrument-row and re-render instruments.
+   */
+  public function ajaxAddInstrumentRow(array &$form, FormStateInterface $form_state) {
+    // Return the portion of the form we're replacing.
+    return $form['instruments'];
+  }
+
+
+
+  // BACK Function
   function backUrl() {
     // $root_url = \Drupal::request()->getBaseUrl();
     // $response = new RedirectResponse($root_url . '/std/select/task/1/9');

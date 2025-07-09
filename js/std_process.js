@@ -1,7 +1,7 @@
 (function ($, Drupal) {
-  Drupal.behaviors.detectorAjaxTrigger = {
+  Drupal.behaviors.componentAjaxTrigger = {
     attach: function (context, settings) {
-      $('.instrument-detector-ajax', context).off('change').on('change', function (e) {
+      $('.instrument-component-ajax', context).off('change').on('change', function (e) {
         //console.log('Checkbox alterado:', $(this).val());
 
         const element = $(this);
