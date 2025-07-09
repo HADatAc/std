@@ -907,49 +907,47 @@ class EditTaskForm extends FormBase {
     return $instruments;
   }
 
-  // TODOPP
-  // É necessário fazer o end-point no FusekiAPIConnector.php (taskInstrumentUpdate)
-  // está um TODOPP no local onde é para colocar o código
-  protected function saveInstruments($taskUri, array $instruments) {
-    if (!isset($taskUri)) {
-        \Drupal::messenger()->addError(t("No task URI has been provided to save instruments."));
-        return;
-    }
+  protected function saveInstruments(string $taskUri, array $instruments) {
     if (empty($instruments)) {
-        // \Drupal::messenger()->addWarning(t("Task has no instrument to be saved."));
-        return;
+      // Nada a enviar.
+      return;
     }
 
-    $api = \Drupal::service('rep.api_connector');
-
+    // Monta payload no formato da TaskAPI.setRequiredInstruments
     $requiredInstrument = [];
+    foreach ($instruments as $inst) {
+      // extrai URI limpa da autocomplete
+      $instrumentUri = Utils::uriFromAutocomplete($inst['instrument']);
+      if (!$instrumentUri) {
+        continue;
+      }
 
-    foreach ($instruments as $instrument) {
-        if (!empty($instrument['instrument'])) {
-            $instrumentUri = Utils::uriFromAutocomplete($instrument['instrument']);
-            $components = [];
+      // componentes no formato { requireComponentUri: ... }
+      $requiredComponents = [];
+      foreach ($inst['components'] as $compUri) {
+        $requiredComponents[] = ['requireComponentUri' => $compUri];
+      }
 
-            if (!empty($instrument['components'])) {
-                foreach ($instrument['components'] as $component) {
-                    $components[] = $component;
-                }
-            }
-
-            $requiredInstrument[] = [
-                'instrumentUri' => $instrumentUri,
-                'components' => $components
-            ];
-        }
+      $requiredInstrument[] = [
+        'instrumentUri'      => $instrumentUri,
+        'requiredComponents' => $requiredComponents,
+      ];
     }
 
-    $taskData = [
-        'taskuri' => $taskUri,
-        'requiredInstrument' => $requiredInstrument
+    $payload = [
+      'taskuri'            => $taskUri,
+      'requiredInstrument' => $requiredInstrument,
     ];
 
-    $api->taskInstrumentUpdate($taskData);
-
-    return;
+    /** @var \Drupal\std\FusekiAPIConnector $api */
+    $api = \Drupal::service('std.api_connector');
+    try {
+      $api->taskSetRequiredInstruments($payload);
+      \Drupal::messenger()->addStatus($this->t('Successefully saved instruments.'));
+    }
+    catch (\Exception $e) {
+      \Drupal::messenger()->addError($this->t('Error saving instruments: @msg', ['@msg' => $e->getMessage()]));
+    }
   }
 
   /**
@@ -1391,11 +1389,18 @@ class EditTaskForm extends FormBase {
           // instruments, its components and its codes
           $api->elementAdd('task',$taskJSON);
 
-          // TODOPP
-          // Save instruments API End-Point uncomment to save
-          // if (isset($instruments)) {
-          //   $this->saveInstruments($this->getTask()->uri,$instruments);
-          // }
+          // Update the task's instruments to ensure last AJAX has been proccessed
+          $this->updateInstruments($form_state);
+          $instruments = \Drupal::state()->get('my_form_instruments');
+
+          // Save instruments on API
+          if ($this->getTask()->typeUri === VSTOI::ABSTRACT_TASK) {
+            // If the task is an Abstract Task, save instruments
+            $this->saveInstruments($this->getTask()->uri, $instruments);
+          } else {
+            // If the task is not an Abstract Task, remove all instruments
+            $instruments = [];
+          }
 
           // Release values cached in the editor
           \Drupal::state()->delete('my_form_basic');
