@@ -1250,15 +1250,9 @@ class EditTaskForm extends FormBase {
       $this->updateBasic($form_state);
     }
 
-    if ($this->getState() === 'instruments') {
-      $this->updateInstruments($form_state);
-    }
-
-    // Get the latest cached versions of values in the editor
-
+    // Basic update
     $basic = \Drupal::state()->get('my_form_basic');
-    $this->updateInstruments($form_state);
-    $instruments = \Drupal::state()->get('my_form_instruments');
+    $instruments = \Drupal::state()->get('my_form_instruments', []);
     $tasks = \Drupal::state()->get('my_form_tasks');
 
     // if ($button_name === 'new_instrument') {
@@ -1380,16 +1374,8 @@ class EditTaskForm extends FormBase {
           $api->elementAdd('task',$taskJSON);
 
           // Update the task's instruments to ensure last AJAX has been proccessed
-          $this->updateInstruments($form_state);
-          $instruments = \Drupal::state()->get('my_form_instruments');
-
-          // Save instruments on API
           if ($this->getTask()->typeUri !== VSTOI::ABSTRACT_TASK) {
-            // If the task is an Abstract Task, save instruments
             $this->saveInstruments($this->getTask()->uri, $instruments);
-          } else {
-            // If the task is not an Abstract Task, remove all instruments
-            $instruments = [];
           }
 
           // Release values cached in the editor
