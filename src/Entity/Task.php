@@ -182,10 +182,9 @@ class Task {
       $rows[] = [
         'data' => [
           'element_uri'             => t(
-            '<a target="_new" href=":link">:nsuri</a>',
+            '<a target="_new" href=":link">'.UTILS::namespaceUri($element['uri']) ?? ''.'</a>',
             [
-              ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri),
-              ':nsuri' => UTILS::namespaceUri($element['uri']) ?? '',
+              ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri)
             ]
           ),
           'element_name'            => $label,
