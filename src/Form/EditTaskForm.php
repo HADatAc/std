@@ -75,6 +75,7 @@ class EditTaskForm extends FormBase {
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
+    $form['#attached']['library'][] = 'std/std_process';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
     // READ TASK
@@ -1235,6 +1236,9 @@ class EditTaskForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
+    dpm($button_name, 'Button name');
+    dpm(str_starts_with($button_name, 'subtask_remove_'), 'Starts with subtask_remove_');
+
     if ($button_name === 'back') {
       // Release values cached in the editor before leaving it
       \Drupal::state()->delete('my_form_basic');
@@ -1242,6 +1246,16 @@ class EditTaskForm extends FormBase {
       \Drupal::state()->delete('my_form_tasks');
       self::backUrl();
       return false;
+    }
+
+    // Delete a sub-task
+    if (str_starts_with($button_name, 'subtask_remove_')) {
+      $encoded = substr($button_name, strlen('subtask_remove_'));
+      $uri = base64_decode($encoded);
+      \Drupal::service('rep.api_connector')->elementDel('task', $uri);
+      \Drupal::messenger()->addStatus($this->t('Sub-task removida.'));
+      $form_state->setRebuild(TRUE);
+      return;
     }
 
     // If not leaving then UPDATE STATE OF VARIABLES, OBJECTS AND CODES
@@ -1606,13 +1620,7 @@ class EditTaskForm extends FormBase {
 
   public function ajaxSubtasksCallback(array &$form, FormStateInterface $form_state) {
     $trigger = $form_state->getTriggeringElement();
-    if (str_starts_with($trigger['#name'], 'subtask_remove_')) {
-      $encoded = substr($trigger['#name'], strlen('subtask_remove_'));
-      $uri     = base64_decode($encoded);
-      // chama o serviço que apaga no backend
-      \Drupal::service('rep.api_connector')->elementDel('task', $uri);
-      \Drupal::messenger()->addStatus($this->t('Sub-task removed.'));
-    }
+
     // Render the updated subtasks table / form.
     $response = new AjaxResponse();
     $response->addCommand(new ReplaceCommand(
