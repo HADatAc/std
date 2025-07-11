@@ -13,6 +13,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Entity\Tables;
 use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\rep\Vocabulary\VSTOI;
+use Drupal\rep\Vocabulary\HASCO;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\AfterCommand;
 use Drupal\Core\Ajax\RemoveCommand;
@@ -75,6 +76,7 @@ class EditTaskForm extends FormBase {
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
+    $form['#attached']['library'][] = 'std/std_process';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
     // READ TASK
@@ -115,13 +117,8 @@ class EditTaskForm extends FormBase {
       $tasks = $this->getTask()->hasSubtaskUris;
 
     } else {
-
-      // $basic = \Drupal::state()->get('my_form_basic') ?? $this->populateBasic();;
-      // $instruments = \Drupal::state()->get('my_form_instruments') ?? $this->populateInstruments();
-      // $tasks = \Drupal::state()->get('my_form_tasks') ?? $this->getTask()->subtask;
       $basic = $this->populateBasic();;
-      $instruments = \Drupal::state()->get('my_form_instruments')
-               ?? $this->populateInstruments();
+      $instruments = \Drupal::state()->get('my_form_instruments', []);
       $tasks = $this->getTask()->hasSubtaskUris;
 
     }
@@ -656,7 +653,7 @@ class EditTaskForm extends FormBase {
     if (isset($input) && is_array($input) &&
         isset($basic) && is_array($basic)) {
       $basic['tasktype'] = $input['task_tasktype'] ?? UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel);
-      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? ($basic['tasktemporaldependency'] ?? $this->getTask()->hasTemporalDependency);
+      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? ($basic['tasktemporaldependency'] ?? UTILS::fieldToAutocomplete($this->getTask()->hasTemporalDependency, $this->getTask()->temporalDependencyLabel));
       $basic['name']        = $input['task_name'] ?? $this->getTask()->label;
       $basic['language']    = $input['task_language'] ?? $this->getTask()->hasLanguage;
       $basic['version']     = $input['task_version'] ?? $this->getTask()->hasVersion;
@@ -671,6 +668,7 @@ class EditTaskForm extends FormBase {
   }
 
   public function populateBasic() {
+
     $basic = [
       'uri' => $this->getTask()->uri,
       'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->typeUri,$this->getTask()->typeLabel),
@@ -855,101 +853,96 @@ class EditTaskForm extends FormBase {
   }
 
   protected function updateInstruments(FormStateInterface $form_state) {
-    $instruments = \Drupal::state()->get('my_form_instruments');
-
+    $instruments = \Drupal::state()->get('my_form_instruments', []);
     $input = $form_state->getUserInput();
-    if (isset($input) && is_array($input) &&
-        isset($instruments) && is_array($instruments)) {
 
-      foreach ($instruments as $instrument_id => $instrument) {
-        if (isset($instrument_id) && isset($instrument)) {
-          $instruments[$instrument_id]['instrument'] = $input['instrument_instrument_' . $instrument_id] ?? '';
-          $component = [];
-          foreach ($input['instrument_components_' . $instrument_id]  as $key => $value) {
-            $component[] = $value;
-          }
-          //$instruments[$instrument_id]['components'] = $input['instrument_components_' . $instrument_id] ?? '';
-          $instruments[$instrument_id]['components'] = $component ?? [];
-        }
+    foreach ($instruments as $instrument_id => $instrument) {
+      $instruments[$instrument_id]['instrument'] =
+        $input['instrument_instrument_' . $instrument_id] ?? '';
+
+      $compKey = 'instrument_components_' . $instrument_id;
+
+      $selectedComponents = [];
+      if (isset($input[$compKey]) && is_array($input[$compKey])) {
+        $selectedComponents = $input[$compKey];
       }
+
+      $instruments[$instrument_id]['components'] = $selectedComponents;
     }
 
-    //dpm($instruments);
     \Drupal::state()->set('my_form_instruments', $instruments);
-    return;
   }
 
   protected function populateInstruments() {
-
-    $instruments = $this->getTask()->requiredInstrument;
-
+    $required = $this->getTask()->requiredInstrument;
     $instrumentData = [];
-
-    foreach ($instruments as $instrument) {
-
-        $instrumentUri = $instrument->instrument->uri ?? null;
-        $instrumentLabel = $instrument->instrument->label ?? 'Unknown Instrument';
-
-        if ($instrumentUri) {
-
-            $components = isset($instrument->components) && is_array($instrument->components)
-                ? array_map(fn($component) => $component->uri, $instrument->components)
-                : [];
-
-            $instrumentData[] = [
-                'instrument' => UTILS::fieldToAutocomplete($instrumentUri,$instrumentLabel),
-                'components' => $components
-            ];
+    foreach ($required as $reqInstr) {
+      $uri   = $reqInstr->instrument->uri;
+      $label = $reqInstr->instrument->label;
+      $components = [];
+      if (!empty($reqInstr->components) && is_array($reqInstr->components)) {
+        foreach ($reqInstr->components as $c) {
+          $components[] = $c->uri;
         }
+      }
+      $instrumentData[] = [
+        'instrument' => UTILS::fieldToAutocomplete($uri, $label),
+        'components' => $components,
+      ];
     }
-
     \Drupal::state()->set('my_form_instruments', $instrumentData);
-    return $instruments;
+    return $instrumentData;
   }
 
-  // TODOPP
-  // É necessário fazer o end-point no FusekiAPIConnector.php (taskInstrumentUpdate)
-  // está um TODOPP no local onde é para colocar o código
-  protected function saveInstruments($taskUri, array $instruments) {
-    if (!isset($taskUri)) {
-        \Drupal::messenger()->addError(t("No task URI has been provided to save instruments."));
-        return;
-    }
-    if (empty($instruments)) {
-        // \Drupal::messenger()->addWarning(t("Task has no instrument to be saved."));
-        return;
-    }
-
-    $api = \Drupal::service('rep.api_connector');
-
+  protected function saveInstruments(string $taskUri, array $instruments) {
     $requiredInstrument = [];
-
-    foreach ($instruments as $instrument) {
-        if (!empty($instrument['instrument'])) {
-            $instrumentUri = Utils::uriFromAutocomplete($instrument['instrument']);
-            $components = [];
-
-            if (!empty($instrument['components'])) {
-                foreach ($instrument['components'] as $component) {
-                    $components[] = $component;
-                }
-            }
-
-            $requiredInstrument[] = [
-                'instrumentUri' => $instrumentUri,
-                'components' => $components
-            ];
-        }
+    foreach ($instruments as $inst) {
+      $instrumentUri = Utils::uriFromAutocomplete($inst['instrument']);
+      if (!$instrumentUri) {
+        \Drupal::logger('std')->warning('Ignorando instrumento sem URI: @label', ['@label' => $inst['instrument']]);
+        continue;
+      }
+      $requiredComponents = array_map(
+        fn($compUri) => ['requiredComponentUri' => $compUri],
+        $inst['components'] ?? []
+      );
+      $requiredInstrument[] = [
+        'instrumentUri'      => $instrumentUri,
+        'requiredComponent' => $requiredComponents,
+      ];
     }
 
-    $taskData = [
-        'taskuri' => $taskUri,
-        'requiredInstrument' => $requiredInstrument
+    $payload = [
+      'taskuri'            => $taskUri,
+      'requiredInstrument' => $requiredInstrument,
     ];
 
-    $api->taskInstrumentUpdate($taskData);
+    \Drupal::logger('std')->notice('» saveInstruments payload: <pre>@json</pre>', [
+      '@json' => json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+    ]);
 
-    return;
+    /** @var \Drupal\std\FusekiAPIConnector $api */
+    $api = \Drupal::service('rep.api_connector');
+
+    try {
+      $response = $api->taskSetRequiredInstruments($payload);
+
+      // 3) Log da resposta decodificada e crua
+      \Drupal::logger('std')->notice('« API response (decoded): <pre>@resp</pre>', [
+        '@resp' => print_r($response, TRUE),
+      ]);
+
+      // Se vier string, log também
+      if (is_string($response)) {
+        \Drupal::logger('std')->notice('« API raw response: @raw', ['@raw' => $response]);
+      }
+
+      \Drupal::messenger()->addStatus($this->t('Instrumentos enviados, verifique logs para detalhes.'));
+    }
+    catch (\Exception $e) {
+      \Drupal::logger('std')->error('Erro em saveInstruments(): @msg', ['@msg' => $e->getMessage()]);
+      \Drupal::messenger()->addError($this->t('Falha ao guardar instrumentos, veja os logs.'));
+    }
   }
 
   /**
@@ -1254,21 +1247,25 @@ class EditTaskForm extends FormBase {
       return false;
     }
 
+    // Delete a sub-task
+    if (str_starts_with($button_name, 'subtask_remove_')) {
+      $encoded = substr($button_name, strlen('subtask_remove_'));
+      $uri = base64_decode($encoded);
+      \Drupal::service('rep.api_connector')->elementDel('task', $uri);
+      \Drupal::messenger()->addStatus($this->t('Sub-task removida.'));
+      $form_state->setRebuild(TRUE);
+      return;
+    }
+
     // If not leaving then UPDATE STATE OF VARIABLES, OBJECTS AND CODES
     // according to the current state of the editor
     if ($this->getState() === 'basic') {
       $this->updateBasic($form_state);
     }
 
-    if ($this->getState() === 'instruments') {
-      $this->updateInstruments($form_state);
-    }
-
-    // Get the latest cached versions of values in the editor
-
+    // Basic update
     $basic = \Drupal::state()->get('my_form_basic');
-    $this->updateInstruments($form_state);
-    $instruments = \Drupal::state()->get('my_form_instruments');
+    $instruments = \Drupal::state()->get('my_form_instruments', []);
     $tasks = \Drupal::state()->get('my_form_tasks');
 
     // if ($button_name === 'new_instrument') {
@@ -1328,7 +1325,6 @@ class EditTaskForm extends FormBase {
         $task_webdocument = $basic['webdocument'];   // valor actual
 
         if ($doc_type === 'url') {
-          // ficou tudo no campo de URL
           $task_webdocument = $form_state->getValue('task_webdocument_url');
 
         } elseif ($doc_type === 'upload') {
@@ -1341,7 +1337,6 @@ class EditTaskForm extends FormBase {
               \Drupal::service('file.usage')->add($file, 'sir', 'task', 1);
               $task_webdocument = $file->getFilename();
 
-              // envia o binário para o backend se mudou
               if ($task_webdocument !== $this->getTask()->hasWebDocument) {
                 $api->parseObjectResponse(
                   $api->uploadFile($this->getTask()->uri, $file->id()),
@@ -1391,11 +1386,10 @@ class EditTaskForm extends FormBase {
           // instruments, its components and its codes
           $api->elementAdd('task',$taskJSON);
 
-          // TODOPP
-          // Save instruments API End-Point uncomment to save
-          // if (isset($instruments)) {
-          //   $this->saveInstruments($this->getTask()->uri,$instruments);
-          // }
+          // Update the task's instruments to ensure last AJAX has been proccessed
+          if ($this->getTask()->typeUri !== VSTOI::ABSTRACT_TASK) {
+            $this->saveInstruments($this->getTask()->uri, $instruments);
+          }
 
           // Release values cached in the editor
           \Drupal::state()->delete('my_form_basic');
@@ -1475,100 +1469,235 @@ class EditTaskForm extends FormBase {
    * @return array
    *   A renderable array for a Drupal table, wrapped in a container.
    */
+  // protected function buildComponentTable(array $components, $container_id, array $arraySelected = []) {
+  //   // Build table header: checkbox + name + URI + type + status.
+  //   $header = [
+  //     $this->t('#'),
+  //     $this->t('Name'),
+  //     $this->t('URI'),
+  //     // $this->t('Type'),
+  //     $this->t('Status'),
+  //   ];
+
+  //   // Sort components by their 'type' so grouping works.
+  //   usort($components, function($a, $b) {
+  //     return strcmp($a['type'], $b['type']);
+  //   });
+
+  //   /** @var \Drupal\Core\Render\RendererInterface $renderer */
+  //   $renderer = \Drupal::service('renderer');
+  //   $root_url = \Drupal::request()->getBaseUrl();
+
+  //   $rows = [];
+  //   $current_type = NULL;
+
+  //   foreach ($components as $component) {
+  //     // Whenever the type changes, inject a full-width grouping row.
+  //     if ($component['type'] !== $current_type) {
+  //       $current_type = $component['type'];
+  //       $rows[] = [
+  //         // The 'data' array holds a single cell with colspan == number of columns.
+  //         'data' => [
+  //           [
+  //             'data'    => [
+  //               '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
+  //             ],
+  //             'colspan' => count($header),
+  //             'class' => ['component-type-row'],
+  //           ],
+  //         ],
+  //         'class' => ['component-type-header'],
+  //       ];
+  //     }
+
+  //     // Build the checkbox render array.
+  //     $checkbox = [
+  //       '#type' => 'checkbox',
+  //       '#name' => $container_id . '[]',
+  //       '#return_value' => $component['uri'],
+  //       '#checked' => in_array($component['uri'], $arraySelected),
+  //       // Ajax behavior to re-render this table on change.
+  //       '#ajax' => [
+  //         'callback' => '::ajaxAddInstrumentRow',
+  //         'event' => 'change',
+  //         'wrapper' => $container_id,
+  //         'progress' => ['type' => 'throbber'],
+  //       ],
+  //       '#executes_submit_callback' => TRUE,
+  //       '#attributes' => ['class' => ['instrument-component-ajax']],
+  //     ];
+  //     $checkbox_rendered = $renderer->render($checkbox);
+
+  //     // Append the normal component row.
+  //     $rows[] = [
+  //       'data' => [
+  //         $checkbox_rendered,
+  //         // Link to describe page.
+  //         t('<a target="_new" href="@url">@name</a>', [
+  //           '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+  //           '@name' => Html::escape($component['name']),
+  //         ]),
+  //         // Link to URI.
+  //         t('<a target="_new" href="@url">@uri</a>', [
+  //           '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+  //           '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
+  //         ]),
+  //         // Render type and status safely.
+  //         // Html::escape($component['type']),
+  //         Html::escape($component['status']),
+  //       ],
+  //     ];
+  //   }
+
+  //   // Wrap the table in a container so AJAX can replace it cleanly.
+  //   return [
+  //     '#type' => 'container',
+  //     '#attributes' => ['id' => $container_id],
+  //     'table' => [
+  //       '#type' => 'table',
+  //       '#header' => $header,
+  //       '#rows' => $rows,
+  //       '#empty' => $this->t('No components found.'),
+  //       '#attributes' => ['class' => ['table', 'table-striped']],
+  //     ],
+  //   ];
+  // }
+
   protected function buildComponentTable(array $components, $container_id, array $arraySelected = []) {
-    // Build table header: checkbox + name + URI + type + status.
+    // 1) Define the table header: checkbox column + Name + URI + Status.
     $header = [
-      $this->t('#'),
-      $this->t('Name'),
-      $this->t('URI'),
-      // $this->t('Type'),
-      $this->t('Status'),
+        $this->t('#'),
+        $this->t('Name'),
+        $this->t('URI'),
+        $this->t('Status'),
     ];
 
-    // Sort components by their 'type' so grouping works.
-    usort($components, function($a, $b) {
-      return strcmp($a['type'], $b['type']);
+    // 2) Sort the components by their 'type' to group identical types together.
+    usort($components, function ($a, $b) {
+        return strcmp($a['type'], $b['type']);
     });
 
+    // 3) Acquire the renderer service for nested rendering.
     /** @var \Drupal\Core\Render\RendererInterface $renderer */
     $renderer = \Drupal::service('renderer');
+    // 4) Retrieve the site's base URL to build clickable links.
     $root_url = \Drupal::request()->getBaseUrl();
 
     $rows = [];
     $current_type = NULL;
 
+    // 5) Iterate each component to build table rows.
     foreach ($components as $component) {
-      // Whenever the type changes, inject a full-width grouping row.
-      if ($component['type'] !== $current_type) {
-        $current_type = $component['type'];
-        $rows[] = [
-          // The 'data' array holds a single cell with colspan == number of columns.
-          'data' => [
-            [
-              'data'    => [
-                '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
-              ],
-              'colspan' => count($header),
-              'class' => ['component-type-row'],
+        // 5a) When encountering a new type, insert a full-width grouping row.
+        if ($component['type'] !== $current_type) {
+            $current_type = $component['type'];
+            $rows[] = [
+                'data' => [
+                    [
+                        'data'    => [
+                            '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
+                        ],
+                        'colspan' => count($header),
+                        'class'   => ['component-type-row'],
+                    ],
+                ],
+                'class' => ['component-type-header'],
+            ];
+        }
+
+        // 5b) If this component is a subcontainer, render it recursively.
+        if ($component['type'] === VSTOI::SUBCONTAINER) {
+            // Generate a unique sub-container ID to avoid DOM conflicts.
+            $sub_container_id = $container_id . '-sub-' . md5($component['uri']);
+
+            // Insert a title row for the subcontainer itself.
+            $rows[] = [
+                'data' => [
+                    [
+                        'data'    => '<em>' . Html::escape($component['name']) . ' (Subcontainer)</em>',
+                        'colspan' => count($header),
+                        'class'   => ['subcontainer-title-row'],
+                    ],
+                ],
+                'class' => ['subcontainer-header'],
+            ];
+
+            // Recursively build the table of child components.
+            $child_table = $this->buildComponentTable(
+                $component['children'] ?? [],
+                $sub_container_id,
+                $arraySelected
+            );
+
+            // Embed the rendered child table as markup in a single row.
+            $rows[] = [
+                'data' => [
+                    [
+                        'data'    => [
+                            '#markup' => $renderer->render($child_table),
+                        ],
+                        'colspan' => count($header),
+                        'class'   => ['subcontainer-table-row'],
+                    ],
+                ],
+            ];
+
+            // Skip the normal row rendering for this subcontainer entry.
+            continue;
+        }
+
+        // 5c) Build a checkbox for selecting this component.
+        $checkbox = [
+            '#type' => 'checkbox',
+            '#name' => $container_id . '[]',
+            '#return_value' => $component['uri'],
+            '#checked' => in_array($component['uri'], $arraySelected),
+            // AJAX behavior to update this table on change.
+            '#ajax' => [
+                'callback' => '::ajaxAddInstrumentRow',
+                'event' => 'change',
+                'wrapper' => $container_id,
+                'progress' => ['type' => 'throbber'],
             ],
-          ],
-          'class' => ['component-type-header'],
+            '#executes_submit_callback' => TRUE,
+            '#attributes' => ['class' => ['instrument-component-ajax']],
         ];
-      }
+        $checkbox_rendered = $renderer->render($checkbox);
 
-      // Build the checkbox render array.
-      $checkbox = [
-        '#type' => 'checkbox',
-        '#name' => $container_id . '[]',
-        '#return_value' => $component['uri'],
-        '#checked' => in_array($component['uri'], $arraySelected),
-        // Ajax behavior to re-render this table on change.
-        '#ajax' => [
-          'callback' => '::ajaxAddInstrumentRow',
-          'event' => 'change',
-          'wrapper' => $container_id,
-          'progress' => ['type' => 'throbber'],
-        ],
-        '#executes_submit_callback' => TRUE,
-        '#attributes' => ['class' => ['instrument-component-ajax']],
-      ];
-      $checkbox_rendered = $renderer->render($checkbox);
-
-      // Append the normal component row.
-      $rows[] = [
-        'data' => [
-          $checkbox_rendered,
-          // Link to describe page.
-          t('<a target="_new" href="@url">@name</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
-            '@name' => Html::escape($component['name']),
-          ]),
-          // Link to URI.
-          t('<a target="_new" href="@url">@uri</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
-            '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
-          ]),
-          // Render type and status safely.
-          // Html::escape($component['type']),
-          Html::escape($component['status']),
-        ],
-      ];
+        // 5d) Append the standard row for a non-subcontainer component.
+        $rows[] = [
+            'data' => [
+                // Checkbox cell.
+                $checkbox_rendered,
+                // Link to the component's description page.
+                t('<a target="_blank" href="@url">@name</a>', [
+                    '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+                    '@name' => Html::escape($component['name']),
+                ]),
+                // Link to the component's raw URI.
+                t('<a target="_blank" href="@url">@uri</a>', [
+                    '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+                    '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
+                ]),
+                // Status cell.
+                Html::escape($component['status']),
+            ],
+        ];
     }
 
-    // Wrap the table in a container so AJAX can replace it cleanly.
+    // 6) Wrap the assembled rows into a table inside a container for AJAX.
     return [
-      '#type' => 'container',
-      '#attributes' => ['id' => $container_id],
-      'table' => [
-        '#type' => 'table',
-        '#header' => $header,
-        '#rows' => $rows,
-        '#empty' => $this->t('No components found.'),
-        '#attributes' => ['class' => ['table', 'table-striped']],
-      ],
+        '#type' => 'container',
+        '#attributes' => ['id' => $container_id],
+        'table' => [
+            '#type' => 'table',
+            '#header' => $header,
+            '#rows' => $rows,
+            '#empty' => $this->t('No components found.'),
+            '#attributes' => ['class' => ['table', 'table-striped']],
+        ],
     ];
   }
-
 
   /**
    * Validates befor submit sub-task.
@@ -1625,13 +1754,7 @@ class EditTaskForm extends FormBase {
 
   public function ajaxSubtasksCallback(array &$form, FormStateInterface $form_state) {
     $trigger = $form_state->getTriggeringElement();
-    if (str_starts_with($trigger['#name'], 'subtask_remove_')) {
-      $encoded = substr($trigger['#name'], strlen('subtask_remove_'));
-      $uri     = base64_decode($encoded);
-      // chama o serviço que apaga no backend
-      \Drupal::service('rep.api_connector')->elementDel('task', $uri);
-      \Drupal::messenger()->addStatus($this->t('Sub-task removed.'));
-    }
+
     // Render the updated subtasks table / form.
     $response = new AjaxResponse();
     $response->addCommand(new ReplaceCommand(
