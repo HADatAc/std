@@ -1236,9 +1236,6 @@ class EditTaskForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
-    dpm($button_name, 'Button name');
-    dpm(str_starts_with($button_name, 'subtask_remove_'), 'Starts with subtask_remove_');
-
     if ($button_name === 'back') {
       // Release values cached in the editor before leaving it
       \Drupal::state()->delete('my_form_basic');
