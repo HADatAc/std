@@ -574,7 +574,7 @@ std.task_autocomplete:
     _permission: 'access content'
 
 std.delete_subtask:
-  path: '/std/delete-subtask/{encoded}'
+  path: '/std/delete-subtask/{processuri}/{state}/{parenttaskuri}/{taskuri}'
   defaults:
     _controller: '\Drupal\std\Controller\SubTaskController::delete'
   requirements:

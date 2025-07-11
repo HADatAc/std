@@ -158,12 +158,10 @@ class Task {
 
       $encoded = base64_encode($uri_raw);
       $delete_url = Url::fromRoute('std.delete_subtask', [
-        'encoded'    => $encoded,
-      ], [
-        'query' => [
           'processuri' => $processuri,
-          'taskuri'    => base64_encode($uri_raw),
-        ],
+          'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
+          'parenttaskuri' => base64_encode($element['hasSupertaskUri']),
+          'taskuri'    => base64_encode($uri_raw)
       ]);
 
       $remove_button = [

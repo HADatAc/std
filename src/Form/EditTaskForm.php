@@ -13,6 +13,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Entity\Tables;
 use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\rep\Vocabulary\VSTOI;
+use Drupal\rep\Vocabulary\HASCO;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\AfterCommand;
 use Drupal\Core\Ajax\RemoveCommand;
@@ -652,7 +653,7 @@ class EditTaskForm extends FormBase {
     if (isset($input) && is_array($input) &&
         isset($basic) && is_array($basic)) {
       $basic['tasktype'] = $input['task_tasktype'] ?? UTILS::fieldToAutocomplete($this->getTask()->typeUri, $this->getTask()->typeLabel);
-      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? ($basic['tasktemporaldependency'] ?? $this->getTask()->hasTemporalDependency);
+      $basic['tasktemporaldependency'] = $input['task_tasktemporaldependency'] ?? ($basic['tasktemporaldependency'] ?? UTILS::fieldToAutocomplete($this->getTask()->hasTemporalDependency, $this->getTask()->temporalDependencyLabel));
       $basic['name']        = $input['task_name'] ?? $this->getTask()->label;
       $basic['language']    = $input['task_language'] ?? $this->getTask()->hasLanguage;
       $basic['version']     = $input['task_version'] ?? $this->getTask()->hasVersion;
@@ -667,6 +668,7 @@ class EditTaskForm extends FormBase {
   }
 
   public function populateBasic() {
+
     $basic = [
       'uri' => $this->getTask()->uri,
       'tasktype' => UTILS::fieldToAutocomplete($this->getTask()->typeUri,$this->getTask()->typeLabel),
@@ -1467,100 +1469,235 @@ class EditTaskForm extends FormBase {
    * @return array
    *   A renderable array for a Drupal table, wrapped in a container.
    */
+  // protected function buildComponentTable(array $components, $container_id, array $arraySelected = []) {
+  //   // Build table header: checkbox + name + URI + type + status.
+  //   $header = [
+  //     $this->t('#'),
+  //     $this->t('Name'),
+  //     $this->t('URI'),
+  //     // $this->t('Type'),
+  //     $this->t('Status'),
+  //   ];
+
+  //   // Sort components by their 'type' so grouping works.
+  //   usort($components, function($a, $b) {
+  //     return strcmp($a['type'], $b['type']);
+  //   });
+
+  //   /** @var \Drupal\Core\Render\RendererInterface $renderer */
+  //   $renderer = \Drupal::service('renderer');
+  //   $root_url = \Drupal::request()->getBaseUrl();
+
+  //   $rows = [];
+  //   $current_type = NULL;
+
+  //   foreach ($components as $component) {
+  //     // Whenever the type changes, inject a full-width grouping row.
+  //     if ($component['type'] !== $current_type) {
+  //       $current_type = $component['type'];
+  //       $rows[] = [
+  //         // The 'data' array holds a single cell with colspan == number of columns.
+  //         'data' => [
+  //           [
+  //             'data'    => [
+  //               '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
+  //             ],
+  //             'colspan' => count($header),
+  //             'class' => ['component-type-row'],
+  //           ],
+  //         ],
+  //         'class' => ['component-type-header'],
+  //       ];
+  //     }
+
+  //     // Build the checkbox render array.
+  //     $checkbox = [
+  //       '#type' => 'checkbox',
+  //       '#name' => $container_id . '[]',
+  //       '#return_value' => $component['uri'],
+  //       '#checked' => in_array($component['uri'], $arraySelected),
+  //       // Ajax behavior to re-render this table on change.
+  //       '#ajax' => [
+  //         'callback' => '::ajaxAddInstrumentRow',
+  //         'event' => 'change',
+  //         'wrapper' => $container_id,
+  //         'progress' => ['type' => 'throbber'],
+  //       ],
+  //       '#executes_submit_callback' => TRUE,
+  //       '#attributes' => ['class' => ['instrument-component-ajax']],
+  //     ];
+  //     $checkbox_rendered = $renderer->render($checkbox);
+
+  //     // Append the normal component row.
+  //     $rows[] = [
+  //       'data' => [
+  //         $checkbox_rendered,
+  //         // Link to describe page.
+  //         t('<a target="_new" href="@url">@name</a>', [
+  //           '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+  //           '@name' => Html::escape($component['name']),
+  //         ]),
+  //         // Link to URI.
+  //         t('<a target="_new" href="@url">@uri</a>', [
+  //           '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+  //           '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
+  //         ]),
+  //         // Render type and status safely.
+  //         // Html::escape($component['type']),
+  //         Html::escape($component['status']),
+  //       ],
+  //     ];
+  //   }
+
+  //   // Wrap the table in a container so AJAX can replace it cleanly.
+  //   return [
+  //     '#type' => 'container',
+  //     '#attributes' => ['id' => $container_id],
+  //     'table' => [
+  //       '#type' => 'table',
+  //       '#header' => $header,
+  //       '#rows' => $rows,
+  //       '#empty' => $this->t('No components found.'),
+  //       '#attributes' => ['class' => ['table', 'table-striped']],
+  //     ],
+  //   ];
+  // }
+
   protected function buildComponentTable(array $components, $container_id, array $arraySelected = []) {
-    // Build table header: checkbox + name + URI + type + status.
+    // 1) Define the table header: checkbox column + Name + URI + Status.
     $header = [
-      $this->t('#'),
-      $this->t('Name'),
-      $this->t('URI'),
-      // $this->t('Type'),
-      $this->t('Status'),
+        $this->t('#'),
+        $this->t('Name'),
+        $this->t('URI'),
+        $this->t('Status'),
     ];
 
-    // Sort components by their 'type' so grouping works.
-    usort($components, function($a, $b) {
-      return strcmp($a['type'], $b['type']);
+    // 2) Sort the components by their 'type' to group identical types together.
+    usort($components, function ($a, $b) {
+        return strcmp($a['type'], $b['type']);
     });
 
+    // 3) Acquire the renderer service for nested rendering.
     /** @var \Drupal\Core\Render\RendererInterface $renderer */
     $renderer = \Drupal::service('renderer');
+    // 4) Retrieve the site's base URL to build clickable links.
     $root_url = \Drupal::request()->getBaseUrl();
 
     $rows = [];
     $current_type = NULL;
 
+    // 5) Iterate each component to build table rows.
     foreach ($components as $component) {
-      // Whenever the type changes, inject a full-width grouping row.
-      if ($component['type'] !== $current_type) {
-        $current_type = $component['type'];
-        $rows[] = [
-          // The 'data' array holds a single cell with colspan == number of columns.
-          'data' => [
-            [
-              'data'    => [
-                '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
-              ],
-              'colspan' => count($header),
-              'class' => ['component-type-row'],
+        // 5a) When encountering a new type, insert a full-width grouping row.
+        if ($component['type'] !== $current_type) {
+            $current_type = $component['type'];
+            $rows[] = [
+                'data' => [
+                    [
+                        'data'    => [
+                            '#markup' => '<strong>' . Html::escape($current_type) . '</strong>',
+                        ],
+                        'colspan' => count($header),
+                        'class'   => ['component-type-row'],
+                    ],
+                ],
+                'class' => ['component-type-header'],
+            ];
+        }
+
+        // 5b) If this component is a subcontainer, render it recursively.
+        if ($component['type'] === VSTOI::SUBCONTAINER) {
+            // Generate a unique sub-container ID to avoid DOM conflicts.
+            $sub_container_id = $container_id . '-sub-' . md5($component['uri']);
+
+            // Insert a title row for the subcontainer itself.
+            $rows[] = [
+                'data' => [
+                    [
+                        'data'    => '<em>' . Html::escape($component['name']) . ' (Subcontainer)</em>',
+                        'colspan' => count($header),
+                        'class'   => ['subcontainer-title-row'],
+                    ],
+                ],
+                'class' => ['subcontainer-header'],
+            ];
+
+            // Recursively build the table of child components.
+            $child_table = $this->buildComponentTable(
+                $component['children'] ?? [],
+                $sub_container_id,
+                $arraySelected
+            );
+
+            // Embed the rendered child table as markup in a single row.
+            $rows[] = [
+                'data' => [
+                    [
+                        'data'    => [
+                            '#markup' => $renderer->render($child_table),
+                        ],
+                        'colspan' => count($header),
+                        'class'   => ['subcontainer-table-row'],
+                    ],
+                ],
+            ];
+
+            // Skip the normal row rendering for this subcontainer entry.
+            continue;
+        }
+
+        // 5c) Build a checkbox for selecting this component.
+        $checkbox = [
+            '#type' => 'checkbox',
+            '#name' => $container_id . '[]',
+            '#return_value' => $component['uri'],
+            '#checked' => in_array($component['uri'], $arraySelected),
+            // AJAX behavior to update this table on change.
+            '#ajax' => [
+                'callback' => '::ajaxAddInstrumentRow',
+                'event' => 'change',
+                'wrapper' => $container_id,
+                'progress' => ['type' => 'throbber'],
             ],
-          ],
-          'class' => ['component-type-header'],
+            '#executes_submit_callback' => TRUE,
+            '#attributes' => ['class' => ['instrument-component-ajax']],
         ];
-      }
+        $checkbox_rendered = $renderer->render($checkbox);
 
-      // Build the checkbox render array.
-      $checkbox = [
-        '#type' => 'checkbox',
-        '#name' => $container_id . '[]',
-        '#return_value' => $component['uri'],
-        '#checked' => in_array($component['uri'], $arraySelected),
-        // Ajax behavior to re-render this table on change.
-        '#ajax' => [
-          'callback' => '::ajaxAddInstrumentRow',
-          'event' => 'change',
-          'wrapper' => $container_id,
-          'progress' => ['type' => 'throbber'],
-        ],
-        '#executes_submit_callback' => TRUE,
-        '#attributes' => ['class' => ['instrument-component-ajax']],
-      ];
-      $checkbox_rendered = $renderer->render($checkbox);
-
-      // Append the normal component row.
-      $rows[] = [
-        'data' => [
-          $checkbox_rendered,
-          // Link to describe page.
-          t('<a target="_new" href="@url">@name</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
-            '@name' => Html::escape($component['name']),
-          ]),
-          // Link to URI.
-          t('<a target="_new" href="@url">@uri</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
-            '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
-          ]),
-          // Render type and status safely.
-          // Html::escape($component['type']),
-          Html::escape($component['status']),
-        ],
-      ];
+        // 5d) Append the standard row for a non-subcontainer component.
+        $rows[] = [
+            'data' => [
+                // Checkbox cell.
+                $checkbox_rendered,
+                // Link to the component's description page.
+                t('<a target="_blank" href="@url">@name</a>', [
+                    '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+                    '@name' => Html::escape($component['name']),
+                ]),
+                // Link to the component's raw URI.
+                t('<a target="_blank" href="@url">@uri</a>', [
+                    '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
+                    '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
+                ]),
+                // Status cell.
+                Html::escape($component['status']),
+            ],
+        ];
     }
 
-    // Wrap the table in a container so AJAX can replace it cleanly.
+    // 6) Wrap the assembled rows into a table inside a container for AJAX.
     return [
-      '#type' => 'container',
-      '#attributes' => ['id' => $container_id],
-      'table' => [
-        '#type' => 'table',
-        '#header' => $header,
-        '#rows' => $rows,
-        '#empty' => $this->t('No components found.'),
-        '#attributes' => ['class' => ['table', 'table-striped']],
-      ],
+        '#type' => 'container',
+        '#attributes' => ['id' => $container_id],
+        'table' => [
+            '#type' => 'table',
+            '#header' => $header,
+            '#rows' => $rows,
+            '#empty' => $this->t('No components found.'),
+            '#attributes' => ['class' => ['table', 'table-striped']],
+        ],
     ];
   }
-
 
   /**
    * Validates befor submit sub-task.
