@@ -328,4 +328,35 @@
     }
   };
 
+  Drupal.behaviors.toggleCards = {
+    attach: function (context, settings) {
+      // RESUMO toggle
+      $('#toggleResumo', context)
+        .off('click.toggleResumo')
+        .on('click.toggleResumo', function (e) {
+          e.preventDefault();
+          $('#cardsCollapse').slideToggle();
+          $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
+        });
+
+      $('#toggleAuxAreas', context)
+        .off('click.toggleAuxAreas')
+        .on('click.toggleAuxAreas', function (e) {
+          e.preventDefault();
+          $('#cardsAuxCollapse').slideToggle();
+          $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
+        });
+
+
+      // DROP‐CARD toggle
+      $('#toggleDropCard', context)
+      .off('click.toggleDropCard')
+      .on('click.toggleDropCard', function (e) {
+        e.preventDefault();
+        $('#card1-container').slideToggle();
+        $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
+      });
+    }
+  };
+
 })(jQuery, Drupal, drupalSettings);

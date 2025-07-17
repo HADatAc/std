@@ -249,7 +249,121 @@ class ManageStudyForm extends FormBase
       '),
     ];
 
-    // Obtenha o valor da sessão para fallback
+    $form['#attached']['library'][] = 'core/drupal.collapse';
+
+    $form['row3'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['row']],
+    ];
+
+    $form['row3']['col'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['col-12']],
+    ];
+
+    $form['row3']['col']['wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['card', 'mb-4', 'p-0'],
+        'id'    => 'myCollapseCard',
+      ],
+    ];
+
+    $form['row3']['col']['wrapper']['header'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'],
+        'id'    => 'headingCard',
+      ],
+      'title' => [
+        '#type'       => 'html_tag',
+        '#tag'        => 'h5',
+        '#value'      => t('Areas of Interest'),
+        '#attributes' => ['class' => ['mb-0']],
+      ],
+      'toggle_button' => [
+        '#type'       => 'html_tag',
+        '#tag'        => 'button',
+        '#value'      => '<i class="fa-solid fa-chevron-up"></i>',
+        '#attributes' => [
+          'class'             => ['btn', 'btn-link', 'p-2'],
+          'type'              => 'button',
+          'data-bs-toggle'    => 'collapse',
+          'data-bs-target'    => '#cardBody',
+          'aria-expanded'     => 'true',
+          'aria-controls'     => 'cardBody',
+        ],
+      ],
+    ];
+
+    $form['row3']['col']['wrapper']['body'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id'             => 'cardBody',
+        'class'          => ['collapse', 'show'],
+        'aria-labelledby'=> 'headingCard',
+        'data-bs-parent' => '#myCollapseCard',
+      ],
+      'cards_row' => [
+        '#type'       => 'container',
+        '#attributes' => ['class' => ['row', 'row-cols-3', 'g-0', 'p-3', 'pt-0']],
+      ],
+    ];
+
+    foreach ([8, 9, 10] as $key) {
+      // Determina texto e classes do botão de acordo com o índice
+      switch ($key) {
+        // case 7:
+        //   $title = t('Manage STRs');
+        //   $btn_classes = ['btn', 'btn-primary'];
+        //   break;
+        case 8:
+          $title = t('Manage Roles');
+          $btn_classes = ['btn', 'btn-secondary', 'disabled'];
+          break;
+        // case 14:
+        //   $title = t('Manage Process');
+        //   $btn_classes = ['btn', 'btn-primary', 'disabled'];
+        //   break;
+        case 9:
+          $title = t('Manage Virtual Columns');
+          $btn_classes = ['btn', 'btn-primary'];
+          break;
+        case 10:
+          $title = t('Manage Object Collections');
+          $btn_classes = ['btn', 'btn-primary'];
+          break;
+      }
+
+      $form['row3']['col']['wrapper']['body']['cards_row']["card{$key}"] = [
+        '#type'       => 'container',
+        '#attributes' => ['class' => ['col', 'p-2']],
+        'card' => [
+          '#type'       => 'container',
+          '#attributes' => ['class' => ['card', 'h-100', 'text-center']],
+          'body'   => [
+            '#type'       => 'container',
+            '#attributes' => ['class' => ['card-body']],
+            'value' => [
+              '#type'  => 'html_tag',
+              '#tag'   => 'h1',
+              '#value' => $cards[$key]['value'],
+            ],
+          ],
+          'footer' => [
+            '#type'       => 'container',
+            '#attributes' => ['class' => ['card-footer']],
+            'link' => [
+              '#type'       => 'link',
+              '#title'      => $title,
+              '#url'        => Url::fromUserInput($cards[$key]['link']),
+              '#attributes' => ['class' => $btn_classes],
+            ],
+          ],
+        ],
+      ];
+    }
+
     $session = \Drupal::service('session');
     $da_page_from_session = $session->get('da_current_page', 1);
     $pub_page_from_session = $session->get('pub_current_page', 1);
@@ -635,131 +749,6 @@ class ManageStudyForm extends FormBase
             </div>
             <div class="card-footer text-center">
               <div id="media-table-pager" class="pagination"></div>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
-    // Third row with 5 cards (card 6 to card 10)
-    $form['row3']['row3_wrapper'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-12'],  // spans the same 12-col width
-      ],
-    ];
-
-    // 2) Inside that wrapper we open the real Bootstrap row—now its gutters line up
-    $form['row3']['row3_wrapper']['row3'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['row', 'row-cols-5', 'g-3'],
-        // row-cols-4: 4 equal columns
-        // g-3: standard gutter spacing
-      ],
-    ];
-
-    // 3) Now each card is just one of those 4 columns:
-
-    // Card 7: STR
-    $form['row3']['row3_wrapper']['row3']['card14'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col']],     // `col` is fine inside row-cols-4
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card h-100 text-center">
-            <div class="card-body">
-              <h1>' . $cards[14]['value'] . '</h1>
-            </div>
-            <div class="card-footer">
-              <a href="' . $cards[14]['link'] . '" class="btn btn-primary disabled">
-                <i class="fa-solid fa-list-check"></i> Manage Process
-              </a>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
-    // Card 7: STR
-    $form['row3']['row3_wrapper']['row3']['card7'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col']],     // `col` is fine inside row-cols-4
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card h-100 text-center">
-            <div class="card-body">
-              <h1>' . $cards[7]['value'] . '</h1>
-            </div>
-            <div class="card-footer">
-              <a href="' . $cards[7]['link'] . '" class="btn btn-primary">
-                <i class="fa-solid fa-list-check"></i> Manage STRs
-              </a>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
-    // Card 8: Roles
-    $form['row3']['row3_wrapper']['row3']['card8'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col']],
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card h-100 text-center">
-            <div class="card-body">
-              <h1>' . $cards[8]['value'] . '</h1>
-            </div>
-            <div class="card-footer">
-              <a href="' . $cards[8]['link'] . '" class="btn btn-secondary disabled">
-                <i class="fa-solid fa-list-check"></i> Manage Roles
-              </a>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
-    // Card 9: Virtual Columns
-    $form['row3']['row3_wrapper']['row3']['card9'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col']],
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card h-100 text-center">
-            <div class="card-body">
-              <h1>' . $cards[9]['value'] . '</h1>
-            </div>
-            <div class="card-footer">
-              <a href="' . $cards[9]['link'] . '" class="btn btn-primary">
-                <i class="fa-solid fa-list-check"></i> Manage Virtual Columns
-              </a>
-            </div>
-          </div>
-        ',
-      ],
-    ];
-
-    // Card 10: Object Collections
-    $form['row3']['row3_wrapper']['row3']['card10'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col']],
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => '
-          <div class="card h-100 text-center">
-            <div class="card-body">
-              <h1>' . $cards[10]['value'] . '</h1>
-            </div>
-            <div class="card-footer">
-              <a href="' . $cards[10]['link'] . '" class="btn btn-primary">
-                <i class="fa-solid fa-list-check"></i> Manage Object Collections
-              </a>
             </div>
           </div>
         ',

@@ -715,6 +715,8 @@ class EditTaskForm extends FormBase {
         ? $this->getComponents($instrument_uri)
         : [];
 
+        // dpm($components, 'Components for instrument: ' . $instrument['instrument']);
+
       // Load persisted selections.
       $selected = $instrument['components'] ?? [];
 
@@ -1429,7 +1431,13 @@ class EditTaskForm extends FormBase {
     $root_url = \Drupal::request()->getBaseUrl();
     // Call to get Components
     $api = \Drupal::service('rep.api_connector');
-    $response = $api->componentListFromInstrument($instrumentUri);
+    // $response = $api->componentListFromInstrument($instrumentUri);
+    $response = $api->containersListFromInstrument($instrumentUri);
+
+    if (!$response) {
+      \Drupal::logger('std')->error('Failed to fetch components for instrument: @uri', ['@uri' => $instrumentUri]);
+      return [];
+    }
 
     // Decode JSON reply
     $data = json_decode($response, true);
@@ -1439,6 +1447,8 @@ class EditTaskForm extends FormBase {
 
     // Decode Body
     $urls = json_decode($data['body'], true);
+    dpm($data, 'API Response for instrument: ' . $instrumentUri);
+    // dpm($urls, 'Component URLs for instrument: ' . $instrumentUri);
 
     // Task components
     $components = [];
