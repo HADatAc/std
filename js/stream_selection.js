@@ -32,6 +32,48 @@
     new bootstrap.Toast(document.getElementById(id)).show();
   }
 
+  function reloadPublications() {
+    var s = drupalSettings.pub;
+    $.getJSON(s.url, {
+      studyuri: s.studyuri,
+      page:     s.page,
+      pagesize: s.pagesize
+    }).done(function(json) {
+      var rows = json.files.map(function(f) {
+        return '<tr><td>'+f.filename+'</td><td><a href="'+f.download_url+'">↓</a></td></tr>';
+      }).join('');
+      $('#publication-table-container table tbody').html(rows);
+      var pager = '';
+      for (var p=1; p<=json.pagination.total_pages; p++) {
+        pager += '<li'+(p===json.pagination.current_page?' class="active"':'')+'>'
+               +  '<a href="#" class="dpl-files-page" data-page="'+p+'">'+p+'</a>'
+               +  '</li>';
+      }
+      $('#publication-table-pager .pagination').html(pager);
+    });
+  }
+
+  function reloadMedia() {
+    var m = drupalSettings.media;
+    $.getJSON(m.url, {
+      studyuri: m.studyuri,
+      page:     m.page,
+      pagesize: m.pagesize
+    }).done(function(json) {
+      var rows = json.files.map(function(f) {
+        return '<tr><td>'+f.filename+'</td><td><a href="'+f.download_url+'">↓</a></td></tr>';
+      }).join('');
+      $('#media-table-container table tbody').html(rows);
+      var pager = '';
+      for (var p=1; p<=json.pagination.total_pages; p++) {
+        pager += '<li'+(p===json.pagination.current_page?' class="active"':'')+'>'
+               +  '<a href="#" class="dpl-files-page" data-page="'+p+'">'+p+'</a>'
+               +  '</li>';
+      }
+      $('#media-table-pager .pagination').html(pager);
+    });
+  }
+
   /** Hide all of our AJAX cards at once */
   function hideAllCards() {
     $('#edit-ajax-cards-container').hide();
@@ -45,7 +87,7 @@
       return;
     }
     $.getJSON(drupalSettings.std.ajaxUrl, {
-      studyUri:  drupalSettings.std.studyUri,
+      studyUri:  drupalSettings.std.studyuri,
       streamUri: currentStreamUri
     })
     .done(function (data) {
@@ -65,7 +107,7 @@
     });
   }
 
-  setInterval(reloadTopicList, 20000);
+  setInterval(reloadTopicList, 5000);
 
   /** Download link behavior */
   Drupal.behaviors.fileDownload = {
@@ -107,7 +149,7 @@
 
         // fetch topics/files + streamType
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri
         })
         .done(function (data) {
@@ -161,7 +203,7 @@
         var topicUri = this.value;
         currentTopicUri = topicUri;
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri,
           topicUri:  topicUri,
           page:      $(this).data('page'),
@@ -224,7 +266,7 @@
           .show();
 
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri,
           page:      page
         })
@@ -262,7 +304,7 @@
           .show();
 
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri,
           topicUri:  currentTopicUri,
           page:      page,
@@ -358,5 +400,100 @@
       });
     }
   };
+
+})(jQuery, Drupal, drupalSettings);
+
+(function ($, Drupal, drupalSettings) {
+  'use strict';
+
+  /**
+   * Drag-and-drop “drop-area” behavior.
+   * Binds to any element with class .drop-area in the #collapseDropCard panel.
+   */
+  Drupal.behaviors.stdDropArea = {
+    attach: function (context, settings) {
+      // Find drop-area inside the opened collapse
+      $('#collapseDropCard .drop-area', context).each(function () {
+        // Use a flag on the DOM node so we only bind once
+        if (this._dropAreaInit) {
+          return;
+        }
+        this._dropAreaInit = true;
+
+        var zone = this;
+        // Highlight on dragover
+        zone.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          zone.classList.add('drag-over');
+        }, false);
+
+        // Remove highlight when leaving
+        zone.addEventListener('dragleave', function (e) {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+        }, false);
+
+        // Handle drop
+        zone.addEventListener('drop', function (e) {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+
+          var files = e.dataTransfer.files;
+          if (!files.length) {
+            return;
+          }
+
+          // Build FormData
+          var fd = new FormData();
+          $.each(files, function (i, file) {
+            fd.append('files[]', file);
+          });
+
+          // POST to your ingest endpoint
+          $.ajax({
+            url: drupalSettings.std.fileIngestUrl,
+            method: 'POST',
+            data: fd,
+            processData: false,
+            contentType: false
+          })
+          .done(function (resp) {
+            // Optionally show a toast or refresh the content
+            if (resp.status === 'success') {
+              new bootstrap.Toast(
+                $('<div class="toast align-items-center text-white bg-success" role="alert">' +
+                   '<div class="toast-body">' + resp.message + '</div>' +
+                 '</div>')[0]
+              ).show();
+              // re-trigger AJAX reload of streams table
+              $('#dpl-streams-table input[type=radio]:checked').trigger('click');
+              reloadPublications();
+              reloadMedia();
+            }
+            else {
+              new bootstrap.Toast(
+                $('<div class="toast align-items-center text-white bg-danger" role="alert">' +
+                   '<div class="toast-body">' + resp.message + '</div>' +
+                 '</div>')[0]
+              ).show();
+            }
+          })
+          .fail(function () {
+            new bootstrap.Toast(
+              $('<div class="toast align-items-center text-white bg-danger" role="alert">' +
+                 '<div class="toast-body">Upload failed.</div>' +
+               '</div>')[0]
+            ).show();
+          });
+        }, false);
+      });
+    }
+  };
+
+  // Whenever the Accordion panel opens, re-attach Drupal behaviors inside it.
+  $('#collapseDropCard')
+    .on('shown.bs.collapse', function () {
+      Drupal.attachBehaviors(this, drupalSettings);
+    });
 
 })(jQuery, Drupal, drupalSettings);

@@ -78,14 +78,25 @@ class ManageStudyForm extends FormBase
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL)
   {
 
+    //Libraries
+    $form['#attached']['library'][] = 'std/json_table';
+    $form['#attached']['library'][] = 'core/drupal.autocomplete';
+    $form['#attached']['library'][] = 'rep/pdfjs';
+    $form['#attached']['library'][] = 'rep/webdoc_modal';
+    $form['#attached']['library'][] = 'std/stream_selection';
+    $form['#attached']['library'][] = 'dpl/stream_recorder';
+    $base_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl();
+    $form['#attached']['drupalSettings']['webdoc_modal'] = [
+      'baseUrl' => $base_url,
+    ];
 
     // Owner of the record
     $useremail = \Drupal::currentUser()->getEmail();
 
-    //if ($studyuri == NULL || $studyuri == "") {
-    //  \Drupal::messenger()->addMessage(t("A STUDY URI is required to manage a study."));
-    //  $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
-    //}
+    if ($studyuri == NULL || $studyuri == "") {
+     \Drupal::messenger()->addMessage(t("A STUDY URI is required to manage a study."));
+     $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
+    }
 
     $uri_decode = base64_decode($studyuri);
     $this->setStudyUri($uri_decode);
@@ -98,6 +109,41 @@ class ManageStudyForm extends FormBase
     } else {
       $this->setStudy($study);
     }
+
+	// ROW CONTENT
+    $session = \Drupal::service('session');
+    $da_page_from_session = $session->get('da_current_page', 1);
+    $pub_page_from_session = $session->get('pub_current_page', 1);
+    $media_page_from_session = $session->get('media_current_page', 1);
+
+    // Settings para AJAX das tabelas
+    $form['#attached']['drupalSettings']['pub'] = [
+      'studyuri'   => rawurlencode($this->studyUri),
+      'elementtype'=> 'publications',
+      'page'       => $pub_page_from_session,
+      'pagesize'   => 5,
+    ];
+    $form['#attached']['drupalSettings']['media'] = [
+      'studyuri'   => rawurlencode($this->studyUri),
+      'elementtype'=> 'media',
+      'page'       => $media_page_from_session,
+      'pagesize'   => 5,
+    ];
+    $form['#attached']['drupalSettings']['std'] = [
+      // —— stream/topic selection ——
+      'studyuri'        => base64_encode($this->studyUri),
+      'ajaxUrl'         => Url::fromRoute('std.stream_data_ajax')->toString(),
+      'streamDataUrl'   => Url::fromRoute('std.stream_data_ajax')->toString(),
+      'latestUrl'       => \Drupal::request()->getSchemeAndHttpHost()
+                . \Drupal::request()->getBaseUrl()
+                . '/dpl/streamtopic/latest_message/',
+      'fileIngestUrl'   => Url::fromRoute('dpl.file_ingest_ajax')->toString(),
+      'fileUningestUrl' => Url::fromRoute('dpl.file_uningest_ajax')->toString(),
+      'elementtype'=> 'da',
+      'mode'       => 'compact',
+      'page'       => $da_page_from_session,
+      'pagesize'   => 5,
+    ];
 
     // get totals for current study
     //Dá erro 404, $totalDAs = self::extractValue($api->parseObjectResponse($api->getTotalStudyDAs($this->getStudy()->uri), 'getTotalStudyDAs'));
@@ -193,29 +239,6 @@ class ManageStudyForm extends FormBase
       $title = $this->getStudy()->title;
     }
 
-    //Libraries
-    // $form['#attached']['library'][] = 'core/drupal.autocomplete';
-    $form['#attached']['library'][] = 'rep/pdfjs';
-    $form['#attached']['library'][] = 'rep/webdoc_modal';
-    $base_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl();
-    $form['#attached']['drupalSettings']['webdoc_modal'] = [
-      'baseUrl' => $base_url,
-    ];
-
-
-    // Attach our JS behavior + settings.
-    $form['#attached']['library'][] = 'std/stream_selection';
-    $form['#attached']['library'][] = 'dpl/stream_recorder';
-    $form['#attached']['drupalSettings']['std'] = [
-      'studyUri'        => base64_encode($this->studyUri),
-      'streamDataUrl'   => Url::fromRoute('std.stream_data_ajax')->toString(),
-      'ajaxUrl'         => Url::fromRoute('std.stream_data_ajax')->toString(),
-      'latestUrl'       => \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/dpl/streamtopic/latest_message/',
-    ];
-    $form['#attached']['drupalSettings']['std']['fileIngestUrl']   = Url::fromRoute('dpl.file_ingest_ajax')->toString();
-    $form['#attached']['drupalSettings']['std']['fileUningestUrl'] = Url::fromRoute('dpl.file_uningest_ajax')->toString();
-
-
     //MODAL
     $form['modal'] = [
       '#type' => 'markup',
@@ -249,82 +272,69 @@ class ManageStudyForm extends FormBase
       '),
     ];
 
+    // ROW AREA INTERESTS
     $form['#attached']['library'][] = 'core/drupal.collapse';
 
     $form['row3'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['row']],
+      '#attributes' => ['class' => ['accordion', 'mt-3'], 'id' => 'accordionAreas'],
     ];
 
-    $form['row3']['col'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col-12']],
-    ];
-
-    $form['row3']['col']['wrapper'] = [
+    $form['row3']['item'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['card', 'mb-4', 'p-0'],
-        'id'    => 'myCollapseCard',
+        'class' => ['accordion-item', 'card', 'drop-area'],
+        'id'    => 'areas-card',
       ],
     ];
 
-    $form['row3']['col']['wrapper']['header'] = [
+    $form['row3']['item']['header'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'],
-        'id'    => 'headingCard',
+        'class' => ['accordion-header', 'justify-content-between', 'align-items-center'],
+        'id'    => 'headingAreas',
       ],
-      'title' => [
-        '#type'       => 'html_tag',
-        '#tag'        => 'h5',
-        '#value'      => t('Areas of Interest'),
-        '#attributes' => ['class' => ['mb-0']],
-      ],
-      'toggle_button' => [
-        '#type'       => 'html_tag',
-        '#tag'        => 'button',
-        '#value'      => '<i class="fa-solid fa-chevron-up"></i>',
+      'button' => [
+        '#type' => 'html_tag',
+        '#tag' => 'button',
+        '#value' => $this->t('<h3 class="mb-0">Areas of Interest</h3>'),
         '#attributes' => [
-          'class'             => ['btn', 'btn-link', 'p-2'],
-          'type'              => 'button',
-          'data-bs-toggle'    => 'collapse',
-          'data-bs-target'    => '#cardBody',
-          'aria-expanded'     => 'true',
-          'aria-controls'     => 'cardBody',
+          'class' => ['accordion-button', 'collapsed'],
+          'type' => 'button',
+          'data-bs-toggle' => 'collapse',
+          'data-bs-target' => '#collapseAreas',
+          'aria-expanded' => 'false',
+          'aria-controls' => 'collapseAreas',
         ],
       ],
     ];
 
-    $form['row3']['col']['wrapper']['body'] = [
+    $form['row3']['item']['collapse'] = [
       '#type' => 'container',
       '#attributes' => [
-        'id'             => 'cardBody',
-        'class'          => ['collapse', 'show'],
-        'aria-labelledby'=> 'headingCard',
-        'data-bs-parent' => '#myCollapseCard',
-      ],
-      'cards_row' => [
-        '#type'       => 'container',
-        '#attributes' => ['class' => ['row', 'row-cols-3', 'g-0', 'p-3', 'pt-0']],
+        'id' => 'collapseAreas',
+        'class' => ['accordion-collapse','collapse', 'hide'],
+        'aria-labelledby' => 'headingAreas',
+        'data-bs-parent' => '#accordionAreas',
       ],
     ];
 
+    $form['row3']['item']['collapse']['body'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['accordion-body','p-0']],
+    ];
+
+    $form['row3']['item']['collapse']['body']['cards_row'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['row','row-cols-3','g-0','p-3','pt-0']],
+    ];
+
     foreach ([8, 9, 10] as $key) {
-      // Determina texto e classes do botão de acordo com o índice
       switch ($key) {
-        // case 7:
-        //   $title = t('Manage STRs');
-        //   $btn_classes = ['btn', 'btn-primary'];
-        //   break;
         case 8:
           $title = t('Manage Roles');
           $btn_classes = ['btn', 'btn-secondary', 'disabled'];
           break;
-        // case 14:
-        //   $title = t('Manage Process');
-        //   $btn_classes = ['btn', 'btn-primary', 'disabled'];
-        //   break;
         case 9:
           $title = t('Manage Virtual Columns');
           $btn_classes = ['btn', 'btn-primary'];
@@ -335,7 +345,7 @@ class ManageStudyForm extends FormBase
           break;
       }
 
-      $form['row3']['col']['wrapper']['body']['cards_row']["card{$key}"] = [
+      $form['row3']['item']['collapse']['body']['cards_row']["card{$key}"] = [
         '#type'       => 'container',
         '#attributes' => ['class' => ['col', 'p-2']],
         'card' => [
@@ -364,11 +374,6 @@ class ManageStudyForm extends FormBase
       ];
     }
 
-    $session = \Drupal::service('session');
-    $da_page_from_session = $session->get('da_current_page', 1);
-    $pub_page_from_session = $session->get('pub_current_page', 1);
-    $media_page_from_session = $session->get('media_current_page', 1);
-
     $uid = \Drupal::currentUser()->id();
 
     $previousUrl = Url::fromRoute('std.manage_study_elements', [
@@ -377,176 +382,150 @@ class ManageStudyForm extends FormBase
     Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
 
     // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
-    if ($this->getStudy()->hasSIRManagerEmail === $useremail) {
-      // User is the owner: enable drag & drop functionality.
-      $markup = '<div class="card drop-area" id="drop-card" style="position: relative;">'
-        . '  <div class="card-header text-center" style="position: relative;">'
-        . '    <h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>'
-        . '    <div class="info-card">You can drag&drop files directly into this card</div>'
-        . '    <div id="toast-container" '
-        . '         style="position: absolute; top: 0.5rem; right: 1rem; z-index: 1050;">'
-        . '    </div>'
-        .     \Drupal::service('renderer')->render($form['row2']['card1']['inner_row'])
-        . '</div>';
-    }
-    else {
-      // User is not the owner: disable drag & drop functionality.
-      $markup = '<div class="card" id="drop-card-disabled">' .
-                '<div class="card-header text-center"><h3 id="total_elements_count">' . $cards[1]['value'] . '</h3>' .
-                '<div class="info-card">Only the owner can drag&drop files</div></div>'
-                . '    <div id="toast-container" '
-                . '         style="position: absolute; top: 0.5rem; right: 1rem; z-index: 1050;">'
-                . '    </div>'
-                .     \Drupal::service('renderer')->render($form['row2']['card1']['inner_row']);
-    }
+    $isOwner = $this->getStudy()->hasSIRManagerEmail === $useremail;
 
-    // Second row with 1 outter card (card 1)
-    $form['row2'] = array(
+    // ROW 2 as a Bootstrap 5 Accordion, preserving your AJAX logic
+    $form['row2'] = [
       '#type' => 'container',
-      '#attributes' => array('class' => array('row', 'mb-3')),
-    );
-
-    $form['row2']['card1'] = [
-      '#type' => 'container',
-      '#attributes' => ['class' => ['col-md-12']],
-      'card' => [
-        '#type' => 'markup',
-        '#markup' => $markup,
-      ],
-      '#attached' => [
-        'library' => [
-          'std/json_table',
-          'core/drupal.autocomplete',
-        ],
-        'drupalSettings' => [
-          'std' => [
-            'studyuri' => base64_encode($this->getStudy()->uri),
-            'elementtype' => 'da',
-            'mode' => 'compact',
-            'page' => $da_page_from_session,
-            'pagesize' => 5,
-          ],
-          'pub' => [
-            'studyuri' => base64_encode($this->getStudy()->uri),
-            'elementtype' => 'publications',
-            'page' => $pub_page_from_session,
-            'pagesize' => 5,
-          ],
-          'media' => [
-            'studyuri' => base64_encode($this->getStudy()->uri),
-            'elementtype' => 'media',
-            'page' => $media_page_from_session,
-            'pagesize' => 5,
-          ],
-          'addNewDA' => [
-            'url' => Url::fromRoute('std.render_add_da_form', [
-              'elementtype' => 'da',
-              'studyuri' => base64_encode($this->getStudy()->uri),
-            ])->toString(),
-          ],
-          'user' => [
-            'logged' => ($this->getStudy()->hasSIRManagerEmail === $useremail ? TRUE:FALSE),
-          ],
-        ],
-      ],
-    ];
-
-    // Inner row of second row with 4 cards (cards 2 to 5)
-    $form['row2']['card1']['inner_row'] = array(
-      '#type' => 'container',
-      '#attributes' => array(
-        'class' => array('row', 'm-3'),
-        'style' => 'margin-bottom:25px!important;',
-      ),
-    );
-
-    // Card 6 STREAMS IN
-    $header = Stream::generateHeaderStudy();
-    $output = Stream::generateOutputStudy($this->getStreamList());
-
-    $form['row2']['card1']['inner_row']['card6'] = [
-      '#type'       => 'container',
       '#attributes' => [
-        'class' => ['col-md-12'],
+        'class' => ['row', 'mb-3'],
       ],
-      // '#prefix'     => '<div class="card">',
-      // '#suffix'     => '</div>',
     ];
 
-    $form['row2']['card1']['inner_row']['card6']['card'] = [
+    // Accordion wrapper for the entire row
+    $form['row2']['accordion'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['accordion', 'w-100'],
+        'id'    => 'accordionRow2',
+      ],
+    ];
+
+    // Single accordion item (you could duplicate this if you ever need more)
+    $form['row2']['accordion']['item'] = [
+	  '#type' => 'container',
+	  '#attributes' => [
+		'class' => ['accordion-item', 'card', 'drop-area'],
+		'id'    => 'drop-card',
+	  ],
+	];
+
+    // Accordion header: button that toggles the collapse
+    $form['row2']['accordion']['item']['header'] = [
+	  '#type' => 'container',
+	  '#attributes' => [
+		'class' => ['accordion-header', 'd-flex', 'justify-content-between', 'align-items-center'],
+		'id'    => 'headingDropCard',
+	  ],
+      'button' => [
+        '#type'       => 'html_tag',
+        '#tag'        => 'button',
+        '#value'      => '<h3 id="total_elements_count" class="mb-0">' . $cards[1]['value'] . '</h3>' .
+          ($isOwner ?
+            '&nbsp;<div class="info-card text-center w-80">(You can drag&amp;drop files directly into this card)</div>' :
+            '') .
+            '<div id="toast-container" style="position:absolute; top:0.5rem; right:1rem; z-index:1050;"></div>',
+        '#attributes' => [
+          'class'          => ['accordion-button', 'collapsed'],
+          'type'           => 'button',
+          'data-bs-toggle' => 'collapse',
+          'data-bs-target'=> '#collapseDropCard',
+          'aria-expanded'  => 'false',
+          'aria-controls'  => 'collapseDropCard',
+        ],
+      ],
+    ];
+
+    // The collapsible pane containing all your cards and AJAX tables
+    $form['row2']['accordion']['item']['collapse'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class'           => ['accordion-collapse', 'collapse', 'hide'], // `show` = start expanded
+        'id'              => 'collapseDropCard',
+        'aria-labelledby' => 'headingDropCard',
+        'data-bs-parent'  => '#accordionRow2',
+      ],
+    ];
+
+    // Accordion body: wrap your original card-body here
+    $form['row2']['accordion']['item']['collapse']['body'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['accordion-body', 'p-0'],
+      ],
+    ];
+
+    // --- Begin inner_row: your original contentRow ---
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['row', 'm-3'],
+        'style' => 'margin-bottom:25px!important;',
+      ],
+    ];
+
+    // Card 6: Streams IN
+    $header   = Stream::generateHeaderStudy();
+    $output   = Stream::generateOutputStudy($this->getStreamList());
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card6'] = [
+      '#type'       => 'container',
+      '#attributes' => ['class' => ['col-md-12']],
+    ];
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card6']['card'] = [
       '#type'       => 'container',
       '#attributes' => ['class' => ['col-md-12', 'mb-4']],
       '#prefix'     => '<div class="card">',
       '#suffix'     => '</div>',
     ];
-
-    // 3) Header
-    $form['row2']['card1']['inner_row']['card6']['card']['card_header'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card6']['card']['card_header'] = [
       '#type'   => 'markup',
       '#markup' => '<div class="card-header text-center">'
         . '<h3 id="stream_files_count">' . $cards[6]['head'] . '</h3>'
         . '</div>',
     ];
-
-    // 4) Body + tabela
-    $form['row2']['card1']['inner_row']['card6']['card']['card_body'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card6']['card']['card_body'] = [
       '#type'       => 'container',
       '#attributes' => ['class' => ['card-body', 'p-']],
     ];
-    $form['row2']['card1']['inner_row']['card6']['card']['card_body']['element_table'] = [
-      '#type'          => 'tableselect',
-      '#header'        => $header,
-      '#options'          => $output,
-      // '#default_value' => [],
-      '#empty'         => t('No stream has been found'),
-      '#attributes' => [
-        'id' => 'dpl-streams-table',
-      ],
-      // forca seleção única (radio) — ajuste se quiser usar checkbox:
-      '#multiple'   => FALSE,
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card6']['card']['card_body']['element_table'] = [
+      '#type'     => 'tableselect',
+      '#header'   => $header,
+      '#options'  => $output,
+      '#empty'    => t('No stream has been found'),
+      '#attributes' => ['id' => 'dpl-streams-table'],
+      '#multiple' => FALSE,
     ];
-
-    // 5) Footer
-    $form['row2']['card1']['inner_row']['card6']['card']['card_footer'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card6']['card']['card_footer'] = [
       '#type'   => 'markup',
       '#markup' => '<div class="card-footer text-center">'
         . '<div id="json-table-stream-pager" class="pagination"></div>'
         . '</div>',
     ];
 
-    //DA TABLE JQUERY
-    /**
-      * 1) AJAX-loaded cards (Stream Data Files + Message Stream)
-      *    → Full-width (col-md-12), then an inner row with two col-md-6 cards.
-      */
-    $form['row2']['card1']['inner_row']['ajax_cards_container'] = [
+    // AJAX-loaded cards: Stream Topic List, Stream Data Files, Message Stream
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['ajax_cards_container'] = [
       '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-12', 'mb-4'],  // span entire width, with bottom margin
-      ],
+      '#attributes' => ['class' => ['col-md-12', 'mb-4']],
+    ];
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['ajax_cards_container']['ajax_row'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['row']],
     ];
 
-    // inner row for the two AJAX cards
-    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['row'],
-      ],
-    ];
-
-    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_topic_list'] = [
+    // Stream Topic List (full width)
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['ajax_cards_container']['ajax_row']['stream_topic_list'] = [
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-12'],
         'id'    => 'stream-topic-list-container',
       ],
       'card' => [
-        '#type' => 'markup',
+        '#type'   => 'markup',
         '#markup' => '
           <div class="card">
             <div class="card-header text-center">
               <h3 id="topic-list-count">Stream Topic List</h3>
-              <div class="info-card">Cards data is refreshed every 20 seconds</div>
+              <div class="info-card">Cards data is refreshed every 5 seconds</div>
             </div>
             <div class="card-body">
               <div id="topic-list-table">Loading…</div>
@@ -559,8 +538,8 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
-    // Stream Data Files card (left half)
-    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
+    // Stream Data Files (left half, hidden until a stream is selected)
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['ajax_cards_container']['ajax_row']['stream_data_files'] = [
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-7', 'mt-3'],
@@ -568,7 +547,7 @@ class ManageStudyForm extends FormBase
         'style' => 'display:none;',
       ],
       'card' => [
-        '#type' => 'markup',
+        '#type'   => 'markup',
         '#markup' => '
           <div class="card">
             <div class="card-header text-center">
@@ -586,7 +565,8 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
-    $form['row2']['card1']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
+    // Message Stream (right half, hidden until a stream is selected)
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['ajax_cards_container']['ajax_row']['message_stream'] = [
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-5', 'mt-3'],
@@ -594,7 +574,7 @@ class ManageStudyForm extends FormBase
         'style' => 'display:none!important;',
       ],
       'card' => [
-        '#type' => 'markup',
+        '#type'   => 'markup',
         '#markup' => '
           <div class="card">
             <div class="card-header text-center">
@@ -613,86 +593,63 @@ class ManageStudyForm extends FormBase
       ],
     ];
 
-    // STREAMS OUT card (card 13)
+    // Card 13: Streams OUT
     $headerOut = Stream::generateHeaderOutStream();
     $outputOut = Stream::generateOutputStream($this->getOutStreamList());
-    $form['row2']['card1']['inner_row']['card13'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card13'] = [
       '#type'       => 'container',
-      '#attributes' => [
-        'class' => ['col-md-12', 'mt-4'],
-      ],
+      '#attributes' => ['class' => ['col-md-12', 'mt-4']],
     ];
-
-    $form['row2']['card1']['inner_row']['card13']['card'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card13']['card'] = [
       '#type'       => 'container',
       '#attributes' => ['class' => ['col-md-12', 'mb-4']],
       '#prefix'     => '<div class="card">',
       '#suffix'     => '</div>',
     ];
-
-    // 3) Header
-    $form['row2']['card1']['inner_row']['card13']['card']['card_header'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card13']['card']['card_header'] = [
       '#type'   => 'markup',
       '#markup' => '<div class="card-header text-center">'
         . '<h3 id="stream_files_count">' . $cards[13]['head'] . '</h3>'
         . '</div>',
     ];
-
-    // 4) Body + tabela
-    $form['row2']['card1']['inner_row']['card13']['card']['card_body'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card13']['card']['card_body'] = [
       '#type'       => 'container',
       '#attributes' => ['class' => ['card-body', 'p-2']],
     ];
-    $form['row2']['card1']['inner_row']['card13']['card']['card_body']['element_table'] = [
-      '#type'          => 'tableselect',
-      '#header'        => $headerOut,
-      '#options'          => $outputOut,
-      // '#default_value' => [],
-      '#empty'         => t('No stream has been found'),
-      '#attributes' => [
-        'id' => 'dpl-streamsout-table',
-      ],
-      // forca seleção única (radio) — ajuste se quiser usar checkbox:
-      '#multiple'   => FALSE,
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card13']['card']['card_body']['element_table'] = [
+      '#type'     => 'tableselect',
+      '#header'   => $headerOut,
+      '#options'  => $outputOut,
+      '#empty'    => t('No stream has been found'),
+      '#attributes' => ['id' => 'dpl-streamsout-table'],
+      '#multiple' => FALSE,
     ];
-
-    // 5) Footer
-    $form['row2']['card1']['inner_row']['card13']['card']['card_footer'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['card13']['card']['card_footer'] = [
       '#type'   => 'markup',
       '#markup' => '<div class="card-footer text-center">'
         . '<div id="json-table-stream-pager" class="pagination"></div>'
         . '</div>',
     ];
 
-
-
-
-    /**
-      * 2) Fixed cards (Study Data Files, Publications, Media)
-      *    → Another full-width wrapper, then an inner row with three col-md-4 cards.
-      */
-    $form['row2']['card1']['inner_row']['fixed_cards_container'] = [
+    // Fixed cards container for Study Data Files, Publications, Media
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container'] = [
       '#type' => 'container',
       '#attributes' => [
         'class' => ['col-md-12', 'mt-3'],
-        'style' => 'border-top: 5px dashed rgb(168, 168, 168)', // spacing below
+        'style' => 'border-top: 5px dashed rgb(168, 168, 168)',
       ],
     ];
-    // inner row for the three fixed cards
-    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row'] = [
       '#type' => 'container',
-      '#attributes' => [
-        'class' => ['row','align-items-start'],
-      ],
+      '#attributes' => ['class' => ['row', 'align-items-start']],
     ];
+
     // Study Data Files (one-third width)
-    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row']['study_data_files'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['study_data_files'] = [
       '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-4'],
-      ],
+      '#attributes' => ['class' => ['col-md-4']],
       'card' => [
-        '#type' => 'markup',
+        '#type'   => 'markup',
         '#markup' => '
           <div class="card">
             <div class="card-header text-center">
@@ -708,14 +665,13 @@ class ManageStudyForm extends FormBase
         ',
       ],
     ];
+
     // Publications (one-third width)
-    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row']['publications'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['publications'] = [
       '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-4'], // one-third + spacing above
-      ],
+      '#attributes' => ['class' => ['col-md-4']],
       'card' => [
-        '#type' => 'markup',
+        '#type'   => 'markup',
         '#markup' => '
           <div class="card">
             <div class="card-header text-center">
@@ -731,18 +687,17 @@ class ManageStudyForm extends FormBase
         ',
       ],
     ];
+
     // Media (one-third width)
-    $form['row2']['card1']['inner_row']['fixed_cards_container']['fixed_row']['media'] = [
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['media'] = [
       '#type' => 'container',
-      '#attributes' => [
-        'class' => ['col-md-4'], // one-third + spacing above
-      ],
+      '#attributes' => ['class' => ['col-md-4']],
       'card' => [
-        '#type' => 'markup',
+        '#type'   => 'markup',
         '#markup' => '
           <div class="card">
             <div class="card-header text-center">
-              <h3>' . $cards[4]['value']. '</h3>
+              <h3>' . $cards[4]['value'] . '</h3>
             </div>
             <div class="card-body">
               <div id="media-table-container">Loading…</div>
@@ -754,6 +709,102 @@ class ManageStudyForm extends FormBase
         ',
       ],
     ];
+
+    // WORKFLOW EXECUTIONS
+    $form['row6'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['accordion', 'mt-3'], 'id' => 'accordionWorkflow'],
+    ];
+
+    $form['row6']['item'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['accordion-item', 'card', 'drop-area'],
+        'id'    => 'workflow-card',
+      ],
+    ];
+
+    $form['row6']['item']['header'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['accordion-header', 'justify-content-between', 'align-items-center'],
+        'id'    => 'headingWorkflow',
+      ],
+      'button' => [
+        '#type' => 'html_tag',
+        '#tag' => 'button',
+        '#value' => $this->t('<h3 class="mb-0">Workflows</h3>'),
+        '#attributes' => [
+          'class' => ['accordion-button', 'collapsed'],
+          'type' => 'button',
+          'data-bs-toggle' => 'collapse',
+          'data-bs-target' => '#collapseWorkflow',
+          'aria-expanded' => 'false',
+          'aria-controls' => 'collapseWorkflow',
+        ],
+      ],
+    ];
+
+    $form['row6']['item']['collapse'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'collapseWorkflow',
+        'class' => ['accordion-collapse','collapse', 'hide'],
+        'aria-labelledby' => 'headingWorkflow',
+        'data-bs-parent' => '#accordionWorkflow',
+      ],
+    ];
+
+    $form['row6']['item']['collapse']['body'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['accordion-body','p-0']],
+    ];
+
+    $form['row6']['item']['collapse']['body']['cards_row'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['row','row-cols-3','g-0','p-3','pt-0']],
+    ];
+
+    foreach ([7,14] as $key) {
+      switch ($key) {
+        case 7:
+          $title = t('Manage STRs');
+          $btn_classes = ['btn', 'btn-primary'];
+          break;
+        case 14:
+          $title = t('Manage Process');
+          $btn_classes = ['btn', 'btn-primary', 'disabled'];
+          break;
+      }
+
+      $form['row6']['item']['collapse']['body']['cards_row']["card{$key}"] = [
+        '#type'       => 'container',
+        '#attributes' => ['class' => ['col', 'p-2']],
+        'card' => [
+          '#type'       => 'container',
+          '#attributes' => ['class' => ['card', 'h-100', 'text-center']],
+          'body'   => [
+            '#type'       => 'container',
+            '#attributes' => ['class' => ['card-body']],
+            'value' => [
+              '#type'  => 'html_tag',
+              '#tag'   => 'h1',
+              '#value' => $cards[$key]['value'],
+            ],
+          ],
+          'footer' => [
+            '#type'       => 'container',
+            '#attributes' => ['class' => ['card-footer']],
+            'link' => [
+              '#type'       => 'link',
+              '#title'      => $title,
+              '#url'        => Url::fromUserInput($cards[$key]['link']),
+              '#attributes' => ['class' => $btn_classes],
+            ],
+          ],
+        ],
+      ];
+    }
 
     // Bottom part of the form
     $form['row4'] = array(
