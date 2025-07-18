@@ -184,7 +184,7 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
-        'head' => 'Streams IN (' . $totalSTREAMs . ')',
+        'head' => 'Streams RAW (' . $totalSTREAMs . ')',
         'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
