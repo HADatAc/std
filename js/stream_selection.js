@@ -40,18 +40,50 @@
     $('#message-stream-container').hide();
   }
 
-    function reloadTopicList() {
+  function reloadDataFiles(streamUri, topicUri) {
+    var params = {
+      studyUri: drupalSettings.std.studyuri,
+      streamUri: streamUri
+    };
+    if (topicUri) {
+      params.topicUri = topicUri;
+    }
+
+    $.getJSON(drupalSettings.std.ajaxUrl, params)
+      .done(function(data) {
+        // injecta tabela
+        $('#data-files-table').html(data.files);
+
+        if (topicUri) {
+          // se for por tópico, mostramos o topic-pager
+          $('#topic-files-pager')
+            .html(data.filesPager)
+            .show();
+          $('#data-files-pager').hide();
+        }
+        else {
+          // se for stream de ficheiros só, mostramos o data-pager
+          $('#data-files-pager')
+            .html(data.filesPager)
+            .show();
+          $('#topic-files-pager').hide();
+        }
+      })
+      .fail(function() {
+        console.warn('Failed to reload data files.');
+      });
+  }
+
+  function reloadTopicList() {
     if (!currentStreamUri) {
       return;
     }
     $.getJSON(drupalSettings.std.ajaxUrl, {
-      studyUri:  drupalSettings.std.studyUri,
+      studyUri:  drupalSettings.std.studyuri,
       streamUri: currentStreamUri
     })
     .done(function (data) {
-      // injeta só os tópicos
       $('#topic-list-table').html(data.topics);
-      // restaura a seleção anterior
       if (currentTopicUri) {
         var $radio = $('#topic-list-table')
           .find('input.topic-radio[value="' + currentTopicUri + '"]');
@@ -59,13 +91,14 @@
           $radio.prop('checked', true);
         }
       }
+      reloadDataFiles(currentStreamUri, currentTopicUri);
     })
     .fail(function () {
       console.warn('Failed to reload topic list.');
     });
   }
 
-  setInterval(reloadTopicList, 20000);
+  setInterval(reloadTopicList, 15000);
 
   /** Download link behavior */
   Drupal.behaviors.fileDownload = {
@@ -107,7 +140,7 @@
 
         // fetch topics/files + streamType
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri
         })
         .done(function (data) {
@@ -161,7 +194,7 @@
         var topicUri = this.value;
         currentTopicUri = topicUri;
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri,
           topicUri:  topicUri,
           page:      $(this).data('page'),
@@ -224,7 +257,7 @@
           .show();
 
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri,
           page:      page
         })
@@ -262,7 +295,7 @@
           .show();
 
         $.getJSON(drupalSettings.std.ajaxUrl, {
-          studyUri:  drupalSettings.std.studyUri,
+          studyUri:  drupalSettings.std.studyuri,
           streamUri: currentStreamUri,
           topicUri:  currentTopicUri,
           page:      page,
@@ -327,5 +360,128 @@
       });
     }
   };
+
+  Drupal.behaviors.toggleCards = {
+    attach: function (context, settings) {
+      $('#toggleResumo', context)
+        .off('click.toggleResumo')
+        .on('click.toggleResumo', function (e) {
+          e.preventDefault();
+          $('#cardsCollapse').slideToggle();
+          $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
+        });
+
+      $('#toggleAuxAreas', context)
+        .off('click.toggleAuxAreas')
+        .on('click.toggleAuxAreas', function (e) {
+          e.preventDefault();
+          $('#cardsAuxCollapse').slideToggle();
+          $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
+        });
+
+      $('#toggleDropCard', context)
+      .off('click.toggleDropCard')
+      .on('click.toggleDropCard', function (e) {
+        e.preventDefault();
+        $('#card1-container').slideToggle();
+        $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
+      });
+    }
+  };
+
+})(jQuery, Drupal, drupalSettings);
+
+(function ($, Drupal, drupalSettings) {
+  'use strict';
+
+  /**
+   * Drag-and-drop “drop-area” behavior.
+   * Binds to any element with class .drop-area in the #collapseDropCard panel.
+   */
+  Drupal.behaviors.stdDropArea = {
+    attach: function (context, settings) {
+      // Find drop-area inside the opened collapse
+      $('#collapseDropCard .drop-area', context).each(function () {
+        // Use a flag on the DOM node so we only bind once
+        if (this._dropAreaInit) {
+          return;
+        }
+        this._dropAreaInit = true;
+
+        var zone = this;
+        // Highlight on dragover
+        zone.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          zone.classList.add('drag-over');
+        }, false);
+
+        // Remove highlight when leaving
+        zone.addEventListener('dragleave', function (e) {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+        }, false);
+
+        // Handle drop
+        zone.addEventListener('drop', function (e) {
+          e.preventDefault();
+          zone.classList.remove('drag-over');
+
+          var files = e.dataTransfer.files;
+          if (!files.length) {
+            return;
+          }
+
+          // Build FormData
+          var fd = new FormData();
+          $.each(files, function (i, file) {
+            fd.append('files[]', file);
+          });
+
+          // POST to your ingest endpoint
+          $.ajax({
+            url: drupalSettings.std.fileIngestUrl,
+            method: 'POST',
+            data: fd,
+            processData: false,
+            contentType: false
+          })
+          .done(function (resp) {
+            // Optionally show a toast or refresh the content
+            if (resp.status === 'success') {
+              new bootstrap.Toast(
+                $('<div class="toast align-items-center text-white bg-success" role="alert">' +
+                   '<div class="toast-body">' + resp.message + '</div>' +
+                 '</div>')[0]
+              ).show();
+              // re-trigger AJAX reload of streams table
+              $('#dpl-streams-table input[type=radio]:checked').trigger('click');
+              reloadPublications();
+              reloadMedia();
+            }
+            else {
+              new bootstrap.Toast(
+                $('<div class="toast align-items-center text-white bg-danger" role="alert">' +
+                   '<div class="toast-body">' + resp.message + '</div>' +
+                 '</div>')[0]
+              ).show();
+            }
+          })
+          .fail(function () {
+            new bootstrap.Toast(
+              $('<div class="toast align-items-center text-white bg-danger" role="alert">' +
+                 '<div class="toast-body">Upload failed.</div>' +
+               '</div>')[0]
+            ).show();
+          });
+        }, false);
+      });
+    }
+  };
+
+  // Whenever the Accordion panel opens, re-attach Drupal behaviors inside it.
+  $('#collapseDropCard')
+    .on('shown.bs.collapse', function () {
+      Drupal.attachBehaviors(this, drupalSettings);
+    });
 
 })(jQuery, Drupal, drupalSettings);
