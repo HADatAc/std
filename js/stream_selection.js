@@ -32,48 +32,6 @@
     new bootstrap.Toast(document.getElementById(id)).show();
   }
 
-  function reloadPublications() {
-    var s = drupalSettings.pub;
-    $.getJSON(s.url, {
-      studyuri: s.studyuri,
-      page:     s.page,
-      pagesize: s.pagesize
-    }).done(function(json) {
-      var rows = json.files.map(function(f) {
-        return '<tr><td>'+f.filename+'</td><td><a href="'+f.download_url+'">↓</a></td></tr>';
-      }).join('');
-      $('#publication-table-container table tbody').html(rows);
-      var pager = '';
-      for (var p=1; p<=json.pagination.total_pages; p++) {
-        pager += '<li'+(p===json.pagination.current_page?' class="active"':'')+'>'
-               +  '<a href="#" class="dpl-files-page" data-page="'+p+'">'+p+'</a>'
-               +  '</li>';
-      }
-      $('#publication-table-pager .pagination').html(pager);
-    });
-  }
-
-  function reloadMedia() {
-    var m = drupalSettings.media;
-    $.getJSON(m.url, {
-      studyuri: m.studyuri,
-      page:     m.page,
-      pagesize: m.pagesize
-    }).done(function(json) {
-      var rows = json.files.map(function(f) {
-        return '<tr><td>'+f.filename+'</td><td><a href="'+f.download_url+'">↓</a></td></tr>';
-      }).join('');
-      $('#media-table-container table tbody').html(rows);
-      var pager = '';
-      for (var p=1; p<=json.pagination.total_pages; p++) {
-        pager += '<li'+(p===json.pagination.current_page?' class="active"':'')+'>'
-               +  '<a href="#" class="dpl-files-page" data-page="'+p+'">'+p+'</a>'
-               +  '</li>';
-      }
-      $('#media-table-pager .pagination').html(pager);
-    });
-  }
-
   /** Hide all of our AJAX cards at once */
   function hideAllCards() {
     $('#edit-ajax-cards-container').hide();
@@ -82,7 +40,41 @@
     $('#message-stream-container').hide();
   }
 
-    function reloadTopicList() {
+  function reloadDataFiles(streamUri, topicUri) {
+    var params = {
+      studyUri: drupalSettings.std.studyuri,
+      streamUri: streamUri
+    };
+    if (topicUri) {
+      params.topicUri = topicUri;
+    }
+
+    $.getJSON(drupalSettings.std.ajaxUrl, params)
+      .done(function(data) {
+        // injecta tabela
+        $('#data-files-table').html(data.files);
+
+        if (topicUri) {
+          // se for por tópico, mostramos o topic-pager
+          $('#topic-files-pager')
+            .html(data.filesPager)
+            .show();
+          $('#data-files-pager').hide();
+        }
+        else {
+          // se for stream de ficheiros só, mostramos o data-pager
+          $('#data-files-pager')
+            .html(data.filesPager)
+            .show();
+          $('#topic-files-pager').hide();
+        }
+      })
+      .fail(function() {
+        console.warn('Failed to reload data files.');
+      });
+  }
+
+  function reloadTopicList() {
     if (!currentStreamUri) {
       return;
     }
@@ -91,9 +83,7 @@
       streamUri: currentStreamUri
     })
     .done(function (data) {
-      // injeta só os tópicos
       $('#topic-list-table').html(data.topics);
-      // restaura a seleção anterior
       if (currentTopicUri) {
         var $radio = $('#topic-list-table')
           .find('input.topic-radio[value="' + currentTopicUri + '"]');
@@ -101,13 +91,14 @@
           $radio.prop('checked', true);
         }
       }
+      reloadDataFiles(currentStreamUri, currentTopicUri);
     })
     .fail(function () {
       console.warn('Failed to reload topic list.');
     });
   }
 
-  setInterval(reloadTopicList, 5000);
+  setInterval(reloadTopicList, 15000);
 
   /** Download link behavior */
   Drupal.behaviors.fileDownload = {
@@ -372,7 +363,6 @@
 
   Drupal.behaviors.toggleCards = {
     attach: function (context, settings) {
-      // RESUMO toggle
       $('#toggleResumo', context)
         .off('click.toggleResumo')
         .on('click.toggleResumo', function (e) {
@@ -389,8 +379,6 @@
           $(this).find('i').toggleClass('fa-chevron-down fa-chevron-up');
         });
 
-
-      // DROP‐CARD toggle
       $('#toggleDropCard', context)
       .off('click.toggleDropCard')
       .on('click.toggleDropCard', function (e) {

@@ -18,6 +18,8 @@ use function Termwind\style;
 class ManageStudyForm extends FormBase
 {
 
+  Const CONFIGNAME = "rep.settings";
+
   protected $studyUri;
 
   protected $study;
@@ -72,11 +74,19 @@ class ManageStudyForm extends FormBase
     return 'manage_study_form';
   }
 
+  protected function getEditableConfigNames() {
+        return [
+            static::CONFIGNAME,
+        ];
+    }
+
   /**
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL)
   {
+
+    $config = $this->config(static::CONFIGNAME);
 
     //Libraries
     $form['#attached']['library'][] = 'std/json_table';
@@ -525,7 +535,7 @@ class ManageStudyForm extends FormBase
           <div class="card">
             <div class="card-header text-center">
               <h3 id="topic-list-count">Stream Topic List</h3>
-              <div class="info-card">Cards data is refreshed every 5 seconds</div>
+              <div class="info-card">Cards data are refreshed every 15 seconds</div>
             </div>
             <div class="card-body">
               <div id="topic-list-table">Loading…</div>
@@ -733,7 +743,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
-        '#value' => $this->t('<h3 class="mb-0">Workflows</h3>'),
+        '#value' => $this->t('<h3 class="mb-0">'.$config->get("preferred_process").'\'s' ?? 'Process\'s'.'</h3>'),
         '#attributes' => [
           'class' => ['accordion-button', 'collapsed'],
           'type' => 'button',
@@ -765,12 +775,12 @@ class ManageStudyForm extends FormBase
       '#attributes' => ['class' => ['row','row-cols-3','g-0','p-3','pt-0']],
     ];
 
-    foreach ([7,14] as $key) {
+    foreach ([14] as $key) {
       switch ($key) {
-        case 7:
-          $title = t('Manage STRs');
-          $btn_classes = ['btn', 'btn-primary'];
-          break;
+        // case 7:
+        //   $title = t('Manage STRs');
+        //   $btn_classes = ['btn', 'btn-primary'];
+        //   break;
         case 14:
           $title = t('Manage Process');
           $btn_classes = ['btn', 'btn-primary', 'disabled'];

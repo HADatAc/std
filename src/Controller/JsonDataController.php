@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
 use Drupal\rep\Entity\Stream;
 use Drupal\Component\Utility\Html;
-use Drupal\dpl\Controller\StreamController;
+use Drupal\Core\Url;
 
 use function PHPUnit\Framework\isArray;
 
@@ -654,11 +654,15 @@ class JsonDataController extends ControllerBase
             // Gerar token para arquivos Word
             $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
 
-            // Adicionar token ao view_url para arquivos Word
-            $view_url = \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
-            if ($token !== null) {
-                $view_url .= '/' . $token;
-            }
+            $view_url = Url::fromRoute('std.view_media_file', [
+              'filename' => $file,
+              'studyuri' => rawurlencode($studyuri),
+              'type'     => 'Publications',
+              'token' => $token,
+            ], [
+              'absolute' => TRUE,
+            ])->toString();
+            // $view_url = \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/Publications';
 
             $files[] = [
                 'filename' => $file,
@@ -790,11 +794,16 @@ class JsonDataController extends ControllerBase
             // Gerar token para arquivos Word
             $token = hash_hmac('sha256', $file, '1357924680'); // Substitua pela chave segura usada no servidor
 
-            // Adicionar token ao view_url para arquivos Word
-            $view_url = \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
-            if ($token !== null) {
-                $view_url .= '/' . $token;
-            }
+            $view_url = Url::fromRoute('std.view_media_file', [
+              'filename' => $file,
+              'studyuri' => rawurlencode($studyuri),
+              'type'     => 'media',
+              'token' => $token,
+            ], [
+              'absolute' => TRUE,
+            ])->toString();
+            // $view_url = \Drupal::request()->getBaseUrl() . '/std/view-file/' . $file . '/' . rawurlencode($studyuri) . '/media';
+
             $files[] = [
                 'filename' => $file,
                 'view_url' =>  $view_url,
