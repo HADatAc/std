@@ -360,8 +360,6 @@ class ManageStudyForm extends FormBase
         $link = substr($link, strlen(base_path()) - 1);
       }
 
-      // dpm(Url::fromUserInput($cards[$key]['link']), "Card {$key} link");
-
       $form['row3']['item']['collapse']['body']['cards_row']["card{$key}"] = [
         '#type'       => 'container',
         '#attributes' => ['class' => ['col', 'p-2']],
