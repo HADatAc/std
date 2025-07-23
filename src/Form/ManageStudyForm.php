@@ -355,6 +355,13 @@ class ManageStudyForm extends FormBase
           break;
       }
 
+      $link = $cards[$key]['link'];
+      if (strpos($link, base_path()) === 0) {
+        $link = substr($link, strlen(base_path()) - 1);
+      }
+
+      // dpm(Url::fromUserInput($cards[$key]['link']), "Card {$key} link");
+
       $form['row3']['item']['collapse']['body']['cards_row']["card{$key}"] = [
         '#type'       => 'container',
         '#attributes' => ['class' => ['col', 'p-2']],
@@ -376,7 +383,7 @@ class ManageStudyForm extends FormBase
             'link' => [
               '#type'       => 'link',
               '#title'      => $title,
-              '#url'        => Url::fromUserInput($cards[$key]['link']),
+              '#url'        => Url::fromUserInput($link),
               '#attributes' => ['class' => $btn_classes],
             ],
           ],
