@@ -1377,7 +1377,7 @@ class EditTaskForm extends FormBase {
             'hasSIRManagerEmail'    => $useremail,
           ];
 
-          // dpm(json_encode($taskData)); return false;
+          dpm(json_encode($taskData)); return false;
 
           $taskJSON = json_encode($taskData);
 

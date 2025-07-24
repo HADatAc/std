@@ -362,7 +362,7 @@ class STDSelectStudyForm extends FormBase
 
       // Check if the element has an image or should use a placeholder
       // $placeholder_image = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/placeholder/'.$elementType.'_placeholder.png';
-      $image_src = Utils::getAPIImage($uri, $element->hasImageUri, UTILS::placeholderImage($element->hascoTypeUri,'study'));
+      $image_src = Utils::getAPIImage($uri, $element->hasImageUri, UTILS::placeholderImage($element->hascoTypeUri,$this->element_type));
 
       // Safely create URI with Utils::namespaceUri if it's not empty
       if (!empty($uri)) {

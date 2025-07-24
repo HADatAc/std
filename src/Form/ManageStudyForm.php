@@ -176,7 +176,7 @@ class ManageStudyForm extends FormBase
     // Example data for cards
     $cards = array(
       1 => array(
-        'value' => 'Study Content',
+        'value' => 'Contents',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
       2 => array('value' => 'Stream Data Files (' . ($totalDAs ?? 0) . ')'),
@@ -184,7 +184,7 @@ class ManageStudyForm extends FormBase
       4 => array('value' => 'Media'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
-        'head' => 'Streams RAW (' . $totalSTREAMs . ')',
+        'head' => 'Original Streams (' . $totalSTREAMs . ')',
         'value' => '<h1>' . $totalSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
@@ -192,22 +192,22 @@ class ManageStudyForm extends FormBase
         'value' => '<h1>' . $totalSTRs . '</h1><h3>STR<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'str',),
       ),
-      8 => array(
+      10 => array(
         'value' => '<h1>' . $totalRoles . '</h1><h3>Roles<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyrole')
       ),
       9 => array(
-        'value' => '<h1>' . $totalVCs . '</h1><h3>Virtual Columns</h3><h4>(Entities)</h4>',
+        'value' => '<h1>' . $totalVCs . '</h1><h3>Entities</h3><h4>(Virtual Columns)</h4>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'virtualcolumn')
       ),
-      10 => array(
+      8 => array(
         'value' => '<h1>' . $totalSOCs . '</h1><h3>Object Collections</h3><h4>(' . $totalSOs . ' Objects)</h4>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'studyobjectcollection')
       ),
       11 => array('value' => 'Message Stream'),
       12 => array('value' => 'Unassociated Data Files'),
       13 => array(
-        'head' => 'Streams OUT (' . $totalOutSTREAMs . ')',
+        'head' => 'Annotated Streams (' . $totalOutSTREAMs . ')',
         'value' => '<h1>' . $totalOutSTREAMs . '</h1><h3>Streams<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
@@ -307,7 +307,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
-        '#value' => $this->t('<h3 class="mb-0">Areas of Interest</h3>'),
+        '#value' => $this->t('<h3 class="mb-0">Objects of Interest</h3>'),
         '#attributes' => [
           'class' => ['accordion-button', 'collapsed'],
           'type' => 'button',
@@ -342,16 +342,16 @@ class ManageStudyForm extends FormBase
     foreach ([8, 9, 10] as $key) {
       switch ($key) {
         case 8:
-          $title = t('Manage Roles');
-          $btn_classes = ['btn', 'btn-secondary', 'disabled'];
+          $title = t('Manage Object Collections');
+          $btn_classes = ['btn', 'btn-secondary',];
           break;
         case 9:
           $title = t('Manage Virtual Columns');
           $btn_classes = ['btn', 'btn-primary'];
           break;
         case 10:
-          $title = t('Manage Object Collections');
-          $btn_classes = ['btn', 'btn-primary'];
+          $title = t('Manage Roles');
+          $btn_classes = ['btn', 'btn-primary', 'disabled'];
           break;
       }
 
@@ -359,8 +359,6 @@ class ManageStudyForm extends FormBase
       if (strpos($link, base_path()) === 0) {
         $link = substr($link, strlen(base_path()) - 1);
       }
-
-      // dpm(Url::fromUserInput($cards[$key]['link']), "Card {$key} link");
 
       $form['row3']['item']['collapse']['body']['cards_row']["card{$key}"] = [
         '#type'       => 'container',
@@ -750,7 +748,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
-        '#value' => $this->t('<h3 class="mb-0">'.$config->get("preferred_process").'\'s' ?? 'Process\'s'.'</h3>'),
+        '#value' => $this->t('<h3 class="mb-0">'.$config->get("preferred_process").' Executions' ?? 'Process Executions'.'</h3>'),
         '#attributes' => [
           'class' => ['accordion-button', 'collapsed'],
           'type' => 'button',
@@ -789,8 +787,8 @@ class ManageStudyForm extends FormBase
         //   $btn_classes = ['btn', 'btn-primary'];
         //   break;
         case 14:
-          $title = t('Manage Process');
-          $btn_classes = ['btn', 'btn-primary', 'disabled'];
+          $title = t('Create Execution');
+          $btn_classes = ['btn', 'btn-primary',];
           break;
       }
 

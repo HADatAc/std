@@ -10,7 +10,7 @@
     const total = totals.daFiles + totals.publications + totals.media;
     if ($("#total_elements_count").length) {
       // $("#total_elements_count").text("Study Content (" + total + ")");
-      $("#total_elements_count").text("Study Content");
+      $("#total_elements_count").text("Contents");
     } else {
       showToast("#total_elements_count not found on DOM.", "danger");
     }
