@@ -492,11 +492,11 @@ std.process_instrument_autocomplete:
   requirements:
     _permission: 'access content'
 
-std.load_detectors:
-  path: '/std/load-detectors'
+std.load_components:
+  path: '/std/load-components'
   defaults:
-    _controller: '\Drupal\std\Controller\JsonApiProcessController::loadDetectors'
-    _title: 'Load Detectors'
+    _controller: '\Drupal\std\Controller\JsonApiProcessController::loadComponents'
+    _title: 'Load Components'
   requirements:
     _permission: 'access content'
   methods: [GET, POST]

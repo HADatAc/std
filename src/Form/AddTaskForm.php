@@ -276,7 +276,7 @@ class AddTaskForm extends FormBase {
             'rep.tree_form',
             [
               'mode'        => 'modal',
-              'elementtype' => 'detectorstem',
+              'elementtype' => 'componentstem',
             ],
             [
               'query' => [
@@ -288,7 +288,7 @@ class AddTaskForm extends FormBase {
 
           // Pass through field identifier and element type.
           'data-field-id'    => 'task_taskstem',
-          'data-elementtype' => 'detectorstem',
+          'data-elementtype' => 'componentstem',
 
           // Disable native browser autocomplete.
           'autocomplete' => 'off',
@@ -575,11 +575,11 @@ class AddTaskForm extends FormBase {
       '#submit' => ['::cancelSubmitCallback'],
     ];
 
-    $form['selected_detectors'] = [
+    $form['selected_components'] = [
       '#type' => 'hidden',
       '#value' => [],
       '#attributes' => [
-        'id' => 'selected-detectors',
+        'id' => 'selected-components',
       ],
     ];
 
@@ -798,9 +798,9 @@ class AddTaskForm extends FormBase {
     $separator = '<div class="w-100"></div>';
     foreach ($instruments as $delta => $instrument) {
 
-      $detectors_component = [];
-      if (empty($instrument['detectors'])) {
-        $detectors_component['table'] = [
+      $components_component = [];
+      if (empty($instrument['components'])) {
+        $components_component['table'] = [
           '#type' => 'table',
           '#header' => [
             $this->t('#'),
@@ -809,13 +809,13 @@ class AddTaskForm extends FormBase {
             $this->t('Status'),
           ],
           '#rows' => [],
-          '#empty' => $this->t('No detectors yet.'),
+          '#empty' => $this->t('No components yet.'),
         ];
       }
       else {
-        //WHEN THERE ARE DETECTORS, MUST GET ALL AND SELECT ONLY THE ONES IN ARRAY
+        //WHEN THERE ARE COMPONENTS, MUST GET ALL AND SELECT ONLY THE ONES IN ARRAY
         $intURI = Utils::uriFromAutocomplete($instrument['instrument']);
-        $detectors_component = $this->buildDetectorTable($this->getDetectors($intURI), 'instrument_detectors_' . $delta, $instrument['detectors']);
+        $components_component = $this->buildComponentTable($this->getComponents($intURI), 'instrument_components_' . $delta, $instrument['components']);
       }
 
       $form_row = array(
@@ -849,9 +849,9 @@ class AddTaskForm extends FormBase {
             ],
             "#autocomplete" => 'off',
             '#ajax' => [
-             'callback' => '::addDetectorCallback',
+             'callback' => '::addComponentCallback',
              'event' => 'change',
-             'wrapper' => 'instrument_detectors_' . $delta,
+             'wrapper' => 'instrument_components_' . $delta,
              'method' => 'replaceWith',
              'effect' => 'fade',
             ],
@@ -863,32 +863,32 @@ class AddTaskForm extends FormBase {
           ),
         ),
 
-        'detectors' => [
+        'components' => [
           'top' => [
             '#type' => 'markup',
             '#markup' => '<div class="pt-3 col border border-white">',
           ],
           // Mescla a configuração básica do container com o array condicional.
-          'instrument_detectors_' . $delta => array_merge([
+          'instrument_components_' . $delta => array_merge([
             '#type' => 'container',
             '#attributes' => [
-              'id' => 'instrument_detectors_' . $delta,
+              'id' => 'instrument_components_' . $delta,
             ],
-          ], $detectors_component),
+          ], $components_component),
           'bottom' => [
             '#type' => 'markup',
             '#markup' => '</div>',
           ],
         ],
-        // 'detectors' => [
+        // 'components' => [
         //   'top' => [
         //     '#type' => 'markup',
         //     '#markup' => '<div class="pt-3 col border border-white">',
         //   ],
-        //   'instrument_detectors_' . $delta => [
+        //   'instrument_components_' . $delta => [
         //     '#type' => 'container',
         //     '#attributes' => [
-        //       'id' => 'instrument_detectors_' . $delta,
+        //       'id' => 'instrument_components_' . $delta,
         //     ],
         //       //WILL BE THIS CODE PART
         //       'table' => [
@@ -900,9 +900,9 @@ class AddTaskForm extends FormBase {
         //             $this->t('Status'),
         //         ],
         //         '#rows' => [], // Começa vazio e será preenchido pelo AJAX
-        //         '#empty' => $this->t('No detectors yet.'),
+        //         '#empty' => $this->t('No components yet.'),
         //       ],
-        //       // '#value' => $this->getDetectorsArray($instrument['detectors']),
+        //       // '#value' => $this->getComponentsArray($instrument['components']),
         //   ],
         //   'bottom' => [
         //     '#type' => 'markup',
@@ -939,10 +939,10 @@ class AddTaskForm extends FormBase {
     return $form_rows;
   }
 
-  public function addDetectorCallback(array &$form, FormStateInterface $form_state) {
+  public function addComponentCallback(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $delta = str_replace('instrument_instrument_', '', $triggering_element['#name']);
-    $container_id = 'instrument_detectors_' . $delta;
+    $container_id = 'instrument_components_' . $delta;
     $instrumentURI = $form_state->getValue('instrument_instrument_' . $delta) !== '' ? $form_state->getValue('instrument_instrument_' . $delta) : $form_state->getUserInput()['instrument_instrument_' . $delta];
     $instrument_uri = Utils::uriFromAutocomplete($instrumentURI);
     $instruments = \Drupal::state()->get('my_form_instruments');
@@ -973,24 +973,24 @@ class AddTaskForm extends FormBase {
     }
 
     // Check if container exists
-    if (!isset($form['instruments']['rows'][$delta]['row'.$delta]['detectors'][$container_id])) {
+    if (!isset($form['instruments']['rows'][$delta]['row'.$delta]['components'][$container_id])) {
         \Drupal::logger('custom_module')->error('Container not found for delta: @delta', ['@delta' => $delta]);
         return [
             '#markup' => $this->t('Error: Container not found for delta @delta.', ['@delta' => $delta]),
         ];
     }
 
-    // Get detectors from API
-    $detectors = $this->getDetectors($instrument_uri);
+    // Get components from API
+    $components = $this->getComponents($instrument_uri);
 
-    // Add detectors to instrument
+    // Add components to instrument
     self::updateInstruments($form_state);
 
-    // Render detectors
-    $detectorTable = $this->buildDetectorTable($detectors, $container_id);
+    // Render components
+    $componentTable = $this->buildComponentTable($components, $container_id);
 
-    // Replace the existing detector container with the updated table
-    $response->addCommand(new ReplaceCommand('#' . $container_id, $detectorTable));
+    // Replace the existing component container with the updated table
+    $response->addCommand(new ReplaceCommand('#' . $container_id, $componentTable));
 
     return $response;
   }
@@ -1007,12 +1007,12 @@ class AddTaskForm extends FormBase {
       foreach ($instruments as $instrument_id => $instrument) {
         if (isset($instrument_id) && isset($instrument)) {
           $instruments[$instrument_id]['instrument'] = $input['instrument_instrument_' . $instrument_id] ?? '';
-          $detector = [];
-          foreach ($input['instrument_detectors_' . $instrument_id]  as $key => $value) {
-            $detector[] = $value;
+          $component = [];
+          foreach ($input['instrument_components_' . $instrument_id]  as $key => $value) {
+            $component[] = $value;
           }
-          //$instruments[$instrument_id]['detectors'] = $input['instrument_detectors_' . $instrument_id] ?? '';
-          $instruments[$instrument_id]['detectors'] = $detector ?? [];
+          //$instruments[$instrument_id]['components'] = $input['instrument_components_' . $instrument_id] ?? '';
+          $instruments[$instrument_id]['components'] = $component ?? [];
         }
       }
     }
@@ -1039,19 +1039,19 @@ class AddTaskForm extends FormBase {
     foreach ($instruments as $instrument) {
         if (!empty($instrument['instrument'])) {
             $instrumentUri = Utils::uriFromAutocomplete($instrument['instrument']);
-            $detectors = [];
+            $components = [];
 
-            // Adiciona os detectores ao array se existirem
-            if (!empty($instrument['detectors'])) {
-                foreach ($instrument['detectors'] as $detector) {
-                    $detectors[] = $detector;
+            // Adiciona os componentes ao array se existirem
+            if (!empty($instrument['components'])) {
+                foreach ($instrument['components'] as $component) {
+                    $components[] = $component;
                 }
             }
 
-            // Estrutura o array com o URI do instrumento e o array de detectores
+            // Estrutura o array com o URI do instrumento e o array de componentes
             $requiredInstrument[] = [
                 'instrumentUri' => $instrumentUri,
-                'detectors' => $detectors
+                'components' => $components
             ];
         }
     }
@@ -1074,7 +1074,7 @@ class AddTaskForm extends FormBase {
     // Add a new row to the table.
     $instruments[] = [
       'instrument' => '',
-      'detectors' => '',
+      'components' => '',
     ];
     \Drupal::state()->set('my_form_instruments', $instruments);
 
@@ -1104,7 +1104,7 @@ class AddTaskForm extends FormBase {
     // Adiciona uma nova linha à tabela
     $instruments[] = [
         'instrument' => '',
-        'detectors' => '',
+        'components' => '',
     ];
     \Drupal::state()->set('my_form_instruments', $instruments);
 
@@ -1527,13 +1527,13 @@ class AddTaskForm extends FormBase {
   }
 
   /**
-   * get Detectors From Instrument
+   * get Components From Instrument
    */
-  public function getDetectors($instrumentUri) {
+  public function getComponents($instrumentUri) {
 
-    // Call to get Detectors
+    // Call to get Components
     $api = \Drupal::service('rep.api_connector');
-    // $response = $api->detectorListFromInstrument($instrumentUri);
+    // $response = $api->componentListFromInstrument($instrumentUri);
     $response = $api->componentListFromInstrument($instrumentUri);
 
     // Decode JSON reply
@@ -1545,22 +1545,22 @@ class AddTaskForm extends FormBase {
     // Decode Body
     $urls = json_decode($data['body'], true);
 
-    // Task detectors
-    $detectors = [];
+    // Task components
+    $components = [];
     foreach ($urls as $url) {
-      $detectorData = $api->getUri($url);
-      $obj = json_decode($detectorData);
-      $detectors[] = [
+      $componentData = $api->getUri($url);
+      $obj = json_decode($componentData);
+      $components[] = [
         'name' => isset($obj->body->label) ? $obj->body->label : '',
         'uri' => isset($obj->body->uri) ? $obj->body->uri : '',
         'status' => isset($obj->body->hasStatus) ? Utils::plainStatus($obj->body->hasStatus) : '',
         'hasStatus' => isset($obj->body->hasStatus) ? $obj->body->hasStatus : null,
       ];
     }
-    return $detectors;
+    return $components;
   }
 
-  protected function buildDetectorTable(array $detectors, $container_id, $arraySelected = []) {
+  protected function buildComponentTable(array $components, $container_id, $arraySelected = []) {
 
     $root_url = \Drupal::request()->getBaseUrl();
 
@@ -1575,13 +1575,13 @@ class AddTaskForm extends FormBase {
     $renderer = \Drupal::service('renderer');
 
     $rows = [];
-    foreach ($detectors as $detector) {
+    foreach ($components as $component) {
       // Build an inline template render array for the checkbox.
       $checkbox = [
         '#type' => 'checkbox',
         '#name' => $container_id . '[]',
-        '#return_value' => $detector['uri'],
-        '#checked' => !empty($arraySelected) ? in_array($detector['uri'], $arraySelected) : 1,
+        '#return_value' => $component['uri'],
+        '#checked' => !empty($arraySelected) ? in_array($component['uri'], $arraySelected) : 1,
         '#ajax' => [
           'callback' => '::addNewInstrumentRow',
           'event' => 'change', // Garante que está ouvindo o evento correto
@@ -1594,7 +1594,7 @@ class AddTaskForm extends FormBase {
         ],
         '#executes_submit_callback' => TRUE, // Força o submit para garantir o disparo
         '#attributes' => [
-          'class' => ['instrument-detector-ajax'],
+          'class' => ['instrument-component-ajax'],
           //'data-container-id' => 'body'
         ],
       ];
@@ -1606,9 +1606,9 @@ class AddTaskForm extends FormBase {
       $rows[] = [
         'data' => [
           $checkbox_rendered,
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . $detector['name'] . '</a>'),
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($detector['uri']).'">' . UTILS::namespaceUri($detector['uri']) . '</a>'),
-          $detector['status'],
+          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($component['uri']).'">' . $component['name'] . '</a>'),
+          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($component['uri']).'">' . UTILS::namespaceUri($component['uri']) . '</a>'),
+          $component['status'],
         ],
       ];
     }
@@ -1620,27 +1620,27 @@ class AddTaskForm extends FormBase {
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $rows,
-        '#empty' => $this->t('No detectors found.'),
+        '#empty' => $this->t('No components found.'),
       ],
     ];
   }
 
 
   /*
-  $form['task_instruments']['wrapper']['detectors_table_'.$i] = [
+  $form['task_instruments']['wrapper']['components_table_'.$i] = [
     '#type' => 'table',
     '#header' => [
       '#',
-      $this->t('Detector Label'),
-      $this->t('Detector Status'),
+      $this->t('Component Label'),
+      $this->t('Component Status'),
     ],
     '#rows' => [],
-    '#attributes' => ['class' => ['detectors-table']],
+    '#attributes' => ['class' => ['components-table']],
   ];
 
   // Add line to table
-  foreach ($detectors as $index => $item) {
-    $form['task_instruments']['wrapper']['instrument_information_'.$i]["instrument_$i"]['fieldset_'.$i]['instrument_detector_wrapper_'.$i]['detectors_table_'.$i][$index]['checkbox'] = [
+  foreach ($components as $index => $item) {
+    $form['task_instruments']['wrapper']['instrument_information_'.$i]["instrument_$i"]['fieldset_'.$i]['instrument_component_wrapper_'.$i]['components_table_'.$i][$index]['checkbox'] = [
       '#type' => 'checkbox',
       '#attributes' => [
         'value' => $item['uri'],
@@ -1648,10 +1648,10 @@ class AddTaskForm extends FormBase {
       ],
       '#value' => TRUE
     ];
-    $form['task_instruments']['wrapper']['instrument_information_'.$i]["instrument_$i"]['fieldset_'.$i]['instrument_detector_wrapper_'.$i]['detectors_table_'.$i][$index]['label'] = [
+    $form['task_instruments']['wrapper']['instrument_information_'.$i]["instrument_$i"]['fieldset_'.$i]['instrument_component_wrapper_'.$i]['components_table_'.$i][$index]['label'] = [
       '#plain_text' => $item['name'] ?: $this->t('Unknown'),
     ];
-    $form['task_instruments']['wrapper']['instrument_information_'.$i]["instrument_$i"]['fieldset_'.$i]['instrument_detector_wrapper_'.$i]['detectors_table_'.$i][$index]['status'] = [
+    $form['task_instruments']['wrapper']['instrument_information_'.$i]["instrument_$i"]['fieldset_'.$i]['instrument_component_wrapper_'.$i]['components_table_'.$i][$index]['status'] = [
       '#plain_text' => $item['status'] ?: $this->t('Unknown'),
     ];
   }

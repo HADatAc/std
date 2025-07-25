@@ -20,11 +20,6 @@ class Task {
       'element_number' => t('Number'),
       'element_tasktype' => t('Task Type'),
       'element_details' => t('Details'),
-      // 'element_temporaldependency' => t('Temporal Dependency'),
-      // 'element_top_task' => t('Top Task'),
-      // 'element_language' => t('Language'),
-      // 'element_tot_instruments' => t('# Instruments'),
-      // 'element_tot_detectors' => t('# Components'),
       'element_status' => t('Status'),
       'element_actions' => t('Actions'),
     ];
@@ -127,11 +122,11 @@ class Task {
       $totDet = 0;
       if (!empty($element['requiredInstrument']) && is_array($element['requiredInstrument'])) {
         foreach ($element['requiredInstrument'] as $instr) {
-          if (!empty($instr['hasRequiredDetector']) && is_array($instr['hasRequiredDetector'])) {
-            $totDet += count($instr['hasRequiredDetector']);
+          if (!empty($instr['hasRequiredComponent']) && is_array($instr['hasRequiredComponent'])) {
+            $totDet += count($instr['hasRequiredComponent']);
           }
-          elseif (!empty($instr['detectors']) && is_array($instr['detectors'])) {
-            $totDet += count($instr['detectors']);
+          elseif (!empty($instr['components']) && is_array($instr['components'])) {
+            $totDet += count($instr['components']);
           }
         }
       }
@@ -192,20 +187,9 @@ class Task {
             ]
           ),
           'element_name'            => $label,
-          'element_number'          => $delta + 1, // 1-based index
+          'element_number'          => $delta + 1,
           'element_tasktype'        => $taskType,
           'element_details'         => t($details),
-          // 'element_temporaldependency' => $taskTemporalDependency ?? '',
-          // 'element_top_task'        => t(
-          //   '<a target="_new" href=":link">:top</a>',
-          //   [
-          //     ':link' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($topTaskRaw),
-          //     ':top'  => $topTaskNs,
-          //   ]
-          // ),
-          // 'element_language'        => $lang_label,
-          // 'element_tot_instruments' => $totInst,
-          // 'element_tot_detectors'   => $totDet,
           'element_status'          => $status,
           'element_actions'         => [
             'data' => $action_container,
