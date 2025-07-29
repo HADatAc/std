@@ -82,7 +82,6 @@ class STDSearchForm extends FormBase {
     $this->setPageSize((int) $pathElements[6]);
   }
 
-  // Ícones
   $form['element_icons'] = [
     '#type' => 'container',
     '#attributes' => ['class' => ['element-icons-grid-wrapper']],
@@ -107,14 +106,16 @@ class STDSearchForm extends FormBase {
     'process' => ['label' => 'Processes', 'image' => 'process_placeholder.png'],
   ];
 
-  $module_path = \Drupal::request()->getBaseUrl() . '/' . \Drupal::service('extension.list.module')->getPath('std');
+    
 
   foreach ($element_types as $type => $info) {
+
+    $module_path = \Drupal::request()->getBaseUrl() . '/' . \Drupal::service('extension.list.module')->getPath('rep');
     $placeholder_image = $module_path . '/images/placeholders/' . $info['image'];
 
     $button_classes = ['element-icon-button'];
     if ($type === $this->getElementType()) {
-      $button_classes[] = 'selected';
+    $button_classes[] = 'selected';
     }
 
     $form['element_icons']['grid'][$type] = [
@@ -136,7 +137,6 @@ class STDSearchForm extends FormBase {
     ];
   }
 
-  // Campo de busca
   $form['search_keyword'] = [
     '#type' => 'textfield',
     '#title' => $this->t('Keyword'),
@@ -194,8 +194,8 @@ class STDSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $url = $this->redirectUrl($form_state);
-    $form_state->setRedirectUrl($url);
+  $url = $this->redirectUrl($form_state);
+  $form_state->setRedirectUrl($url);
   }
 
   public function iconSubmitForm(array &$form, FormStateInterface $form_state) {
