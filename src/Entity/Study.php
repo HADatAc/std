@@ -226,7 +226,8 @@ class Study {
         $image_uri = $element->hasImageUri;
       }
       else {
-        $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
+        // $image_uri = base_path() . \Drupal::service('extension.list.module')->getPath('rep') . '/images/std_placeholder.png';
+        $image_uri = Utils::getAPIImage($uri, $element->hasImageUri, UTILS::placeholderImage($element->hascoTypeUri,'study'));
       }
 
       // Process the URI using the namespace utility if not empty.
