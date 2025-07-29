@@ -127,6 +127,7 @@ class VirtualColumn {
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary'],
               'style' => 'margin-right: 10px;',
+              'target' => '_new',
             ],
           ],
         ],
