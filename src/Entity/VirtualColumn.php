@@ -86,12 +86,13 @@ class VirtualColumn {
 
       // Create a view link for the virtual column.
       // This builds a link to the description page using a back_url mechanism.
-      $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
+      $path = \Drupal::request()->getPathInfo();
+      $safe_previousUrl = rtrim(strtr(base64_encode($path), '+/', '-_'), '=');
       $view_virtual_str = base64_encode(Url::fromRoute('rep.describe_element', [
         'elementuri' => base64_encode($element->uri)
       ])->toString());
       $view_virtual = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',
+        'previousurl' => $safe_previousUrl,
         'currenturl' => $view_virtual_str,
         'currentroute' => 'rep.describe_element',
       ]);
