@@ -788,7 +788,7 @@ class STDSelectStudyForm extends FormBase
     $this->manager_email = \Drupal::currentUser()->getEmail();
 
     $pagesize = $form_state->get('page_size') ?? 9;
-    $new_items = ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize);
+    $new_items = ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize) ?? [];
 
     // Update status on already loaded items
     $items_loaded = $form_state->get('items_loaded') ?? 0;
