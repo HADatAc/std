@@ -110,7 +110,8 @@ class StudyObjectCollection {
 
       // Create a view link for the study object collection.
       // REPGUI::DESCRIBE_PAGE is assumed to be a constant that holds the describe page path.
-      $view_url = Url::fromUserInput($root_url . REPGUI::DESCRIBE_PAGE . base64_encode($element->uri));
+      // $view_url = Url::fromUserInput($root_url . REPGUI::DESCRIBE_PAGE . base64_encode($element->uri));
+      $view_url = Url::fromUri('base:' . REPGUI::DESCRIBE_PAGE . base64_encode($element->uri));
 
       // Build the card output for this element.
       $output[$index] = [
@@ -146,6 +147,7 @@ class StudyObjectCollection {
             '#url' => $view_url,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary'],
+              'target' => '_new',
             ],
           ],
         ],
