@@ -91,7 +91,7 @@ class VirtualColumn {
         'elementuri' => base64_encode($element->uri)
       ])->toString());
       $view_virtual = Url::fromRoute('rep.back_url', [
-        'previousurl' => $previousUrl,
+        'previousurl' => 'std.manage_study_elements',
         'currenturl' => $view_virtual_str,
         'currentroute' => 'rep.describe_element',
       ]);
@@ -103,7 +103,7 @@ class VirtualColumn {
           'class' => ['card', 'mb-3'],
         ],
         // Wrap each card in a column for grid layouts.
-        '#prefix' => '<div class="col-md-6">',
+        '#prefix' => '<div class="col">',
         '#suffix' => '</div>',
         'card_body_' . $index => [
           '#type' => 'container',

@@ -366,17 +366,27 @@ class STDListForm extends FormBase {
     }
     else if ($view_type == 'cards') {
       // Render card view container with AJAX wrapper.
+      // $form['content'] = [
+      //   '#type' => 'container',
+      //   '#attributes' => [
+      //     'id' => 'card-container-wrapper',
+      //     'class' => ['card-container'],
+      //   ],
+      // ];
+
+      // // Add each card render array as a child of the container.
+      // foreach ($output as $card) {
+      //   $form['content'][] = $card;
+      // }
       $form['content'] = [
         '#type' => 'container',
         '#attributes' => [
           'id' => 'card-container-wrapper',
-          'class' => ['card-container'],
+          'class' => ['card-container', 'row'],    // <--- adiciona 'row' aqui
         ],
       ];
-
-      // Add each card render array as a child of the container.
-      foreach ($output as $card) {
-        $form['content'][] = $card;
+      foreach ($output as $card_render) {
+        $form['content'][] = $card_render;         // cada um já tem prefix/suffix col-md-3
       }
 
       // Only add the "Load More" button if the total number of elements is greater than the pagesize.
