@@ -382,15 +382,15 @@ class STDListForm extends FormBase {
         '#type' => 'container',
         '#attributes' => [
           'id' => 'card-container-wrapper',
-          'class' => ['card-container', 'row'],    // <--- adiciona 'row' aqui
+          'class' => ['card-container', 'row',],
+          'style' => 'margin-bottom: 2rem!important;',
         ],
       ];
       foreach ($output as $card_render) {
-        $form['content'][] = $card_render;         // cada um já tem prefix/suffix col-md-3
+        $form['content'][] = $card_render;
       }
 
       // Only add the "Load More" button if the total number of elements is greater than the pagesize.
-      // dpm($current_pagesize);
       if ($this->list_size > $current_pagesize) {
         $form['content']['load_more_wrapper'] = [
           '#type' => 'container',
