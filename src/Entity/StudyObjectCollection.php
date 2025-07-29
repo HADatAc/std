@@ -120,7 +120,7 @@ class StudyObjectCollection {
           'class' => ['card', 'mb-3'],
         ],
         // Wrap each card in a column (for grid layout).
-        '#prefix' => '<div class="col-md-6">',
+        '#prefix' => '<div class="col">',
         '#suffix' => '</div>',
         'card_body_' . $index => [
           '#type' => 'container',
