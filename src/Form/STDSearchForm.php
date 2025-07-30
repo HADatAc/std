@@ -93,9 +93,6 @@ class STDSearchForm extends FormBase {
   ];
 
   $element_types = [
-    'dsg' => ['label' => 'DSGs', 'image' => 'dsg_placeholder.png'],
-    'dd' => ['label' => 'DDs', 'image' => 'dd_placeholder.png'],
-    'sdd' => ['label' => 'SDDs', 'image' => 'sdd_placeholder.png'],
     'da' => ['label' => 'DAs', 'image' => 'da_placeholder.png'],
     'study' => ['label' => 'Studies', 'image' => 'study_placeholder.png'],
     'studyrole' => ['label' => 'Study Roles', 'image' => 'studyrole_placeholder.png'],
