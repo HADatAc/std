@@ -5,10 +5,10 @@
 }
 
 .element-icons-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  justify-items: center;
+  justify-content: center;
 }
 
 .element-icon-button {
