@@ -31,6 +31,7 @@ class StudyObjectCollection {
 
     $output = array();
     foreach ($list as $element) {
+      //dpm($element);
       $uri = ' ';
       if ($element->uri != NULL) {
         $uri = $element->uri;
