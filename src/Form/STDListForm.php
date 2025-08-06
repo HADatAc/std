@@ -336,9 +336,9 @@ class STDListForm extends FormBase {
 
     // Add active class based on the current view type.
     if ($view_type == 'table') {
-      $form['header']['view_toggle']['table_view']['#attributes']['class'][] = 'view-active';
+      $form['header']['view_toggle']['table_view']['#attributes']['class'][] = 'selected-button';
     } elseif ($view_type == 'cards') {
-      $form['header']['view_toggle']['card_view']['#attributes']['class'][] = 'view-active';
+      $form['header']['view_toggle']['card_view']['#attributes']['class'][] = 'selected-button';
     }
 
     // Build form content based on view type.
