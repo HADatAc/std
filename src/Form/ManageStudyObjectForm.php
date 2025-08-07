@@ -86,7 +86,7 @@ class ManageStudyObjectForm extends FormBase {
       $this->setStudyObjectCollection($soc);
     }
 
-    kint($soc);
+    // kint($soc);
 
     // GET TOTAL NUMBER OF ELEMENTS AND TOTAL NUMBER OF PAGES
     $this->element_type = $elementtype;
