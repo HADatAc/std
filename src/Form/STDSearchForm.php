@@ -63,74 +63,91 @@ class STDSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
+  $form['#attached']['library'][] = 'std/std_icons';
 
-    // RETRIEVE PARAMETERS FROM HTML REQUEST
-    $request = \Drupal::request();
-    $pathInfo = $request->getPathInfo();
-    $pathElements = (explode('/',$pathInfo));
-    $this->setElementType('entity');
-    $this->setKeyword('');
-    $this->setPage(1);
-    $this->setPageSize(9);
-    // dpm($pathElements);
-    if (sizeof($pathElements) >= 7) {
+  // GET URL INFO
+  $request = \Drupal::request();
+  $pathInfo = $request->getPathInfo();
+  $pathElements = explode('/', $pathInfo);
 
-      // ELEMENT TYPE
-      $this->setElementType($pathElements[3]);
+  $this->setElementType('study');
+  $this->setKeyword('');
+  $this->setPage(1);
+  $this->setPageSize(9);
 
-      // KEYWORD
-      if ($pathElements[4] == '_') {
-        $this->setKeyword('');
-      } else {
-        $this->setKeyword($pathElements[4]);
-      }
+  if (count($pathElements) >= 7) {
+    $this->setElementType($pathElements[3]);
+    $this->setKeyword($pathElements[4] === '_' ? '' : $pathElements[4]);
+    $this->setPage((int) $pathElements[5]);
+    $this->setPageSize((int) $pathElements[6]);
+  }
 
-      // PAGE
-      $this->setPage((int)$pathElements[5]);
+  $form['element_icons'] = [
+    '#type' => 'container',
+    '#attributes' => ['class' => ['element-icons-grid-wrapper']],
+  ];
 
-      // PAGESIZE
-      $this->setPageSize((int)$pathElements[6]);
-    } else {
-      $this->setElementType('study');
+  $form['element_icons']['grid'] = [
+    '#type' => 'container',
+    '#attributes' => ['class' => ['element-icons-grid']],
+  ];
+
+  $element_types = [
+    'da' => ['label' => 'DAs', 'image' => 'da_placeholder.png'],
+    'study' => ['label' => 'Studies', 'image' => 'study_placeholder.png'],
+    'studyrole' => ['label' => 'Study Roles', 'image' => 'studyrole_placeholder.png'],
+    'virtualcolumn' => ['label' => 'Virtual Columns', 'image' => 'virtualcolumn_placeholder.png'],
+    'studyobjectcollection' => ['label' => 'Object Collections', 'image' => 'studyobjectcollection_placeholder.png'],
+    'studyobject' => ['label' => 'Study Objects', 'image' => 'studyobject_placeholder.png'],
+    'processstem' => ['label' => 'Process Stems', 'image' => 'processstem_placeholder.png'],
+    'process' => ['label' => 'Processes', 'image' => 'process_placeholder.png'],
+  ];
+
+    
+
+  foreach ($element_types as $type => $info) {
+
+    $module_path = \Drupal::request()->getBaseUrl() . '/' . \Drupal::service('extension.list.module')->getPath('rep');
+    $placeholder_image = $module_path . '/images/placeholders/' . $info['image'];
+
+    $button_classes = ['element-icon-button'];
+    if ($type === $this->getElementType()) {
+    $button_classes[] = 'selected';
     }
 
-    $form['search_element_type'] = [
-      '#type' => 'select',
-      '#title' => $this->t('Element Type'),
-      '#required' => TRUE,
-      '#options' => [
-        'dsg' => $this->t('DSGs'),
-        'dd' => $this->t('DDs'),
-        'sdd' => $this->t('SDDs'),
-        'da' => $this->t('DAs'),
-        'study' => $this->t('Studies'),
-        'studyrole' => $this->t('Study Roles'),
-        'virtualcolumn' => $this->t('Virtual Columns'),
-        'studyobjectcollection' => $this->t('Study Object Collections'),
-        'studyobject' => $this->t('Study Objects'),
-        'processstem' => $this->t('Process Stems'),
-        'process' => $this->t('Processes'),
+    $form['element_icons']['grid'][$type] = [
+      '#type' => 'submit',
+      '#value' => '',
+      '#attributes' => [
+        'class' => $button_classes,
+        'style' => "background-image: url('$placeholder_image');",
+        'title' => $this->t($info['label']),
+        'aria-label' => $this->t($info['label']),
       ],
-      '#default_value' => $this->getElementType(),
+      '#name' => $type,
+      '#submit' => ['::iconSubmitForm'],
+      '#limit_validation_errors' => [],
       '#ajax' => [
         'callback' => '::ajaxSubmitForm',
+        'progress' => ['type' => 'none'],
       ],
     ];
-    $form['search_keyword'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Keyword'),
-      '#default_value' => $this->getKeyword(),
-    ];
-    $form['search_submit'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Search'),
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'search-button'],
-      ],
-    ];
-
-    return $form;
   }
+
+  $form['search_keyword'] = [
+    '#type' => 'textfield',
+    '#title' => $this->t('Keyword'),
+    '#default_value' => $this->getKeyword(),
+  ];
+
+  $form['search_submit'] = [
+    '#type' => 'submit',
+    '#value' => $this->t('Search'),
+    '#attributes' => ['class' => ['btn', 'btn-primary', 'search-button']],
+  ];
+
+  return $form;
+}
 
   /**
    * {@inheritdoc}
@@ -174,8 +191,13 @@ class STDSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    $url = $this->redirectUrl($form_state);
-    $form_state->setRedirectUrl($url);
+  $url = $this->redirectUrl($form_state);
+  $form_state->setRedirectUrl($url);
   }
 
+  public function iconSubmitForm(array &$form, FormStateInterface $form_state) {
+  $clicked_button = $form_state->getTriggeringElement()['#name'];
+  $form_state->setValue('search_element_type', $clicked_button);
+  $form_state->setValue('search_keyword', '');
+}
 }

@@ -40,3 +40,9 @@ stream_selection:
   dependencies:
     - core/jquery
     - core/drupal
+
+std_icons:
+  version: 1.x
+  css:
+    theme:
+      css/std_icons.css: {}
