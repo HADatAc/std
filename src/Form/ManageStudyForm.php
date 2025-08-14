@@ -95,7 +95,7 @@ class ManageStudyForm extends FormBase
     $form['#attached']['library'][] = 'rep/webdoc_modal';
     $form['#attached']['library'][] = 'std/stream_selection';
     $form['#attached']['library'][] = 'dpl/stream_recorder';
-    $base_url = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl();
+    $base_url = (\Drupal::request()->headers->get('x-forwarded-proto') === 'https' ? 'https://':'http://'). \Drupal::request()->getHost() . \Drupal::request()->getBaseUrl();
     $form['#attached']['drupalSettings']['webdoc_modal'] = [
       'baseUrl' => $base_url,
     ];
@@ -144,8 +144,7 @@ class ManageStudyForm extends FormBase
       'studyuri'        => base64_encode($this->studyUri),
       'ajaxUrl'         => Url::fromRoute('std.stream_data_ajax')->toString(),
       'streamDataUrl'   => Url::fromRoute('std.stream_data_ajax')->toString(),
-      'latestUrl'       => \Drupal::request()->getSchemeAndHttpHost()
-                . \Drupal::request()->getBaseUrl()
+      'latestUrl'       => (\Drupal::request()->headers->get('x-forwarded-proto') === 'https' ? 'https://':'http://'). \Drupal::request()->getHost() . \Drupal::request()->getBaseUrl()
                 . '/dpl/streamtopic/latest_message/',
       'fileIngestUrl'   => Url::fromRoute('dpl.file_ingest_ajax')->toString(),
       'fileUningestUrl' => Url::fromRoute('dpl.file_uningest_ajax')->toString(),
