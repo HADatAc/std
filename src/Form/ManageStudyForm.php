@@ -210,7 +210,7 @@ class ManageStudyForm extends FormBase
       'studyUri'        => base64_encode($this->studyUri),
       'streamDataUrl'   => Url::fromRoute('std.stream_data_ajax')->toString(),
       'ajaxUrl'         => Url::fromRoute('std.stream_data_ajax')->toString(),
-      'latestUrl'       => \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl() . '/dpl/streamtopic/latest_message/',
+      'latestUrl'       => (\Drupal::request()->headers->get('x-forwarded-proto') === 'https' ? 'https://':'http://'). \Drupal::request()->getHost() . \Drupal::request()->getBaseUrl() . '/dpl/streamtopic/latest_message/',
     ];
     $form['#attached']['drupalSettings']['std']['fileIngestUrl']   = Url::fromRoute('dpl.file_ingest_ajax')->toString();
     $form['#attached']['drupalSettings']['std']['fileUningestUrl'] = Url::fromRoute('dpl.file_uningest_ajax')->toString();
