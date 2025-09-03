@@ -31,6 +31,7 @@ class StudyObjectCollection {
 
     $output = array();
     foreach ($list as $element) {
+      //dpm($element);
       $uri = ' ';
       if ($element->uri != NULL) {
         $uri = $element->uri;
@@ -110,7 +111,8 @@ class StudyObjectCollection {
 
       // Create a view link for the study object collection.
       // REPGUI::DESCRIBE_PAGE is assumed to be a constant that holds the describe page path.
-      $view_url = Url::fromUserInput($root_url . REPGUI::DESCRIBE_PAGE . base64_encode($element->uri));
+      // $view_url = Url::fromUserInput($root_url . REPGUI::DESCRIBE_PAGE . base64_encode($element->uri));
+      $view_url = Url::fromUri('base:' . REPGUI::DESCRIBE_PAGE . base64_encode($element->uri));
 
       // Build the card output for this element.
       $output[$index] = [
@@ -119,7 +121,7 @@ class StudyObjectCollection {
           'class' => ['card', 'mb-3'],
         ],
         // Wrap each card in a column (for grid layout).
-        '#prefix' => '<div class="col-md-6">',
+        '#prefix' => '<div class="col">',
         '#suffix' => '</div>',
         'card_body_' . $index => [
           '#type' => 'container',
@@ -146,6 +148,7 @@ class StudyObjectCollection {
             '#url' => $view_url,
             '#attributes' => [
               'class' => ['btn', 'btn-sm', 'btn-secondary'],
+              'target' => '_new',
             ],
           ],
         ],
