@@ -103,8 +103,6 @@ class STDSearchForm extends FormBase {
     'process' => ['label' => 'Processes', 'image' => 'white/process_placeholder.png'],
   ];
 
-
-
   foreach ($element_types as $type => $info) {
 
     $module_path = \Drupal::request()->getBaseUrl() . '/' . \Drupal::service('extension.list.module')->getPath('rep');
