@@ -72,6 +72,14 @@ class EditStudyObjectForm extends FormBase {
     }
     $this->setStudyObject($studyObject);
 
+    if ($this->getStudyObject()->isMemberOf == NULL) {
+      \Drupal::messenger()->addError(t("Study Object with uri=".$uri." does not have a Study Object Collection (SOC) associated."));
+      self::backurl();
+      return;
+    }
+
+    // kint($this->getStudyObject());
+
     // RETRIEVE ENTITY BY URI
     $entityContent = ' ';
     if ($studyObject != NULL &&
@@ -128,7 +136,7 @@ class EditStudyObjectForm extends FormBase {
     $form['studyobject_entity'] = [
       'top' => [
         '#type' => 'markup',
-        '#markup' => '<div class="pt-3 col border border-white">',
+        '#markup' => '<div class="col border border-white">',
       ],
       'main' => [
         '#type' => 'textfield',
@@ -155,18 +163,58 @@ class EditStudyObjectForm extends FormBase {
         '#markup' => '</div>',
       ],
     ];
-    $form['studyobject_domainscope_object'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t("Domain Scope's Object (if required)"),
-    ];
-    $form['studyobject_timescope_object'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t("Time Scope's Object (if required)"),
-    ];
-    $form['studyobject_spacescope_object'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t("Space Scope's Object (if required)"),
-    ];
+    if ($this->getStudyObject()->isMemberOf->hasScopeUri && $this->getStudyObject()->isMemberOf->hasScopeUri != NULL) {
+      $form['studyobject_domainscope_object'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t("Domain Scope's Object"),
+        '#default_value' => Utils::fieldToAutocomplete($this->getStudyObject()->isMemberOf->uri, $this->getStudyObject()->isMemberOf->label),
+      ];
+    }
+    if (count($this->getStudyObject()->isMemberOf->timeScopeUris) > 0) {
+      // $form['studyobject_timescope_object'] = [
+      //   '#type' => 'textfield',
+      //   '#title' => $this->t("Time Scope's Object"),
+      //   '#default_value' => UTILS::fieldToAutocomplete($this->getStudyObject()->isMemberOf->uri, $this->getStudyObject()->isMemberOf->label),
+      // ];
+
+      foreach ($this->getStudyObject()->isMemberOf->spaceScopeUris as $spaceScopeUri) {
+        $ssObject = $api->parseObjectResponse($api->getUri($spaceScopeUri, 'getUri'), 'getUri');
+        // kint($ssObject);
+        // $socElements = $api->parseObjectResponse($api->listByManagerEmailBySOC($spaceScopeUri,'studyobject',$this->getStudyObject()->hasSIRManagerEmail,9999,0),'listByManagerEmailBySOC');
+        foreach ($this->getStudyObject()->timeScopeUris as $timeScopeUri) {
+          $tsObject = $api->parseObjectResponse($api->getUri($timeScopeUri, 'getUri'), 'getUri');
+          $form['studyobject_timescope_object'] = [
+            '#type' => 'textfield',
+            '#title' => $this->t($this->getStudyObject()->isMemberOf->label . " Scope"),
+            '#default_value' => Utils::fieldToAutocomplete($tsObject->uri, $tsObject->label),
+            '#autocomplete_route_name'       => 'dpl.socobjectstudy_autocomplete',
+            '#autocomplete_route_parameters' => [
+              'socuri' => rawurlencode($tsObject->isMemberOfUri),
+            ],
+          ];
+        }
+      }
+    }
+    if (count($this->getStudyObject()->isMemberOf->spaceScopeUris) > 0) {
+      // $form['studyobject_spacescope_object'] = [
+      //   '#type' => 'textfield',
+      //   '#title' => $this->t("Space Scope's Object (if required)"),
+      //   '#default_value' => UTILS::fieldToAutocomplete($this->getStudyObject()->isMemberOf->uri, $this->getStudyObject()->isMemberOf->label),
+      // ];
+      foreach ($this->getStudyObject()->spaceScopeUris as $spaceScopeUri) {
+        $ssObject = $api->parseObjectResponse($api->getUri($spaceScopeUri, 'getUri'), 'getUri');
+        $form['studyobject_spacescope_object'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t($this->getStudyObject()->isMemberOf->label . " Scope"),
+          '#default_value' => Utils::fieldToAutocomplete($ssObject->uri, $ssObject->label),
+          '#autocomplete_route_name'       => 'dpl.socobjectstudy_autocomplete',
+          '#autocomplete_route_parameters' => [
+            'socuri' => rawurlencode($ssObject->isMemberOfUri),
+          ],
+        ];
+      }
+    }
+
     $form['studyobject_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),

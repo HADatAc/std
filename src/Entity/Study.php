@@ -53,7 +53,9 @@ class Study {
       $actions = [];
 
       // Constrói URLs para os links
-      $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
+      $path = \Drupal::request()->getPathInfo();
+      $safe_previousUrl = rtrim(strtr(base64_encode($path), '+/', '-_'), '=');
+      $safe_previousUrl_str = base64_encode($safe_previousUrl);
       $studyUriEncoded = base64_encode($element->uri);
 
       // Link para Gerenciar Elementos
@@ -93,7 +95,7 @@ class Study {
       $delete_study = Url::fromRoute('rep.delete_element', [
         'elementtype' => 'study',
         'elementuri' => $studyUriEncoded,
-        'currenturl' => $previousUrl,
+        'currenturl' => $safe_previousUrl_str,
       ]);
 
       // Link para Gerenciar Elemento
