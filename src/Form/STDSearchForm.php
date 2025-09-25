@@ -99,7 +99,7 @@ class STDSearchForm extends FormBase {
     'virtualcolumn' => ['label' => 'Virtual Columns', 'image' => 'white/virtualcolumn_placeholder.png'],
     'studyobjectcollection' => ['label' => 'Object Collections', 'image' => 'white/studyobjectcollection_placeholder.png'],
     'studyobject' => ['label' => 'Study Objects', 'image' => 'white/studyobject_placeholder.png'],
-    'processstem' => ['label' => 'Workflow Stems', 'image' => 'white/process_stem_placeholder.png'],
+    'processstem' => ['label' => 'Workflow Stems', 'image' => 'white/processstem_placeholder.png'],
     'process' => ['label' => 'Processes', 'image' => 'white/process_placeholder.png'],
   ];
 
