@@ -93,17 +93,17 @@ class STDSearchForm extends FormBase {
   ];
 
   $element_types = [
-    'da' => ['label' => 'DAs', 'image' => 'da_placeholder.png'],
-    'study' => ['label' => 'Studies', 'image' => 'study_placeholder.png'],
-    'studyrole' => ['label' => 'Study Roles', 'image' => 'studyrole_placeholder.png'],
-    'virtualcolumn' => ['label' => 'Virtual Columns', 'image' => 'virtualcolumn_placeholder.png'],
-    'studyobjectcollection' => ['label' => 'Object Collections', 'image' => 'studyobjectcollection_placeholder.png'],
-    'studyobject' => ['label' => 'Study Objects', 'image' => 'studyobject_placeholder.png'],
-    'processstem' => ['label' => 'Process Stems', 'image' => 'processstem_placeholder.png'],
-    'process' => ['label' => 'Processes', 'image' => 'process_placeholder.png'],
+    'da' => ['label' => 'DAs', 'image' => 'white/da_placeholder.png'],
+    'study' => ['label' => 'Studies', 'image' => 'white/study_placeholder.png'],
+    'studyrole' => ['label' => 'Study Roles', 'image' => 'white/studyrole_placeholder.png'],
+    'virtualcolumn' => ['label' => 'Virtual Columns', 'image' => 'white/virtualcolumn_placeholder.png'],
+    'studyobjectcollection' => ['label' => 'Object Collections', 'image' => 'white/studyobjectcollection_placeholder.png'],
+    'studyobject' => ['label' => 'Study Objects', 'image' => 'white/studyobject_placeholder.png'],
+    'processstem' => ['label' => 'Workflow Stems', 'image' => 'white/process_stem_placeholder.png'],
+    'process' => ['label' => 'Processes', 'image' => 'white/process_placeholder.png'],
   ];
 
-    
+
 
   foreach ($element_types as $type => $info) {
 
