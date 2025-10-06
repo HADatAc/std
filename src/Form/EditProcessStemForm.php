@@ -16,26 +16,26 @@ use Drupal\file\Entity\File;
 
 class EditProcessStemForm extends FormBase {
 
-  protected $detectorStemUri;
+  protected $componentStemUri;
 
-  protected $detectorStem;
+  protected $componentStem;
 
   protected $sourceProcessStem;
 
   public function getProcessStemUri() {
-    return $this->detectorStemUri;
+    return $this->componentStemUri;
   }
 
   public function setProcessStemUri($uri) {
-    return $this->detectorStemUri = $uri;
+    return $this->componentStemUri = $uri;
   }
 
   public function getProcessStem() {
-    return $this->detectorStem;
+    return $this->componentStem;
   }
 
   public function setProcessStem($obj) {
-    return $this->detectorStem = $obj;
+    return $this->componentStem = $obj;
   }
 
   public function getSourceProcessStem() {
@@ -549,9 +549,9 @@ class EditProcessStemForm extends FormBase {
     }
   }
 
-  public function retrieveProcessStem($detectorStemUri) {
+  public function retrieveProcessStem($componentStemUri) {
     $api = \Drupal::service('rep.api_connector');
-    $rawresponse = $api->getUri($detectorStemUri);
+    $rawresponse = $api->getUri($componentStemUri);
     $obj = json_decode($rawresponse);
     if ($obj->isSuccessful) {
       return $obj->body;
