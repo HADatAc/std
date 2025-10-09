@@ -265,7 +265,7 @@ class STDListForm extends FormBase {
 
       // PROCESS STEM
       case "processstem":
-        $class_name = "Process Stems";
+        $class_name = "Workflow Stems";
         $header = ProcessStem::generateHeader();
         $output = ProcessStem::generateOutput($this->getList());
         break;

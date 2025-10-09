@@ -452,12 +452,12 @@ std.download_file:
     studyUri: '.+'
     type: '.+'
 
-# Process CRUD options
+# Workflow CRUD options
 
 std.manage_process:
   path: 'std/manage/process'
   defaults:
-    _title: 'Manage Process'
+    _title: 'Manage Workflow'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
@@ -509,13 +509,13 @@ std.process_task_autocomplete:
   requirements:
     _permission: 'access content'
 
-# Process Stem CRUD options
+# Workflow Stem CRUD options
 
 std.add_processstem:
   path: 'std/manage/addprocessstem/{sourceprocessstemuri}'
   defaults:
     _form: '\Drupal\std\Form\AddProcessStemForm'
-    _title: 'Add Process Stem'
+    _title: 'Add Workflow Stem'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
@@ -526,7 +526,7 @@ std.edit_processstem:
   path: 'std/manage/editprocessstem/{processstemuri}'
   defaults:
     _form: '\Drupal\std\Form\EditProcessStemForm'
-    _title: 'Edit Process Stem'
+    _title: 'Edit Workflow Stem'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
@@ -581,13 +581,13 @@ std.delete_subtask:
     _permission: 'access content'
 
 # REVIEW OPTIONS
-# Process Stem
+# Workflow Stem
 
 std.review_processstem:
   path: 'std/manage/reviewprocessstem/{processstemuri}'
   defaults:
     _form: '\Drupal\std\Form\Review\ReviewProcessStemForm'
-    _title: 'Review Process Stem'
+    _title: 'Review Workflow Stem'
   requirements:
     # _permission: 'access reviewer menu'
     _role: 'content_editor'

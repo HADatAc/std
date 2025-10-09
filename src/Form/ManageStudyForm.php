@@ -211,7 +211,7 @@ class ManageStudyForm extends FormBase
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'stream',),
       ),
       14 => array(
-        'value' => '<h1>' . $totalPRCs . '</h1><h3>Process<br>&nbsp;</h3>',
+        'value' => '<h1>' . $totalPRCs . '</h1><h3>Workflow<br>&nbsp;</h3>',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'prc',),
       ),
     );
@@ -769,7 +769,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
-        '#value' => $this->t('<h3 class="mb-0">'.$config->get("preferred_process").' Executions' ?? 'Process Executions'.'</h3>'),
+        '#value' => $this->t('<h3 class="mb-0">'.$config->get("preferred_process").' Executions' ?? 'Workflow Executions'.'</h3>'),
         '#attributes' => [
           'class' => ['accordion-button', 'collapsed'],
           'type' => 'button',

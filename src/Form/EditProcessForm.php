@@ -79,13 +79,13 @@ class EditProcessForm extends FormBase {
     $languages = ['' => $this->t('Select language please')] + $languages;
     $informants = ['' => $this->t('Select Informant please')] + $informants;
 
-    // Get Process Data
+    // Get Workflow Data
 
     $api = \Drupal::service('rep.api_connector');
     $uri_decode=base64_decode($processuri);
     $process = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
     if ($process == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Process."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve Workflow."));
       self::backUrl();
       return;
     } else {
@@ -110,7 +110,7 @@ class EditProcessForm extends FormBase {
       '#attributes' => [
         'class' => ['ms-auto','btn-group'],
         'role'  => 'group',
-        'aria-label' => $this->t('Process actions'),
+        'aria-label' => $this->t('Workflow actions'),
       ],
     ];
 
@@ -150,7 +150,7 @@ class EditProcessForm extends FormBase {
       ],
       'main' => [
         '#type' => 'textfield',
-        '#title' => $this->t('Process Stem'),
+        '#title' => $this->t('Workflow Stem'),
         '#name' => 'process_processstem',
         '#default_value' => UTILS::fieldToAutocomplete($this->getProcess()->typeUri, $this->getProcess()->typeLabel),
         '#id' => 'process_processstem',
@@ -468,7 +468,7 @@ class EditProcessForm extends FormBase {
 
     if ($button_name !== 'back') {
       if(strlen($form_state->getValue('process_processstem')) < 1) {
-        $form_state->setErrorByName('process_processstem', $this->t('Please enter a valid Process stem'));
+        $form_state->setErrorByName('process_processstem', $this->t('Please enter a valid Workflow stem'));
       }
     } else {
       self::backUrl();
@@ -575,7 +575,7 @@ class EditProcessForm extends FormBase {
         $message = $api->elementAdd('process',$processJSON);
 
         if ($message != null)
-          \Drupal::messenger()->addMessage(t("New Version Process has been created successfully."));
+          \Drupal::messenger()->addMessage(t("New Version Workflow has been created successfully."));
 
       } else {
 
@@ -612,20 +612,20 @@ class EditProcessForm extends FormBase {
           '"hasReviewNote":"'.$this->getProcess()->hasReviewNote.'",'.
           '"hasEditorEmail":"'.$this->getProcess()->hasEditorEmail.'"}';
 
-        // dpm($processJSON, 'Process JSON');return false;
+        // dpm($processJSON, 'Workflow JSON');return false;
         // UPDATE BY DELETING AND CREATING
         $api->elementDel('process',$this->getProcessUri());
         $message = $api->elementAdd('process',$processJSON);
 
         if ($message != null)
-          \Drupal::messenger()->addMessage(t("Process has been updated successfully."));
+          \Drupal::messenger()->addMessage(t("Workflow has been updated successfully."));
       }
 
       self::backUrl();
       return;
 
     }catch(\Exception $e){
-      \Drupal::messenger()->addError(t("An error occurred while updating the Process: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while updating the Workflow: ".$e->getMessage()));
       self::backUrl();
       return;
     }

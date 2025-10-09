@@ -73,7 +73,7 @@ class EditProcessStemForm extends FormBase {
 
     $this->setProcessStem($this->retrieveProcessStem($this->getProcessStemUri()));
     if ($this->getProcessStem() == NULL) {
-      \Drupal::messenger()->addError(t("Failed to retrieve Process."));
+      \Drupal::messenger()->addError(t("Failed to retrieve Workflow."));
       self::backUrl();
       return;
     }
@@ -459,7 +459,7 @@ class EditProcessStemForm extends FormBase {
 
         // UPDATE BY DELETING AND CREATING
         $api->elementAdd('processtem', $processStemJson);
-        \Drupal::messenger()->addMessage(t("New Version Process Stem has been created successfully."));
+        \Drupal::messenger()->addMessage(t("New Version Workflow Stem has been created successfully."));
 
       } else {
 
@@ -536,14 +536,14 @@ class EditProcessStemForm extends FormBase {
 
         $api->elementDel('processstem', $this->getProcessStemUri());
         $api->elementAdd('processstem', $processStemJson);
-        \Drupal::messenger()->addMessage(t("Process Stem has been updated successfully."));
+        \Drupal::messenger()->addMessage(t("Workflow Stem has been updated successfully."));
       }
 
       self::backUrl();
       return;
 
     }catch(\Exception $e){
-      \Drupal::messenger()->addError(t("An error occurred while updating the Process Stem: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while updating the Workflow Stem: ".$e->getMessage()));
       self::backUrl();
       return;
     }
