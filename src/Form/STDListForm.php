@@ -272,7 +272,7 @@ class STDListForm extends FormBase {
 
       // PROCESS
       case "process":
-        $class_name = "Processes";
+        $class_name = "Workflow's";
         $header = Process::generateHeader();
         $output = Process::generateOutput($this->getList());
         break;
