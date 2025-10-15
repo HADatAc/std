@@ -39,30 +39,30 @@ class JsonApiProcessController extends ControllerBase{
     return new JsonResponse($results);
   }
 
-  public function loadDetectors(Request $request) {
+  public function loadComponents(Request $request) {
     $api = \Drupal::service('rep.api_connector');
-    $response = $api->detectorListFromInstrument($request->query->get('instrument_id'));
+    $response = $api->componentListFromInstrument($request->query->get('instrument_id'));
 
     // Decode Main JSON
     $data = json_decode($response, true);
     // Decode Body JSON
     $urls = json_decode($data['body'], true);
 
-    $detectors = [];
+    $components = [];
     foreach ($urls as $url) {
-      $detectorData = $api->getUri($url);
-      $obj = json_decode($detectorData);
-      $detectors[] = [
+      $componentData = $api->getUri($url);
+      $obj = json_decode($componentData);
+      $components[] = [
         'name' => isset($obj->body->label) ? $obj->body->label : '',
         'uri' => isset($obj->body->uri) ? $obj->body->uri : '',
         'status' => isset($obj->body->hasStatus) ? Utils::plainStatus($obj->body->hasStatus) : '',
         'hasStatus' => isset($obj->body->hasStatus) ? $obj->body->hasStatus : null,
       ];
     }
-    return new JsonResponse($detectors);
+    return new JsonResponse($components);
   }
 
-  public function updateDetectorWrapper(array &$form, FormStateInterface $form_state) {
+  public function updateComponentWrapper(array &$form, FormStateInterface $form_state) {
     // Obtém o elemento que disparou o callback
     $trigger = $form_state->getTriggeringElement();
 
@@ -81,31 +81,31 @@ class JsonApiProcessController extends ControllerBase{
 
     if (!$instrument_uri) {
       // Se não houver URI, limpa o conteúdo do wrapper
-      $form_state->set("instrument_detector_wrapper_$i", []);
-      return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_detector_wrapper_'.$i];
+      $form_state->set("instrument_component_wrapper_$i", []);
+      return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
     }
 
-    // Chama a API para obter a lista de detectores
+    // Chama a API para obter a lista de componentes
     $api = \Drupal::service('rep.api_connector');
-    $response = $api->detectorListFromInstrument($instrument_uri);
+    $response = $api->componentListFromInstrument($instrument_uri);
 
     // Decodifica o JSON da resposta
     $data = json_decode($response, true);
     if (!$data || !isset($data['body'])) {
       // Em caso de resposta inválida, limpa o conteúdo do wrapper
-      $form_state->set("instrument_detector_wrapper_$i", []);
-      return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_detector_wrapper_'.$i];
+      $form_state->set("instrument_component_wrapper_$i", []);
+      return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
     }
 
     // Decodifica o corpo da resposta
     $urls = json_decode($data['body'], true);
 
-    // Processa os detectores
-    $detectors = [];
+    // Processa os componentes
+    $components = [];
     foreach ($urls as $url) {
-      $detectorData = $api->getUri($url);
-      $obj = json_decode($detectorData);
-      $detectors[] = [
+      $componentData = $api->getUri($url);
+      $obj = json_decode($componentData);
+      $components[] = [
         'name' => isset($obj->body->label) ? $obj->body->label : '',
         'uri' => isset($obj->body->uri) ? $obj->body->uri : '',
         'status' => isset($obj->body->hasStatus) ? Utils::plainStatus($obj->body->hasStatus) : '',
@@ -113,11 +113,11 @@ class JsonApiProcessController extends ControllerBase{
       ];
     }
 
-    // Armazena os detectores no Form State
-    $form_state->set("instrument_detector_wrapper_$i", $detectors);
+    // Armazena os componentes no Form State
+    $form_state->set("instrument_component_wrapper_$i", $components);
 
     // Retorna o wrapper atualizado
-    return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_detector_wrapper_'.$i];
+    return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
   }
 
   /**

@@ -79,24 +79,70 @@ class EditProcessForm extends FormBase {
     $languages = ['' => $this->t('Select language please')] + $languages;
     $informants = ['' => $this->t('Select Informant please')] + $informants;
 
-    // Get Process Data
+    // Get Workflow Data
 
     $api = \Drupal::service('rep.api_connector');
     $uri_decode=base64_decode($processuri);
     $process = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
     if ($process == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Process."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve Workflow."));
       self::backUrl();
       return;
     } else {
       $this->setProcess($process);
     }
 
-    $form['process_uri'] = [
+    $form['process_header'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['d-flex','align-items-center','mb-3'],
+      ],
+    ];
+
+    $form['process_header']['process_uri'] = [
       '#type' => 'item',
       '#title' => $this->t('URI: '),
       '#markup' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($this->getProcessUri()).'">'.$this->getProcessUri().'</a>'),
     ];
+
+    $form['process_header']['process_actions'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['ms-auto','btn-group'],
+        'role'  => 'group',
+        'aria-label' => $this->t('Workflow actions'),
+      ],
+    ];
+
+    $form['process_header']['process_actions']['validate_task_model'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Validate Task Model'),
+      '#attributes' => [
+        'class' => ['btn','btn-primary','me-2', 'check-button', 'top-icon'],
+        'style' => 'max-width: 120px;'
+      ],
+      '#disabled' => TRUE,
+    ];
+    $form['process_header']['process_actions']['execute_task_model'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Execute Task Model'),
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['btn','btn-primary', 'me-2', 'execute-button'],
+        'style' => 'max-width: 120px;'
+      ],
+      '#disabled' => TRUE,
+    ];
+    $form['process_header']['process_actions']['edit_task'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Edit Task Model'),
+      '#submit' => ['::setBackUrl'],
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'edit-task-button', 'edit-element-button', 'top-icon'],
+        'style' => 'max-width: 120px;'
+      ],
+    ];
+
     $form['process_processstem'] = [
       'top' => [
         '#type' => 'markup',
@@ -104,7 +150,7 @@ class EditProcessForm extends FormBase {
       ],
       'main' => [
         '#type' => 'textfield',
-        '#title' => $this->t('Process Stem'),
+        '#title' => $this->t('Workflow Stem'),
         '#name' => 'process_processstem',
         '#default_value' => UTILS::fieldToAutocomplete($this->getProcess()->typeUri, $this->getProcess()->typeLabel),
         '#id' => 'process_processstem',
@@ -198,17 +244,6 @@ class EditProcessForm extends FormBase {
       '#attributes'  => [
         // make it take up remaining space
         'style' => 'flex: 1 1 0;',
-      ],
-    ];
-
-    // Add the Edit Task button next to the Top Task element
-    $form['process_toptask_wrapper']['edit_task'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Edit Task Model'),
-      '#submit' => ['::setBackUrl'],
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'edit-task-button', 'mt-2'],
-        'style' => 'margin-left: 1em;',
       ],
     ];
 
@@ -433,7 +468,7 @@ class EditProcessForm extends FormBase {
 
     if ($button_name !== 'back') {
       if(strlen($form_state->getValue('process_processstem')) < 1) {
-        $form_state->setErrorByName('process_processstem', $this->t('Please enter a valid Process stem'));
+        $form_state->setErrorByName('process_processstem', $this->t('Please enter a valid Workflow stem'));
       }
     } else {
       self::backUrl();
@@ -540,7 +575,7 @@ class EditProcessForm extends FormBase {
         $message = $api->elementAdd('process',$processJSON);
 
         if ($message != null)
-          \Drupal::messenger()->addMessage(t("New Version Process has been created successfully."));
+          \Drupal::messenger()->addMessage(t("New Version Workflow has been created successfully."));
 
       } else {
 
@@ -577,20 +612,20 @@ class EditProcessForm extends FormBase {
           '"hasReviewNote":"'.$this->getProcess()->hasReviewNote.'",'.
           '"hasEditorEmail":"'.$this->getProcess()->hasEditorEmail.'"}';
 
-        // dpm($processJSON, 'Process JSON');return false;
+        // dpm($processJSON, 'Workflow JSON');return false;
         // UPDATE BY DELETING AND CREATING
         $api->elementDel('process',$this->getProcessUri());
         $message = $api->elementAdd('process',$processJSON);
 
         if ($message != null)
-          \Drupal::messenger()->addMessage(t("Process has been updated successfully."));
+          \Drupal::messenger()->addMessage(t("Workflow has been updated successfully."));
       }
 
       self::backUrl();
       return;
 
     }catch(\Exception $e){
-      \Drupal::messenger()->addError(t("An error occurred while updating the Process: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while updating the Workflow: ".$e->getMessage()));
       self::backUrl();
       return;
     }

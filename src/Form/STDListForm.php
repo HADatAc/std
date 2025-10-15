@@ -265,14 +265,14 @@ class STDListForm extends FormBase {
 
       // PROCESS STEM
       case "processstem":
-        $class_name = "Process Stems";
+        $class_name = "Workflow Stems";
         $header = ProcessStem::generateHeader();
         $output = ProcessStem::generateOutput($this->getList());
         break;
 
       // PROCESS
       case "process":
-        $class_name = "Processes";
+        $class_name = "Workflow's";
         $header = Process::generateHeader();
         $output = Process::generateOutput($this->getList());
         break;
@@ -336,9 +336,9 @@ class STDListForm extends FormBase {
 
     // Add active class based on the current view type.
     if ($view_type == 'table') {
-      $form['header']['view_toggle']['table_view']['#attributes']['class'][] = 'view-active';
+      $form['header']['view_toggle']['table_view']['#attributes']['class'][] = 'selected-button';
     } elseif ($view_type == 'cards') {
-      $form['header']['view_toggle']['card_view']['#attributes']['class'][] = 'view-active';
+      $form['header']['view_toggle']['card_view']['#attributes']['class'][] = 'selected-button';
     }
 
     // Build form content based on view type.
@@ -366,17 +366,28 @@ class STDListForm extends FormBase {
     }
     else if ($view_type == 'cards') {
       // Render card view container with AJAX wrapper.
+      // $form['content'] = [
+      //   '#type' => 'container',
+      //   '#attributes' => [
+      //     'id' => 'card-container-wrapper',
+      //     'class' => ['card-container'],
+      //   ],
+      // ];
+
+      // // Add each card render array as a child of the container.
+      // foreach ($output as $card) {
+      //   $form['content'][] = $card;
+      // }
       $form['content'] = [
         '#type' => 'container',
         '#attributes' => [
           'id' => 'card-container-wrapper',
-          'class' => ['card-container'],
+          'class' => ['card-container', 'row',],
+          'style' => 'margin-bottom: 2rem!important;',
         ],
       ];
-
-      // Add each card render array as a child of the container.
-      foreach ($output as $card) {
-        $form['content'][] = $card;
+      foreach ($output as $card_render) {
+        $form['content'][] = $card_render;
       }
 
       // Only add the "Load More" button if the total number of elements is greater than the pagesize.

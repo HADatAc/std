@@ -7,6 +7,8 @@ use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\Core\Url;
+use Drupal\Core\Link;
+use Drupal\Component\Utility\Html;
 
 class Task {
 
@@ -22,7 +24,7 @@ class Task {
       // 'element_top_task' => t('Top Task'),
       // 'element_language' => t('Language'),
       // 'element_tot_instruments' => t('# Instruments'),
-      // 'element_tot_detectors' => t('# Components'),
+      // 'element_tot_components' => t('# Components'),
       'element_status' => t('Status'),
       'element_actions' => t('Actions'),
     ];
@@ -67,6 +69,17 @@ class Task {
       }
     }
 
+    // 2.b) Para cada elemento, converte o array requiredInstrument de stdClass → array
+    foreach ($parsed as &$element) {
+      if (isset($element['requiredInstrument']) && is_array($element['requiredInstrument'])) {
+        $element['requiredInstrument'] = array_map(
+          fn($instr) => is_object($instr) ? (array) $instr : $instr,
+          $element['requiredInstrument']
+        );
+      }
+    }
+    unset($element);
+
     // 3) Prepare some helpers.
     $root_url  = \Drupal::request()->getBaseUrl();
     $tables    = new Tables();
@@ -77,6 +90,9 @@ class Task {
 
     // 4) Build each row. We use array_values() so $delta is 0,1,2…
     foreach (array_values($parsed) as $delta => $element) {
+      if (empty($element['uri'])) {
+        continue; // Skip if no URI is present.
+      }
       // --- a) Extract fields with safe defaults ---
       $uri_raw       = $element['uri'] ?? '';
       $namespacedUri = Utils::namespaceUri($element['uri']);
@@ -111,11 +127,11 @@ class Task {
       $totDet = 0;
       if (!empty($element['requiredInstrument']) && is_array($element['requiredInstrument'])) {
         foreach ($element['requiredInstrument'] as $instr) {
-          if (!empty($instr['hasRequiredDetector']) && is_array($instr['hasRequiredDetector'])) {
-            $totDet += count($instr['hasRequiredDetector']);
+          if (!empty($instr['hasRequiredComponent']) && is_array($instr['hasRequiredComponent'])) {
+            $totDet += count($instr['hasRequiredComponent']);
           }
-          elseif (!empty($instr['detectors']) && is_array($instr['detectors'])) {
-            $totDet += count($instr['detectors']);
+          elseif (!empty($instr['components']) && is_array($instr['components'])) {
+            $totDet += count($instr['components']);
           }
         }
       }
@@ -132,30 +148,29 @@ class Task {
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
         'processuri' => $processuri,
-        'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'basic',
+        'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
         'taskuri'    => base64_encode($uri_raw),
       ])->toString();
       $edit_button_html = t(
-        '<a class="btn btn-sm btn-primary edit-element-button" href=":url">Edit</a>',
+        '<a class="btn btn-sm btn-primary edit-element-button" href=":url">Edit Task</a>',
         [':url' => $edit_url]
       );
 
-      // --- c) Build the “Remove” AJAX submit button ---
       $encoded = base64_encode($uri_raw);
+      $delete_url = Url::fromRoute('std.delete_subtask', [
+          'processuri' => $processuri,
+          'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
+          'parenttaskuri' => base64_encode($element['hasSupertaskUri']),
+          'taskuri'    => base64_encode($uri_raw)
+      ]);
+
       $remove_button = [
-        '#type'                    => 'submit',
-        '#name'                    => "subtask_remove_$encoded",
-        '#value'                   => t('Delete'),
-        '#limit_validation_errors' => [],
-        '#ajax' => [
-          'callback' => '::ajaxSubtasksCallback',
-          'wrapper'  => 'subtasks-wrapper',
-          'event'    => 'click',
-        ],
+        '#type' => 'link',
+        '#title' => t('Delete'),
+        '#url' => $delete_url,
         '#attributes' => [
-          'class'   => ['btn','btn-sm','btn-danger','ms-2', 'delete-button'],
-          'onclick' => "return confirm('Are you sure you want to delete this sub-task?');",
-          'disabled' => TRUE,
+          'class' => ['use-ajax', 'btn','btn-sm','btn-danger','ms-2', 'delete-element-button'],
+          'onclick' => "if (!confirm('Are you sure you want to delete this sub-task?')) { return false; }",
         ],
       ];
 
@@ -171,10 +186,9 @@ class Task {
       $rows[] = [
         'data' => [
           'element_uri'             => t(
-            '<a target="_new" href=":link">:nsuri</a>',
+            '<a target="_new" href=":link">'.UTILS::namespaceUri($element['uri']) ?? ''.'</a>',
             [
-              ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri),
-              ':nsuri' => UTILS::namespaceUri($element['uri']) ?? '',
+              ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri)
             ]
           ),
           'element_name'            => $label,
@@ -191,7 +205,7 @@ class Task {
           // ),
           // 'element_language'        => $lang_label,
           // 'element_tot_instruments' => $totInst,
-          // 'element_tot_detectors'   => $totDet,
+          // 'element_tot_components'   => $totDet,
           'element_status'          => $status,
           'element_actions'         => [
             'data' => $action_container,
