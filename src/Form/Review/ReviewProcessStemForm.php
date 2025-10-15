@@ -72,7 +72,7 @@ class ReviewProcessStemForm extends FormBase {
     $wasGeneratedBy = Constant::DEFAULT_WAS_GENERATED_BY;
     $this->setProcessStem($this->retrieveProcessStem($this->getProcessStemUri()));
     if ($this->getProcessStem() == NULL) {
-      \Drupal::messenger()->addError(t("Failed to retrieve Process Stem."));
+      \Drupal::messenger()->addError(t("Failed to retrieve Workflow Stem."));
       self::backUrl();
       return;
     } else {
@@ -353,7 +353,7 @@ class ReviewProcessStemForm extends FormBase {
           $api->processStemAdd($parentProcessStemJson);
         }
 
-        \Drupal::messenger()->addMessage(t("Process Stem has been updated successfully."));
+        \Drupal::messenger()->addMessage(t("Workflow Stem has been updated successfully."));
       // REJECT
       } else {
 
@@ -382,7 +382,7 @@ class ReviewProcessStemForm extends FormBase {
       return;
 
     }catch(\Exception $e){
-      \Drupal::messenger()->addError(t("An error occurred while updating the Process Stem: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while updating the Workflow Stem: ".$e->getMessage()));
       self::backUrl();
       return;
     }

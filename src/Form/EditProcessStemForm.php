@@ -16,26 +16,26 @@ use Drupal\file\Entity\File;
 
 class EditProcessStemForm extends FormBase {
 
-  protected $detectorStemUri;
+  protected $componentStemUri;
 
-  protected $detectorStem;
+  protected $componentStem;
 
   protected $sourceProcessStem;
 
   public function getProcessStemUri() {
-    return $this->detectorStemUri;
+    return $this->componentStemUri;
   }
 
   public function setProcessStemUri($uri) {
-    return $this->detectorStemUri = $uri;
+    return $this->componentStemUri = $uri;
   }
 
   public function getProcessStem() {
-    return $this->detectorStem;
+    return $this->componentStem;
   }
 
   public function setProcessStem($obj) {
-    return $this->detectorStem = $obj;
+    return $this->componentStem = $obj;
   }
 
   public function getSourceProcessStem() {
@@ -73,7 +73,7 @@ class EditProcessStemForm extends FormBase {
 
     $this->setProcessStem($this->retrieveProcessStem($this->getProcessStemUri()));
     if ($this->getProcessStem() == NULL) {
-      \Drupal::messenger()->addError(t("Failed to retrieve Process."));
+      \Drupal::messenger()->addError(t("Failed to retrieve Workflow."));
       self::backUrl();
       return;
     }
@@ -459,7 +459,7 @@ class EditProcessStemForm extends FormBase {
 
         // UPDATE BY DELETING AND CREATING
         $api->elementAdd('processtem', $processStemJson);
-        \Drupal::messenger()->addMessage(t("New Version Process Stem has been created successfully."));
+        \Drupal::messenger()->addMessage(t("New Version Workflow Stem has been created successfully."));
 
       } else {
 
@@ -536,22 +536,22 @@ class EditProcessStemForm extends FormBase {
 
         $api->elementDel('processstem', $this->getProcessStemUri());
         $api->elementAdd('processstem', $processStemJson);
-        \Drupal::messenger()->addMessage(t("Process Stem has been updated successfully."));
+        \Drupal::messenger()->addMessage(t("Workflow Stem has been updated successfully."));
       }
 
       self::backUrl();
       return;
 
     }catch(\Exception $e){
-      \Drupal::messenger()->addError(t("An error occurred while updating the Process Stem: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while updating the Workflow Stem: ".$e->getMessage()));
       self::backUrl();
       return;
     }
   }
 
-  public function retrieveProcessStem($detectorStemUri) {
+  public function retrieveProcessStem($componentStemUri) {
     $api = \Drupal::service('rep.api_connector');
-    $rawresponse = $api->getUri($detectorStemUri);
+    $rawresponse = $api->getUri($componentStemUri);
     $obj = json_decode($rawresponse);
     if ($obj->isSuccessful) {
       return $obj->body;

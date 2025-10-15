@@ -444,12 +444,12 @@ class AddProcessStemForm extends FormBase {
         }
       }
 
-      \Drupal::messenger()->addMessage(t("Added a new Process Stem with URI: ".$newProcessStemUri));
+      \Drupal::messenger()->addMessage(t("Added a new Workflow Stem with URI: ".$newProcessStemUri));
       self::backUrl();
       return;
 
     } catch(\Exception $e) {
-        \Drupal::messenger()->addError(t("An error occurred while adding the Process Stem: ".$e->getMessage()));
+        \Drupal::messenger()->addError(t("An error occurred while adding the Workflow Stem: ".$e->getMessage()));
         self::backUrl();
         return;
       }

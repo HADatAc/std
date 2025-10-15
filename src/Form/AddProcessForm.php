@@ -76,7 +76,7 @@ class AddProcessForm extends FormBase {
       ],
       'main' => [
         '#type' => 'textfield',
-        '#title' => $this->t('Process Stem'),
+        '#title' => $this->t('Workflow Stem'),
         '#name' => 'process_processstem',
         '#default_value' => '',
         '#id' => 'process_processstem',
@@ -308,7 +308,7 @@ class AddProcessForm extends FormBase {
     // dpm($button_name) ;
     if ($button_name !== "back") {
       if(empty($form_state->getValue('process_processstem'))) {
-        $form_state->setErrorByName('process_processstem', $this->t('Please select a valid Process Stem'));
+        $form_state->setErrorByName('process_processstem', $this->t('Please select a valid Workflow Stem'));
       }
       if(strlen($form_state->getValue('process_name')) < 1) {
         $form_state->setErrorByName('process_name', $this->t('Please enter a valid Name'));
@@ -431,7 +431,7 @@ class AddProcessForm extends FormBase {
 
       $message = $api->elementAdd('process',$processJSON);
       if ($message != null)
-        \Drupal::messenger()->addMessage(t("Process has been added successfully."));
+        \Drupal::messenger()->addMessage(t("Workflow has been added successfully."));
 
       // UPLOAD IMAGE AND WEBDOCUMENT TO API
       if ($image_type === 'upload') {
