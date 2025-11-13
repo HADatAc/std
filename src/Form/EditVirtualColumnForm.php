@@ -46,6 +46,8 @@ class EditVirtualColumnForm extends FormBase {
     $uri_decode=base64_decode($uri);
     $this->setVirtualColumnUri($uri_decode);
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     $api = \Drupal::service('rep.api_connector');
     $virtualColumn = $api->parseObjectResponse($api->getUri($this->getVirtualColumnUri()),'getUri');
     if ($virtualColumn == NULL) {
@@ -67,14 +69,14 @@ class EditVirtualColumnForm extends FormBase {
     if ($fixstd == 'T') {
       $form['virtualcolumn_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#disabled' => TRUE,
       ];
     } else {
       $form['virtualcolumn_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#autocomplete_route_name' => 'std.study_autocomplete',
       ];

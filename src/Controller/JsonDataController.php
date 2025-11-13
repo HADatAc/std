@@ -121,7 +121,7 @@ class JsonDataController extends ControllerBase
         if (!$study) {
             $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
             $this->backUrl();
-            return new JsonResponse(['error' => $preferred_study' not found'], 404);
+            return new JsonResponse(['error' => $preferred_study.' not found'], 404);
         } else {
             $this->setStudy($study);
         }

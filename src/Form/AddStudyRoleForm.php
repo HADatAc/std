@@ -75,14 +75,14 @@ class AddStudyRoleForm extends FormBase {
     if ($fixstd == 'T') {
       $form['studyrole_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#disabled' => TRUE,
       ];
     } else {
       $form['studyrole_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#autocomplete_route_name' => 'std.study_autocomplete',
       ];

@@ -75,7 +75,7 @@ class EditStudyObjectForm extends FormBase {
     $this->setStudyObject($studyObject);
 
     if ($this->getStudyObject()->isMemberOf == NULL) {
-      \Drupal::messenger()->addError(t("Study Object with uri=".$uri." does not have a ".ucfirst($preferred_study)." Object Collection (SOC) associated."));
+      \Drupal::messenger()->addError(t(ucfirst($preferred_study)." Object with uri=".$uri." does not have a ".ucfirst($preferred_study)." Object Collection (SOC) associated."));
       self::backurl();
       return;
     }

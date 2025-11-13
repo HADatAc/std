@@ -83,6 +83,9 @@ class STDListForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $elementtype=NULL, $keyword=NULL, $page=NULL, $pagesize=NULL) {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+    $preferred_process = \Drupal::config('rep.settings')->get('preferred_process') ?? 'workflow';
+
     // dpm($elementtype);
     // CSS and JS library
     $form['#attached']['library'][] = 'std/std_js_css';
@@ -209,7 +212,7 @@ class STDListForm extends FormBase {
         break;
 
       case "study":
-        $class_name = "Studies";
+        $class_name = ucfirst($preferred_study)."s";
         if ($view_type == 'table') {
           $header = Study::generateHeader();
           $output = Study::generateOutput($this->getList());
@@ -220,7 +223,7 @@ class STDListForm extends FormBase {
         break;
 
       case "studyrole":
-        $class_name = "Study Role";
+        $class_name = ucfirst($preferred_study)." Role";
         if ($view_type == 'table') {
           $header = StudyRole::generateHeader();
           $output = StudyRole::generateOutput($this->getList());
@@ -231,7 +234,7 @@ class STDListForm extends FormBase {
         break;
 
       case "studyobjectcollection":
-        $class_name = "Study Object Collections";
+        $class_name = ucfirst($preferred_study)." Object Collections";
         if ($view_type == 'table') {
           $header = StudyObjectCollection::generateHeader();
           $output = StudyObjectCollection::generateOutput($this->getList());
@@ -242,7 +245,7 @@ class STDListForm extends FormBase {
         break;
 
       case "studyobject":
-        $class_name = "Study Object";
+        $class_name = ucfirst($preferred_study)." Object";
         if ($view_type == 'table') {
           $header = StudyObject::generateHeader();
           $output = StudyObject::generateOutput($this->getList());
@@ -265,14 +268,14 @@ class STDListForm extends FormBase {
 
       // PROCESS STEM
       case "processstem":
-        $class_name = "Workflow Stems";
+        $class_name = ucfirst($preferred_process)." Stems";
         $header = ProcessStem::generateHeader();
         $output = ProcessStem::generateOutput($this->getList());
         break;
 
       // PROCESS
       case "process":
-        $class_name = "Workflow's";
+        $class_name = ucfirst($preferred_process)."s";
         $header = Process::generateHeader();
         $output = Process::generateOutput($this->getList());
         break;

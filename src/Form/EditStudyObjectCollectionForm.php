@@ -44,11 +44,12 @@ class EditStudyObjectCollectionForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state, $studyobjectcollectionuri = NULL) {
     $uri_decode=base64_decode($studyobjectcollectionuri);
     $this->setStudyObjectCollectionUri($uri_decode);
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     $api = \Drupal::service('rep.api_connector');
     $studyObjectCollection = $api->parseObjectResponse($api->getUri($this->getStudyObjectCollectionUri()),'getUri');
     if ($studyObjectCollection == NULL) {
-      \Drupal::messenger()->addError(t("Failed to retrieve Study Object Collection."));
+      \Drupal::messenger()->addError(t("Failed to retrieve ".ucfirst($preferred_study)." Object Collection."));
       self::backUrl();
       return;
     } else {
@@ -86,7 +87,7 @@ class EditStudyObjectCollectionForm extends FormBase {
 
     $form['soc_study'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Study'),
+      '#title' => $this->t(ucfirst($preferred_study)),
       '#default_value' => $study,
       '#disabled' => TRUE,
     ];

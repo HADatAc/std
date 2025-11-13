@@ -96,14 +96,14 @@ class AddStudyObjectCollectionForm extends FormBase {
     if ($fixstd == 'T') {
       $form['soc_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#disabled' => TRUE,
       ];
     } else {
       $form['soc_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#autocomplete_route_name' => 'std.study_autocomplete',
       ];
@@ -171,7 +171,7 @@ class AddStudyObjectCollectionForm extends FormBase {
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('soc_study')) < 1) {
-        $form_state->setErrorByName('soc_study', $this->t('Please enter a valid '.ucfirst($preferred_study).' for the Study Object Collection'));
+        $form_state->setErrorByName('soc_study', $this->t('Please enter a valid '.ucfirst($preferred_study).' for the '.ucfirst($preferred_study).' Object Collection'));
       }
       if ((strlen($form_state->getValue('soc_virtualcolumn')) < 1) ||
           ($form_state->getValue('soc_virtualcolumn') == 'none')) {

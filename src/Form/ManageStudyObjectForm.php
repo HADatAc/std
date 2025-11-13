@@ -74,13 +74,14 @@ class ManageStudyObjectForm extends FormBase {
     $uid = \Drupal::currentUser()->id();
     $user = \Drupal\user\Entity\User::load($uid);
     $this->manager_name = $user->name->value;
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     // GET SOC
     $api = \Drupal::service('rep.api_connector');
     $decoded_socuri = base64_decode($socuri);
     $soc = $api->parseObjectResponse($api->getUri($decoded_socuri),'getUri');
     if ($soc == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study Object Collection."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)." Object Collection."));
       self::backUrl();
     } else {
       $this->setStudyObjectCollection($soc);
@@ -124,8 +125,8 @@ class ManageStudyObjectForm extends FormBase {
     //dpm($this->element_type);
     //dpm($this->getList());
 
-    $this->single_class_name = "Study Object";
-    $this->plural_class_name = "Study Objects";
+    $this->single_class_name = ucfirst($preferred_study)." Object";
+    $this->plural_class_name = ucfirst($preferred_study)." Objects";
     $header = StudyObject::generateHeader();
     $output = StudyObject::generateOutput($this->getList());
 
@@ -133,11 +134,11 @@ class ManageStudyObjectForm extends FormBase {
 
     $form['scope'] = [
       '#type' => 'item',
-      '#title' => t('<h3>Study: <font color="DarkGreen">' . $this->getStudyObjectCollection()->isMemberOf->label . '</font></h3>'),
+      '#title' => t('<h3>'.ucfirst($preferred_study).': <font color="DarkGreen">' . $this->getStudyObjectCollection()->isMemberOf->label . '</font></h3>'),
     ];
     $form['subscope'] = [
       '#type' => 'item',
-      '#title' => t('<h4>Study Object Collection: <font color="DarkGreen">' . $this->getStudyObjectCollection()->label . '</font></h4>'),
+      '#title' => t('<h4>'.ucfirst($preferred_study).' Object Collection: <font color="DarkGreen">' . $this->getStudyObjectCollection()->label . '</font></h4>'),
     ];
     $form['subtitle'] = [
       '#type' => 'item',
@@ -146,7 +147,7 @@ class ManageStudyObjectForm extends FormBase {
     if ($this->getStudyObjectCollection() != NULL) {
       $form['add_so'] = [
         '#type' => 'submit',
-        '#value' => $this->t("Add Study Object"),
+        '#value' => $this->t("Add ".ucfirst($preferred_study)." Object"),
         '#name' => 'add_so',
         '#attributes' => [
           'class' => ['btn', 'btn-primary', 'add-element-button'],
@@ -155,7 +156,7 @@ class ManageStudyObjectForm extends FormBase {
     }
     $form['edit_so'] = [
       '#type' => 'submit',
-      '#value' => $this->t("Edit Study Object"),
+      '#value' => $this->t("Edit ".ucfirst($preferred_study)." Object"),
       '#name' => 'edit_so',
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'edit-element-button'],
@@ -163,7 +164,7 @@ class ManageStudyObjectForm extends FormBase {
     ];
     $form['delete_so'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Delete Selected Study Objects'),
+      '#value' => $this->t('Delete Selected '.ucfirst($preferred_study).' Objects'),
       '#name' => 'delete_sos',
       '#attributes' => [
         'onclick' => 'if(!confirm("Really Delete?")){return false;}',
@@ -193,7 +194,7 @@ class ManageStudyObjectForm extends FormBase {
     ];
     $form['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Back to Study Object Collections'),
+      '#value' => $this->t('Back to '.ucfirst($preferred_study).' Object Collections'),
       '#name' => 'back',
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'back-button'],
@@ -217,6 +218,8 @@ class ManageStudyObjectForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
+
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     // RETRIEVE TRIGGERING BUTTON
     $triggering_element = $form_state->getTriggeringElement();
@@ -252,9 +255,9 @@ class ManageStudyObjectForm extends FormBase {
     // EDIT STUDY OBJECT
     if ($button_name === 'edit_so') {
       if (sizeof($rows) < 1) {
-        \Drupal::messenger()->addWarning(t("Select a Study Object to be edited."));
+        \Drupal::messenger()->addWarning(t("Select a ".ucfirst($preferred_study)." Object to be edited."));
       } else if (sizeof($rows) > 1) {
-        \Drupal::messenger()->addWarning(t("Select one Study Object to be edited. No more than one Study Object can be edited at once."));
+        \Drupal::messenger()->addWarning(t("Select one ".ucfirst($preferred_study)." Object to be edited. No more than one ".ucfirst($preferred_study)." Object can be edited at once."));
       } else {
         $first = array_shift($rows);
         Utils::trackingStoreUrls($uid, $previousUrl, 'std.edit_studyobject');
@@ -268,7 +271,7 @@ class ManageStudyObjectForm extends FormBase {
     // DELETE STUDY OBJECT
     if ($button_name === 'delete_sos') {
       if (sizeof($rows) < 1) {
-        \Drupal::messenger()->addWarning(t("Select Study Objects to be deleted."));
+        \Drupal::messenger()->addWarning(t("Select ".ucfirst($preferred_study)." Objects to be deleted."));
         return;
       } else {
         $api = \Drupal::service('rep.api_connector');
@@ -278,12 +281,12 @@ class ManageStudyObjectForm extends FormBase {
           try {
             $api->elementDel('studyobject',$uri);
           } catch(\Exception $e) {
-            \Drupal::messenger()->addError(t("An error occurred while deleting a Study Object: ".$e->getMessage()));
+            \Drupal::messenger()->addError(t("An error occurred while deleting a ".ucfirst($preferred_study)." Object: ".$e->getMessage()));
             self::backUrl();
             return;
           }
         }
-        \Drupal::messenger()->addMessage(t("Study object(s) has been deleted successfully."));
+        \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." object(s) has been deleted successfully."));
       }
     }
 

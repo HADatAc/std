@@ -201,13 +201,14 @@ class AddStudyForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('study_short_name')) < 1) {
-        $form_state->setErrorByName('study_short_name', $this->t('Please enter a valid short name for the Study'));
+        $form_state->setErrorByName('study_short_name', $this->t('Please enter a valid short name for the '.ucfirst($preferred_study)));
       }
       if(strlen($form_state->getValue('study_name')) < 1) {
-        $form_state->setErrorByName('study_name', $this->t('Please enter a valid name for the Study'));
+        $form_state->setErrorByName('study_name', $this->t('Please enter a valid name for the '.ucfirst($preferred_study)));
       }
     }
   }

@@ -11,9 +11,11 @@ class StudyObjectCollection {
 
   public static function generateHeader() {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     return $header = [
       'soc_uri' => t('URI'),
-      'soc_study' => t('Study'),
+      'soc_study' => t(ucfirst($preferred_study)),
       'soc_reference' => t('Reference'),
       'soc_label' => t('Label'),
       'soc_grounding_label' => t('Grounding Label'),
