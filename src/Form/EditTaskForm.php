@@ -64,6 +64,9 @@ class EditTaskForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $processuri=NULL, $state=NULL, $taskuri=NULL) {
 
+    $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
+
     if (!isset($processuri) || !isset($state) || !isset($taskuri)) {
       \Drupal::messenger()->addMessage(t("Invalid parameters for Edit Task Form."), 'error');
       self::backUrl();
@@ -432,8 +435,8 @@ class EditTaskForm extends FormBase {
         '#type' => 'markup',
         '#markup' =>
           '<div class="row mb-2">' .
-            '<div class="col bg-secondary text-white p-2">Instrument</div>' .
-            '<div class="col bg-secondary text-white p-2 ps-4">Components</div>' .
+            '<div class="col bg-secondary text-white p-2">'.ucfirst($preferred_instrument).'s</div>' .
+            '<div class="col bg-secondary text-white p-2 ps-4">'.ucfirst($preferred_component).'s</div>' .
             '<div class="col-md-1 bg-secondary text-white p-2 ps-4">Operations</div>' .
           '</div>',
       ];
@@ -444,7 +447,7 @@ class EditTaskForm extends FormBase {
       // 3) Button numa nova row full-width
       $form['instruments']['add_row'] = [
         '#type' => 'submit',
-        '#value' => $this->t('New Instrument'),
+        '#value' => $this->t('New '.ucfirst($preferred_instrument)),
         '#name' => 'new_instrument',
         '#limit_validation_errors' => [],
         '#submit' => ['::onAddInstrumentRow'],
@@ -714,8 +717,6 @@ class EditTaskForm extends FormBase {
       $components = $instrument_uri
         ? $this->getComponents($instrument_uri)
         : [];
-
-        // dpm($components, 'Components for instrument: ' . $instrument['instrument']);
 
       // Load persisted selections.
       $selected = $instrument['components'] ?? [];
@@ -1429,13 +1430,15 @@ class EditTaskForm extends FormBase {
 
   public function getComponents($instrumentUri) {
     $root_url = \Drupal::request()->getBaseUrl();
+    $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
     // Call to get Components
     $api = \Drupal::service('rep.api_connector');
     // $response = $api->componentListFromInstrument($instrumentUri);
     $response = $api->containersListFromInstrument($instrumentUri);
 
     if (!$response) {
-      \Drupal::logger('std')->error('Failed to fetch components for instrument: @uri', ['@uri' => $instrumentUri]);
+      \Drupal::logger('std')->error('Failed to fetch '.ucfirst($preferred_component).'s for '.lcfirst($preferred_instrument).': @uri', ['@uri' => $instrumentUri]);
       return [];
     }
 
@@ -1447,8 +1450,6 @@ class EditTaskForm extends FormBase {
 
     // Decode Body
     $urls = json_decode($data['body'], true);
-    dpm($data, 'API Response for instrument: ' . $instrumentUri);
-    // dpm($urls, 'Component URLs for instrument: ' . $instrumentUri);
 
     // Task components
     $components = [];
@@ -1556,6 +1557,7 @@ class EditTaskForm extends FormBase {
     }
 
     // Wrap the table in a container so AJAX can replace it cleanly.
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
     return [
       '#type' => 'container',
       '#attributes' => ['id' => $container_id],
@@ -1563,7 +1565,7 @@ class EditTaskForm extends FormBase {
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $rows,
-        '#empty' => $this->t('No components found.'),
+        '#empty' => $this->t('No '.ucfirst($preferred_component).'s found.'),
         '#attributes' => ['class' => ['table', 'table-striped']],
       ],
     ];
