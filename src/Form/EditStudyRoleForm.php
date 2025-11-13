@@ -45,11 +45,12 @@ class EditStudyRoleForm extends FormBase {
     $uri=$studyroleuri ?? 'default';
     $uri_decode=base64_decode($uri);
     $this->setStudyRoleUri($uri_decode);
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     $api = \Drupal::service('rep.api_connector');
     $studyRole = $api->parseObjectResponse($api->getUri($this->getStudyRoleUri()),'getUri');
     if ($studyRole == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study Role."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)." Role."));
       self::backUrl();
       return;
     } else {
@@ -66,14 +67,14 @@ class EditStudyRoleForm extends FormBase {
     if ($fixstd == 'T') {
       $form['studyrole_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#disabled' => TRUE,
       ];
     } else {
       $form['studyrole_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#autocomplete_route_name' => 'std.study_autocomplete',
       ];
@@ -117,12 +118,14 @@ class EditStudyRoleForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('studyrole_study')) < 1) {
-        $form_state->setErrorByName('studyrole_study', $this->t('Please enter a valid study for the Study Role'));
+        $form_state->setErrorByName('studyrole_study', $this->t('Please enter a valid '.$preferred_study.' for the '.ucfirst($preferred_study).' Role'));
       }
       if(strlen($form_state->getValue('studyrole_name')) < 1) {
-        $form_state->setErrorByName('studyrole_name', $this->t('Please enter a valid name for the Study Role'));
+        $form_state->setErrorByName('studyrole_name', $this->t('Please enter a valid name for the '.ucfirst($preferred_study).' Role'));
       }
     }
   }
@@ -133,6 +136,7 @@ class EditStudyRoleForm extends FormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -160,12 +164,12 @@ class EditStudyRoleForm extends FormBase {
       $api->elementDel('studyrole',$this->getStudyRole()->uri);
       $api->elementAdd('studyrole',$studyRoleJSON);
 
-      \Drupal::messenger()->addMessage(t("Study Role has been updated successfully."));
+      \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Role has been updated successfully."));
       self::backUrl();
       return;
 
     } catch(\Exception $e) {
-      \Drupal::messenger()->addMessage(t("An error occurred while updating Study Role: ".$e->getMessage()));
+      \Drupal::messenger()->addMessage(t("An error occurred while updating ".ucfirst($preferred_study)." Role: ".$e->getMessage()));
       self::backUrl();
       return;
     }

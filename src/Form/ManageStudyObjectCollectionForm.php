@@ -36,6 +36,8 @@ class ManageStudyObjectCollectionForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL) {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     # SET CONTEXT
     $uri=base64_decode($studyuri);
 
@@ -92,7 +94,7 @@ class ManageStudyObjectCollectionForm extends FormBase {
     # PUT FORM TOGETHER
     $form['scope'] = [
       '#type' => 'item',
-      '#title' => t('<h3>Study Object Collections (SOCs) of Study <font color="DarkGreen">' . $this->getStudy()->label . '</font></h3>'),
+      '#title' => t('<h3>'.ucfirst($preferred_study).' Object Collections (SOCs) of '.ucfirst($preferred_study).' <font color="DarkGreen">' . $this->getStudy()->label . '</font></h3>'),
     ];
     $form['subtitle'] = [
       '#type' => 'item',
@@ -159,6 +161,8 @@ class ManageStudyObjectCollectionForm extends FormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     // RETRIEVE TRIGGERING BUTTON
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
@@ -207,7 +211,7 @@ class ManageStudyObjectCollectionForm extends FormBase {
           try {
             $api->studyObjectCollectionDel($uri);
           } catch(\Exception $e) {
-            \Drupal::messenger()->addError(t("An error occurred while deleting a Study Object Collection: ".$e->getMessage()));
+            \Drupal::messenger()->addError(t("An error occurred while deleting a ".ucfirst($preferred_study)." Object Collection: ".$e->getMessage()));
             $url = Url::fromRoute('std.manage_studyobjectcollection', ['studyuri' => base64_encode($this->getStudy()->uri)]);
             $form_state->setRedirectUrl($url);
             return;

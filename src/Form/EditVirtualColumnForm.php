@@ -118,12 +118,14 @@ class EditVirtualColumnForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('virtualcolumn_soc_reference')) < 1) {
         $form_state->setErrorByName('virtualcolumn_soc_reference', $this->t('Please enter a valid SOC Reference for Virtual Column'));
       }
       if(strlen($form_state->getValue('virtualcolumn_study')) < 1) {
-        $form_state->setErrorByName('virtualcolumn_study', $this->t('Please enter a valid study for the Virtual Column'));
+        $form_state->setErrorByName('virtualcolumn_study', $this->t('Please enter a valid '.ucfirst($preferred_study).' for the Virtual Column'));
       }
     }
   }

@@ -220,6 +220,8 @@ class AddStudyForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     if ($button_name === 'back') {
       self::backUrl();
       return;
@@ -319,13 +321,13 @@ class AddStudyForm extends FormBase {
             }
           }
 
-          \Drupal::messenger()->addMessage(t("Study has been added successfully."));
+          \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been added successfully."));
         }
         self::backUrl();
         return;
 
       } catch(\Exception $e) {
-        \Drupal::messenger()->addMessage(t("An error occurred while adding a study: ".$e->getMessage()));
+        \Drupal::messenger()->addMessage(t("An error occurred while adding a ".ucfirst($preferred_study).": ".$e->getMessage()));
         self::backUrl();
         return;
       }

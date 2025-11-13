@@ -150,12 +150,14 @@ class EditStudyObjectCollectionForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('soc_study')) < 1) {
-        $form_state->setErrorByName('soc_study', $this->t('Please enter a valid study for the Study Object Collection'));
+        $form_state->setErrorByName('soc_study', $this->t('Please enter a valid '.$preferred_study.' for the '.ucfirst($preferred_study).' Object Collection'));
       }
       if(strlen($form_state->getValue('soc_virtualcolumn')) < 1) {
-        $form_state->setErrorByName('soc_virtualcolumn', $this->t('Please enter a valid Virtual Column for Study Object Collection'));
+        $form_state->setErrorByName('soc_virtualcolumn', $this->t('Please enter a valid Virtual Column for '.ucfirst($preferred_study).' Object Collection'));
       }
     }
   }
@@ -166,6 +168,7 @@ class EditStudyObjectCollectionForm extends FormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -194,12 +197,12 @@ class EditStudyObjectCollectionForm extends FormBase {
       $api->elementDel('studyobjectcollection',$this->getStudyObjectCollection()->uri);
       $api->elementAdd('studyobjectcollection',$studyObjectCollectionJSON);
 
-      \Drupal::messenger()->addMessage(t("Study Object Collection has been updated successfully."));
+      \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Object Collection has been updated successfully."));
       self::backUrl();
       return;
 
     } catch(\Exception $e) {
-      \Drupal::messenger()->addError(t("An error occurred while updating Study Object Collection: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while updating ".ucfirst($preferred_study)." Object Collection: ".$e->getMessage()));
       self::backUrl();
       return;
     }

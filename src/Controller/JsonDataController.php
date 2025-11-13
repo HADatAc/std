@@ -119,8 +119,9 @@ class JsonDataController extends ControllerBase
         $decoded_studyuri = base64_decode($studyuri);
         $study = $api->parseObjectResponse($api->getUri($decoded_studyuri), 'getUri');
         if (!$study) {
+            $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
             $this->backUrl();
-            return new JsonResponse(['error' => 'Study not found'], 404);
+            return new JsonResponse(['error' => $preferred_study' not found'], 404);
         } else {
             $this->setStudy($study);
         }
@@ -272,27 +273,28 @@ class JsonDataController extends ControllerBase
     // ADD STUDY FORM
     public function renderAddDAForm($elementtype = 'da', $studyuri = NULL)
     {
-        if ($studyuri === NULL) {
-            // Retorne uma mensagem de erro em JSON.
-            return new JsonResponse(['status' => 'error', 'message' => t('The study URI is missing.')], 400);
-        }
+      $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+      if ($studyuri === NULL) {
+          // Retorne uma mensagem de erro em JSON.
+          return new JsonResponse(['status' => 'error', 'message' => t('The '.$preferred_study.' URI is missing.')], 400);
+      }
 
-        // Renderizar o formulário usando o formBuilder.
-        $form = \Drupal::formBuilder()->getForm('Drupal\rep\Form\AddMTForm', $elementtype, $studyuri);
+      // Renderizar o formulário usando o formBuilder.
+      $form = \Drupal::formBuilder()->getForm('Drupal\rep\Form\AddMTForm', $elementtype, $studyuri);
 
-        // Use o serviço de renderização para gerar o HTML do formulário.
-        $rendered_form = \Drupal::service('renderer')->renderPlain($form);
+      // Use o serviço de renderização para gerar o HTML do formulário.
+      $rendered_form = \Drupal::service('renderer')->renderPlain($form);
 
-        // SET USER ID AND PREVIOUS URL FOR TRACKING STORE URLS
-        $uid = \Drupal::currentUser()->id();
-        $previousUrl = \Drupal::request()->getRequestUri();
-        Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
+      // SET USER ID AND PREVIOUS URL FOR TRACKING STORE URLS
+      $uid = \Drupal::currentUser()->id();
+      $previousUrl = \Drupal::request()->getRequestUri();
+      Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
 
-        // Retorne o formulário renderizado como uma resposta HTML.
-        return new JsonResponse([
-            'status' => 'success',
-            'form' => $rendered_form,
-        ]);
+      // Retorne o formulário renderizado como uma resposta HTML.
+      return new JsonResponse([
+          'status' => 'success',
+          'form' => $rendered_form,
+      ]);
     }
 
     public function upload(Request $request, $field_name, $studyuri = NULL)
