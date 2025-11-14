@@ -70,6 +70,9 @@ class AddTaskForm extends FormBase {
 
     $api = \Drupal::service('rep.api_connector');
 
+    $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
+
     // FOUR groups of values are preserved in state: basic, instruments, objects and codes.
     // for each group, we have render*, update*, save*, add*, remove* (basic has no add* and remove*)
     //   - render* is from $ELEMENT to $form
@@ -386,8 +389,8 @@ class AddTaskForm extends FormBase {
       $form['instruments']['header'] = array(
         '#type' => 'markup',
         '#markup' =>
-          '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Components</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">'.ucfirst($preferred_instrument).'</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">'.ucfirst($preferred_component).'</div>' .
           '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
       );
 
@@ -405,7 +408,7 @@ class AddTaskForm extends FormBase {
 
       $form['instruments']['actions']['add_row'] = [
         '#type' => 'submit',
-        '#value' => $this->t('New Instrument'),
+        '#value' => $this->t('New '.ucfirst($preferred_instrument)),
         '#name' => 'new_instrument',
         '#attributes' => array('class' => array('btn', 'btn-sm', 'save-button')),
       ];
@@ -794,6 +797,7 @@ class AddTaskForm extends FormBase {
    ******************************/
 
   protected function renderInstrumentRows(array $instruments) {
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
     $form_rows = [];
     $separator = '<div class="w-100"></div>';
     foreach ($instruments as $delta => $instrument) {
@@ -809,7 +813,7 @@ class AddTaskForm extends FormBase {
             $this->t('Status'),
           ],
           '#rows' => [],
-          '#empty' => $this->t('No components yet.'),
+          '#empty' => $this->t('No '.ucfirst($preferred_component).'s yet.'),
         ];
       }
       else {
@@ -1023,12 +1027,14 @@ class AddTaskForm extends FormBase {
   }
 
   protected function saveInstruments($taskUri, array $instruments) {
+
+    $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
     if (!isset($taskUri)) {
         \Drupal::messenger()->addError(t("No task URI has been provided to save instruments."));
         return;
     }
     if (empty($instruments)) {
-        \Drupal::messenger()->addWarning(t("Task has no instrument to be saved."));
+        \Drupal::messenger()->addWarning(t("Task has no ".lcfirst($preferred_instrument)." to be saved."));
         return;
     }
 
@@ -1613,6 +1619,8 @@ class AddTaskForm extends FormBase {
       ];
     }
 
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
+
     return [
       '#type' => 'container',
       '#attributes' => ['id' => $container_id],
@@ -1620,7 +1628,7 @@ class AddTaskForm extends FormBase {
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $rows,
-        '#empty' => $this->t('No components found.'),
+        '#empty' => $this->t('No '.ucfirst($preferred_component).'s found.'),
       ],
     ];
   }

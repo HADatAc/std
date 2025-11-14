@@ -11,9 +11,11 @@ class StudyObjectCollection {
 
   public static function generateHeader() {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     return $header = [
       'soc_uri' => t('URI'),
-      'soc_study' => t('Study'),
+      'soc_study' => t(ucfirst($preferred_study)),
       'soc_reference' => t('Reference'),
       'soc_label' => t('Label'),
       'soc_grounding_label' => t('Grounding Label'),
@@ -75,6 +77,8 @@ class StudyObjectCollection {
     // Get the root URL.
     $root_url = \Drupal::request()->getBaseUrl();
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     // Return an empty array if the list is empty.
     if (empty($list)) {
       return $output;
@@ -135,7 +139,7 @@ class StudyObjectCollection {
           // Card details show study, reference, grounding label, and number of objects.
           'details' => [
             '#markup' => '<p class="card-text">'
-              . '<strong>Study:</strong> ' . $study . '<br>'
+              . '<strong>'.ucfirst($preferred_study).':</strong> ' . $study . '<br>'
               . '<strong>Reference:</strong> ' . $socreference . '<br>'
               . '<strong>Grounding:</strong> ' . $groundingLabel . '<br>'
               . '<strong>Objects:</strong> ' . $element->numOfObjects

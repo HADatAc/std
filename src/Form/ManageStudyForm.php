@@ -87,6 +87,7 @@ class ManageStudyForm extends FormBase
   {
 
     $config = $this->config(static::CONFIGNAME);
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     //Libraries
     $form['#attached']['library'][] = 'std/json_table';
@@ -104,7 +105,7 @@ class ManageStudyForm extends FormBase
     $useremail = \Drupal::currentUser()->getEmail();
 
     if ($studyuri == NULL || $studyuri == "") {
-     \Drupal::messenger()->addMessage(t("A STUDY URI is required to manage a study."));
+     \Drupal::messenger()->addMessage(t("A URI is required to manage a ".$preferred_study."."));
      $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
     }
 
@@ -114,7 +115,7 @@ class ManageStudyForm extends FormBase
     $study = $api->parseObjectResponse($api->getUri($uri_decode), 'getUri');
 
     if ($study == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
       self::backUrl();
     } else {
       $this->setStudy($study);

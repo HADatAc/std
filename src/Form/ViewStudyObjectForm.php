@@ -32,6 +32,8 @@ class ViewStudyObjectForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyobjectcollectionuri = NULL) {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     # SET CONTEXT
     $uri=base64_decode($studyobjectcollectionuri);
 
@@ -87,11 +89,11 @@ class ViewStudyObjectForm extends FormBase {
 
     $form['scope'] = [
       '#type' => 'item',
-      '#title' => t('<h3>Study: <font color="DarkGreen">' . $this->getStudyObjectCollection()->isMemberOf->label . '</font></h3>'),
+      '#title' => t('<h3>'.ucfirst($preferred_study).': <font color="DarkGreen">' . $this->getStudyObjectCollection()->isMemberOf->label . '</font></h3>'),
     ];
     $form['subscope'] = [
       '#type' => 'item',
-      '#title' => t('<h4>Study Object Collection: <font color="DarkGreen">' . $this->getStudyObjectCollection()->label . '</font></h4>'),
+      '#title' => t('<h4>'.ucfirst($preferred_study).' Object Collection: <font color="DarkGreen">' . $this->getStudyObjectCollection()->label . '</font></h4>'),
     ];
 
     $form['so_table'] = [

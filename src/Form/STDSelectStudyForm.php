@@ -60,6 +60,9 @@ class STDSelectStudyForm extends FormBase
    */
   public function buildForm(array $form, FormStateInterface $form_state, $elementtype = NULL, $page = NULL, $pagesize = NULL)
   {
+    // Prefered Names
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+    $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
 
     $form['#attached']['library'][] = 'std/std_js_css';
 
@@ -89,14 +92,12 @@ class STDSelectStudyForm extends FormBase
 
     $form_state->set('page_size', $pagesize);
 
-    $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
-
     $this->single_class_name = "";
     $this->plural_class_name = "";
     switch ($this->element_type) {
       case "study":
-        $this->single_class_name = "Study";
-        $this->plural_class_name = "Studies";
+        $this->single_class_name = ucfirst($preferred_study);
+        $this->plural_class_name = ucfirst($preferred_study)."s";
         break;
       // PROCESS STEM
       case "processstem":
@@ -841,11 +842,9 @@ class STDSelectStudyForm extends FormBase
   public function submitForm(array &$form, FormStateInterface $form_state)
   {
 
-    // RECUPERA O BOTÃO QUE DISPAROU O ENVIO
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
-    // DEFINE O ID DO USUÁRIO E A URL ANTERIOR PARA RASTREAMENTO
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
 

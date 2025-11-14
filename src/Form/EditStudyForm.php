@@ -48,11 +48,12 @@ class EditStudyForm extends FormBase {
     $uri=$studyuri ?? 'default';
     $uri_decode=base64_decode($uri);
     $this->setStudyUri($uri_decode);
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     $api = \Drupal::service('rep.api_connector');
     $study = $api->parseObjectResponse($api->getUri($this->getStudyUri()),'getUri');
     if ($study == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
       self::backUrl();
       return;
     } else {
@@ -275,13 +276,14 @@ class EditStudyForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('study_short_name')) < 1) {
-        $form_state->setErrorByName('study_short_name', $this->t('Please enter a short name for the Study'));
+        $form_state->setErrorByName('study_short_name', $this->t('Please enter a short name for the '.ucfirst($preferred_study)));
       }
       if(strlen($form_state->getValue('study_name')) < 1) {
-        $form_state->setErrorByName('study_name', $this->t('Please enter a name for the Study'));
+        $form_state->setErrorByName('study_name', $this->t('Please enter a name for the '.ucfirst($preferred_study)));
       }
     }
   }
@@ -292,6 +294,7 @@ class EditStudyForm extends FormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -390,13 +393,13 @@ class EditStudyForm extends FormBase {
       }
 
       if ($message != null)
-        \Drupal::messenger()->addMessage(t("Study has been updated successfully."));
+        \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been updated successfully."));
 
       self::backUrl();
       return;
 
     } catch(\Exception $e) {
-      \Drupal::messenger()->addMessage(t("An error occurred while updating Study: ".$e->getMessage()));
+      \Drupal::messenger()->addMessage(t("An error occurred while updating ".ucfirst($preferred_study).": ".$e->getMessage()));
       self::backUrl();
       return;
     }

@@ -83,6 +83,8 @@ class STDSelectByStudyForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL, $elementtype = NULL, $mode = NULL, $page = NULL, $pagesize = NULL) {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     // GET MANAGER EMAIL
     $this->manager_email = \Drupal::currentUser()->getEmail();
     $uid = \Drupal::currentUser()->id();
@@ -97,7 +99,7 @@ class STDSelectByStudyForm extends FormBase {
     $decoded_studyuri = base64_decode($studyuri);
     $study = $api->parseObjectResponse($api->getUri($decoded_studyuri),'getUri');
     if ($study == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
       self::backUrl();
     } else {
       $this->setStudy($study);
@@ -156,8 +158,8 @@ class STDSelectByStudyForm extends FormBase {
         }
         break;
       case "studyrole":
-        $this->single_class_name = "Study Role";
-        $this->plural_class_name = "Study Roles";
+        $this->single_class_name = ucfirst($preferred_study)." Role";
+        $this->plural_class_name = ucfirst($preferred_study)." Roles";
         $header = StudyRole::generateHeader();
         $output = StudyRole::generateOutput($this->getList());
         break;
@@ -168,14 +170,14 @@ class STDSelectByStudyForm extends FormBase {
         $output = VirtualColumn::generateOutput($this->getList());
         break;
       case "studyobjectcollection":
-        $this->single_class_name = "Study Object Collection";
-        $this->plural_class_name = "Study Object Collections";
+        $this->single_class_name = ucfirst($preferred_study)." Object Collection";
+        $this->plural_class_name = ucfirst($preferred_study)." Object Collections";
         $header = StudyObjectCollection::generateHeader();
         $output = StudyObjectCollection::generateOutput($this->getList());
         break;
       case "studyobject":
-        $this->single_class_name = "Study Object";
-        $this->plural_class_name = "Study Objects";
+        $this->single_class_name = ucfirst($preferred_study)." Object";
+        $this->plural_class_name = ucfirst($preferred_study)." Objects";
         $header = StudyObject::generateHeader();
         $output = StudyObject::generateOutput($this->getList());
         break;
@@ -203,7 +205,7 @@ class STDSelectByStudyForm extends FormBase {
     ];
     $form['page_study_context'] = [
       '#type' => 'item',
-      '#title' => $this->t('<h4>' . $this->plural_class_name . ' belonging to study <font color="DarkGreen">' . $this->getStudy()->label . ' (' . $this->getStudy()->title . ')</font></h4>'),
+      '#title' => $this->t('<h4>' . $this->plural_class_name . ' belonging to '.$preferred_study.' <font color="DarkGreen">' . $this->getStudy()->label . ' (' . $this->getStudy()->title . ')</font></h4>'),
     ];
     $form['page_subtitle'] = [
       '#type' => 'item',
@@ -241,7 +243,7 @@ class STDSelectByStudyForm extends FormBase {
         if ($this->element_type == 'studyobjectcollection') {
           $form['manage_study_objects'] = [
             '#type' => 'submit',
-            '#value' => $this->t('Manage objects of selected Study Object Collection'),
+            '#value' => $this->t('Manage objects of selected '.ucfirst($preferred_study).' Object Collection'),
             '#name' => 'manage_studyobject',
             '#attributes' => [
               'class' => ['btn', 'btn-primary', 'manage_codebookslots-button'],
@@ -331,7 +333,7 @@ class STDSelectByStudyForm extends FormBase {
 
     $form['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Back to Manage Study'),
+      '#value' => $this->t('Back to Manage '.ucfirst($preferred_study)),
       '#name' => 'back',
       '#attributes' => [
           'class' => ['btn', 'btn-primary', 'back-button'],
@@ -531,24 +533,6 @@ class STDSelectByStudyForm extends FormBase {
       } else {
         $api = \Drupal::service('rep.api_connector');
         foreach($rows as $uri) {
-          //if ($this->element_type == 'da') {
-          //  $mt = $api->parseObjectResponse($api->getUri($uri),'getUri');
-          //  if ($mt != NULL && $mt->hasDataFile != NULL) {
-          //    // DELETE FILE
-          //    if (isset($mt->hasDataFile->id)) {
-          //      $file = File::load($mt->hasDataFile->id);
-          //      if ($file) {
-          //        $file->delete();
-          //        \Drupal::messenger()->addMessage(t("Deleted file with following ID: ".$mt->hasDataFile->id));
-          //      }
-          //    }
-          //    // DELETE DATAFILE
-          //    if (isset($mt->hasDataFile->uri)) {
-          //      $api->dataFileDel($mt->hasDataFile->uri);
-          //      \Drupal::messenger()->addMessage(t("Deleted DataFile with following URI: ".$mt->hasDataFile->uri));
-          //    }
-          //  }
-          //}
           $api->elementDel($this->element_type,$uri);
         }
         \Drupal::messenger()->addMessage(t("Selected " . $this->plural_class_name . " has/have been deleted successfully."));

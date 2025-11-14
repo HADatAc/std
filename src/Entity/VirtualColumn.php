@@ -10,10 +10,11 @@ use Drupal\Core\Render\Markup;
 class VirtualColumn {
 
   public static function generateHeader() {
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     return $header = [
       'element_uri' => t('URI'),
-      'element_study' => t('Study'),
+      'element_study' => t(ucfirst($preferred_study)),
       'element_soc_reference' => t('SOC Reference'),
     ];
 
@@ -52,6 +53,7 @@ class VirtualColumn {
   }
 
   public static function generateOutputCards($list) {
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
     $output = [];
 
     // Get the root URL.
@@ -118,7 +120,7 @@ class VirtualColumn {
           ],
           // Display study and soc reference in the card text.
           'text' => [
-            '#markup' => '<p class="card-text">Study: ' . $study . '<br>Soc: ' . $soc . '</p>',
+            '#markup' => '<p class="card-text">'.ucfirst($preferred_study).': ' . $study . '<br>Soc: ' . $soc . '</p>',
           ],
           // Add a "View" link button.
           'view_link_' . $index => [

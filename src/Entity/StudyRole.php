@@ -10,10 +10,11 @@ use Drupal\Core\Render\Markup;
 class StudyRole {
 
   public static function generateHeader() {
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     return $header = [
       'element_uri' => t('URI'),
-      'element_study' => t('Study'),
+      'element_study' => t(ucfirst($preferred_study)),
       'element_name' => t('Name'),
     ];
 
@@ -52,6 +53,7 @@ class StudyRole {
   }
 
   public static function generateOutputCards($list) {
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
     $output = [];
     // Get the root URL.
     $root_url = \Drupal::request()->getBaseUrl();
@@ -103,7 +105,7 @@ class StudyRole {
           ],
           // Card text displays the study and URI.
           'details' => [
-            '#markup' => '<p class="card-text"><strong>Study:</strong> ' . $study . '<br><strong>URI:</strong> ' . $uri . '</p>',
+            '#markup' => '<p class="card-text"><strong>'.ucfirst($preferred_study).':</strong> ' . $study . '<br><strong>URI:</strong> ' . $uri . '</p>',
           ],
           // Add a "View" button linking to the description page.
           'view_link_' . $index => [

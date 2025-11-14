@@ -201,13 +201,14 @@ class AddStudyForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('study_short_name')) < 1) {
-        $form_state->setErrorByName('study_short_name', $this->t('Please enter a valid short name for the Study'));
+        $form_state->setErrorByName('study_short_name', $this->t('Please enter a valid short name for the '.ucfirst($preferred_study)));
       }
       if(strlen($form_state->getValue('study_name')) < 1) {
-        $form_state->setErrorByName('study_name', $this->t('Please enter a valid name for the Study'));
+        $form_state->setErrorByName('study_name', $this->t('Please enter a valid name for the '.ucfirst($preferred_study)));
       }
     }
   }
@@ -219,6 +220,8 @@ class AddStudyForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -319,13 +322,13 @@ class AddStudyForm extends FormBase {
             }
           }
 
-          \Drupal::messenger()->addMessage(t("Study has been added successfully."));
+          \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been added successfully."));
         }
         self::backUrl();
         return;
 
       } catch(\Exception $e) {
-        \Drupal::messenger()->addMessage(t("An error occurred while adding a study: ".$e->getMessage()));
+        \Drupal::messenger()->addMessage(t("An error occurred while adding a ".ucfirst($preferred_study).": ".$e->getMessage()));
         self::backUrl();
         return;
       }
