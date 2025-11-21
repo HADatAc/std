@@ -23,19 +23,16 @@
       return;
     }
 
-    const studyuri = drupalSettings.std.studyuri;
+    const studyuri = drupalSettings.std.studyUri;
     const elementtype = drupalSettings.std.elementtype;
     const mode = drupalSettings.std.mode;
     const pagesize = drupalSettings.std.pagesize;
     const loggedUser = drupalSettings.user.logged;
 
+    console.log(`Loading table data: studyuri=${studyuri}, elementtype=${elementtype}, mode=${mode}, page=${page}, pagesize=${pagesize}`);
     const url =
       drupalSettings.path.baseUrl +
-      `std/json-data/${encodeURIComponent(studyuri)}/${encodeURIComponent(
-        elementtype
-      )}/${encodeURIComponent(mode)}/${encodeURIComponent(
-        page
-      )}/${encodeURIComponent(pagesize)}/true`;
+      `std/json-data/${encodeURIComponent(studyuri)}/${encodeURIComponent(elementtype)}/${encodeURIComponent(mode)}/${encodeURIComponent(page)}/${encodeURIComponent(pagesize)}/true`;
 
     $.ajax({
       url: url,
