@@ -33,7 +33,8 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($studies as $study) {
       $results[] = [
-        'value' => $study->label . ' [' . $study->uri . ']',
+        // 'value' => $study->label . ' [' . $study->uri . ']',
+        'value' => Utils::trimAutoCompleteString($study->label, $study->uri),
         'label' => $study->label,
       ];
     }
@@ -59,7 +60,8 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($semanticdatadictionaries as $semanticdatadictionary) {
       $results[] = [
-        'value' => $semanticdatadictionary->label . ' [' . $semanticdatadictionary->uri . ']',
+        // 'value' => $semanticdatadictionary->label . ' [' . $semanticdatadictionary->uri . ']',
+        'value' => UTILS::trimAutoCompleteString($semanticdatadictionary->label, $semanticdatadictionary->uri),
         'label' => $semanticdatadictionary->label,
       ];
     }
@@ -85,8 +87,8 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($deployments as $deployment) {
       $results[] = [
-        'value' => $deployment->label . ' [' . $deployment->uri . ']',
-        // 'value' => UTILS::trimAutoCompleteString($deployment->label, $deployment->uri),
+        // 'value' => $deployment->label . ' [' . $deployment->uri . ']',
+        'value' => UTILS::trimAutoCompleteString($deployment->label, $deployment->uri),
         'label' => $deployment->label,
       ];
     }
