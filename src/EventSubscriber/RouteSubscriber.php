@@ -37,18 +37,19 @@ class RouteSubscriber extends RouteSubscriberBase {
       }
     }
 
-    if ($route = $collection->get('std.edit_processstem')) {
+    if ($route = $collection->get('std.edit_workflowstem')) {
       $route->setDefault('_title', 'Edit ' . $preferred_processstem . ' Stem');
     }
-    if ($route = $collection->get('std.add_processstem')) {
+    if ($route = $collection->get('std.add_workflowstem')) {
       $route->setDefault('_title', 'Add ' . $preferred_processstem . ' Stem');
     }
-    if ($route = $collection->get('std.edit_process')) {
+    if ($route = $collection->get('std.edit_workflow')) {
       $route->setDefault('_title', 'Edit ' . $preferred_processstem);
     }
-    if ($route = $collection->get('std.add_process')) {
+    if ($route = $collection->get('std.add_workflow')) {
       $route->setDefault('_title', 'Add ' . $preferred_processstem);
     }
   }
 
 }
+

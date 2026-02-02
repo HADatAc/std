@@ -12,7 +12,7 @@ use Drupal\rep\Constant;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\VSTOI;
 
-class ReviewProcessStemForm extends FormBase {
+class ReviewWorkflowStemForm extends FormBase {
 
   protected $processStemUri;
 
@@ -48,7 +48,7 @@ class ReviewProcessStemForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'review_processstem_form';
+    return 'review_workflowstem_form';
   }
 
   /**
@@ -106,10 +106,10 @@ class ReviewProcessStemForm extends FormBase {
             'data-dialog-options' => json_encode(['width' => 800]),
             'data-url' => Url::fromRoute('rep.tree_form', [
               'mode' => 'modal',
-              'elementtype' => 'processstem',
+              'elementtype' => 'workflowstem',
             ], ['query' => ['field_id' => 'processstem_type']])->toString(),
             'data-field-id' => 'processstem_type',
-            'data-elementtype' => 'processstem',
+            'data-elementtype' => 'workflowstem',
             'data-search-value' => $this->getProcessStem()->superUri ?? '',
           ],
         ],
@@ -409,3 +409,4 @@ class ReviewProcessStemForm extends FormBase {
   }
 
 }
+

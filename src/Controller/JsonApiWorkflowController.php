@@ -8,10 +8,10 @@ use Symfony\Component\HttpFoundation\Request;
 use Drupal\Component\Utility\Xss;
 use Drupal\rep\Utils;
 /**
- * Class JsonApiProcessController
+ * Class JsonApiWorkflowController
  * @package Drupal\std\Controller
  */
-class JsonApiProcessController extends ControllerBase{
+class JsonApiWorkflowController extends ControllerBase{
 
   /**
    * @return JsonResponse
@@ -24,16 +24,16 @@ class JsonApiProcessController extends ControllerBase{
     }
     $keyword = Xss::filter($input);
     $api = \Drupal::service('rep.api_connector');
-    $process_list = $api->listByKeyword('process',$keyword,10,0);
-    $obj = json_decode($process_list);
-    $processes = [];
+    $workflow_list = $api->listByKeyword('workflow',$keyword,10,0);
+    $obj = json_decode($workflow_list);
+    $workflows = [];
     if ($obj->isSuccessful) {
-      $processes = $obj->body;
+      $workflows = $obj->body;
     }
-    foreach ($processes as $process) {
+    foreach ($workflows as $workflow) {
       $results[] = [
-        'value' => $process->label . ' [' . $process->uri . ']',
-        'label' => $process->label,
+        'value' => $workflow->label . ' [' . $workflow->uri . ']',
+        'label' => $workflow->label,
       ];
     }
     return new JsonResponse($results);
@@ -73,7 +73,7 @@ class JsonApiProcessController extends ControllerBase{
     }
     else {
       // Se não conseguir determinar o índice, retorna o wrapper completo
-      return $form['process_instruments']['wrapper'];
+      return $form['workflow_instruments']['wrapper'];
     }
 
     // Obtém o valor selecionado (URI do instrumento)
@@ -82,7 +82,7 @@ class JsonApiProcessController extends ControllerBase{
     if (!$instrument_uri) {
       // Se não houver URI, limpa o conteúdo do wrapper
       $form_state->set("instrument_component_wrapper_$i", []);
-      return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
+      return $form['workflow_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
     }
 
     // Chama a API para obter a lista de componentes
@@ -94,7 +94,7 @@ class JsonApiProcessController extends ControllerBase{
     if (!$data || !isset($data['body'])) {
       // Em caso de resposta inválida, limpa o conteúdo do wrapper
       $form_state->set("instrument_component_wrapper_$i", []);
-      return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
+      return $form['workflow_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
     }
 
     // Decodifica o corpo da resposta
@@ -117,7 +117,7 @@ class JsonApiProcessController extends ControllerBase{
     $form_state->set("instrument_component_wrapper_$i", $components);
 
     // Retorna o wrapper atualizado
-    return $form['process_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
+    return $form['workflow_instruments']['wrapper']["instrument_$i"]['instrument_component_wrapper_'.$i];
   }
 
   /**
@@ -135,7 +135,7 @@ class JsonApiProcessController extends ControllerBase{
     $obj = json_decode($task_list);
     $tasks = [];
     if ($obj->isSuccessful) {
-      $processes = $obj->body;
+      $tasks = $obj->body;
     }
     foreach ($tasks as $task) {
       $results[] = [

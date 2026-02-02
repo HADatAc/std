@@ -15,19 +15,19 @@ use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\file\Entity\File;
 use Drupal\Core\Render\Markup;
 
-class EditProcessForm extends FormBase {
+class EditWorkflowForm extends FormBase {
 
-  protected $processUri;
+  protected $workflowUri;
 
   protected $process;
 
   protected $sourceProcess;
 
-  public function getProcessUri() {
+  public function getWorkflowUri() {
     return $this->processUri;
   }
 
-  public function setProcessUri($uri) {
+  public function setWorkflowUri($uri) {
     return $this->processUri = $uri;
   }
 
@@ -51,13 +51,13 @@ class EditProcessForm extends FormBase {
    * {@inheritdoc}
    */
   public function getFormId() {
-    return 'edit_process_form';
+    return 'edit_workflow_form';
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $processuri = NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $workflowUri = NULL) {
 
     // ROOT URL
     $root_url = \Drupal::request()->getBaseUrl();
@@ -67,9 +67,9 @@ class EditProcessForm extends FormBase {
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
 
-    $uri=$processuri;
+    $uri=$workflowUri;
     $uri_decode=base64_decode($uri);
-    $this->setProcessUri($uri_decode);
+    $this->setWorkflowUri($uri_decode);
 
     $tables = new Tables;
     $languages = $tables->getLanguages();
@@ -82,7 +82,7 @@ class EditProcessForm extends FormBase {
     // Get Workflow Data
 
     $api = \Drupal::service('rep.api_connector');
-    $uri_decode=base64_decode($processuri);
+    $uri_decode=base64_decode($workflowUri);
     $process = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
     if ($process == NULL) {
       \Drupal::messenger()->addMessage(t("Failed to retrieve Workflow."));
@@ -99,10 +99,10 @@ class EditProcessForm extends FormBase {
       ],
     ];
 
-    $form['process_header']['process_uri'] = [
+    $form['process_header']['workflow_uri'] = [
       '#type' => 'item',
       '#title' => $this->t('URI: '),
-      '#markup' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($this->getProcessUri()).'">'.$this->getProcessUri().'</a>'),
+      '#markup' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($this->getWorkflowUri()).'">'.$this->getWorkflowUri().'</a>'),
     ];
 
     $form['process_header']['process_actions'] = [
@@ -143,7 +143,7 @@ class EditProcessForm extends FormBase {
       ],
     ];
 
-    $form['process_processstem'] = [
+    $form['workflow_workflowstem'] = [
       'top' => [
         '#type' => 'markup',
         '#markup' => '<div class="col border border-white">',
@@ -151,20 +151,20 @@ class EditProcessForm extends FormBase {
       'main' => [
         '#type' => 'textfield',
         '#title' => $this->t('Workflow Stem'),
-        '#name' => 'process_processstem',
+        '#name' => 'workflow_workflowstem',
         '#default_value' => UTILS::fieldToAutocomplete($this->getProcess()->typeUri, $this->getProcess()->typeLabel),
-        '#id' => 'process_processstem',
-        '#parents' => ['process_processstem'],
+        '#id' => 'workflow_workflowstem',
+        '#parents' => ['workflow_workflowstem'],
         '#attributes' => [
           'class' => ['open-tree-modal'],
           'data-dialog-type' => 'modal',
           'data-dialog-options' => json_encode(['width' => 800]),
           'data-url' => Url::fromRoute('rep.tree_form', [
             'mode' => 'modal',
-            'elementtype' => 'processstem',
-          ], ['query' => ['field_id' => 'process_processstem']])->toString(),
-          'data-field-id' => 'process_processstem',
-          'data-elementtype' => 'processstem',
+            'elementtype' => 'workflowstem',
+          ], ['query' => ['field_id' => 'workflow_workflowstem']])->toString(),
+          'data-field-id' => 'workflow_workflowstem',
+          'data-elementtype' => 'workflowstem',
           'autocomplete' => 'off',
         ],
       ],
@@ -173,19 +173,19 @@ class EditProcessForm extends FormBase {
         '#markup' => '</div>',
       ],
     ];
-    $form['process_name'] = [
+    $form['workflow_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Name'),
       '#default_value' => $this->getProcess()->label,
       '#required' => true
     ];
-    $form['process_language'] = [
+    $form['workflow_language'] = [
       '#type' => 'select',
       '#title' => $this->t('Language'),
       '#options' => $languages,
       '#default_value' => $this->getProcess()->hasLanguage,
     ];
-    $form['process_version'] = [
+    $form['workflow_version'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Version'),
       '#default_value' =>
@@ -195,7 +195,7 @@ class EditProcessForm extends FormBase {
         'disabled' => 'disabled',
       ],
     ];
-    $form['process_description'] = [
+    $form['workflow_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
       '#default_value' => $this->getProcess()->comment,
@@ -254,15 +254,15 @@ class EditProcessForm extends FormBase {
     // Retrieve the current image value.
     // Retrieve the current process and its image.
     $process = $this->getProcess();
-    $process_uri = Utils::namespaceUri($this->getProcessUri());
-    $process_image = $process->hasImageUri ?? '';
+    $process_uri = Utils::namespaceUri($this->getWorkflowUri());
+    $workflow_image = $process->hasImageUri ?? '';
 
     // Determine if the existing web document is a URL or a file.
     $image_type = '';
-    if (!empty($process_image) && stripos(trim($process_image), 'http') === 0) {
+    if (!empty($workflow_image) && stripos(trim($workflow_image), 'http') === 0) {
       $image_type = 'url';
     }
-    elseif (!empty($process_image)) {
+    elseif (!empty($workflow_image)) {
       $image_type = 'upload';
     }
 
@@ -276,7 +276,7 @@ class EditProcessForm extends FormBase {
     }
 
     // Image Type selector (URL or Upload).
-    $form['process_information']['process_image_type'] = [
+    $form['process_information']['workflow_image_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Image Type'),
       '#options' => [
@@ -288,35 +288,35 @@ class EditProcessForm extends FormBase {
     ];
 
     // Textfield for URL mode (only visible when type = 'url').
-    $form['process_information']['process_image_url'] = [
+    $form['process_information']['workflow_image_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Image'),
-      '#default_value' => ($image_type === 'url') ? $process_image : '',
+      '#default_value' => ($image_type === 'url') ? $workflow_image : '',
       '#attributes' => [
         'placeholder' => 'http://',
       ],
       '#states' => [
         'visible' => [
-          ':input[name="process_image_type"]' => ['value' => 'url'],
+          ':input[name="workflow_image_type"]' => ['value' => 'url'],
         ],
       ],
     ];
 
     // Container for the file upload elements (only visible when type = 'upload').
-    $form['process_information']['process_image_upload_wrapper'] = [
+    $form['process_information']['workflow_image_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [
         'visible' => [
-          ':input[name="process_image_type"]' => ['value' => 'upload'],
+          ':input[name="workflow_image_type"]' => ['value' => 'upload'],
         ],
       ],
     ];
 
     // Attempt to load an existing file if the document is not a URL.
     $existing_image_fid = NULL;
-    if ($image_type === 'upload' && !empty($process_image)) {
+    if ($image_type === 'upload' && !empty($workflow_image)) {
       // Build the expected file URI in the private filesystem.
-      $desired_uri = 'private://resources/' . $modUri . '/image/' . $process_image;
+      $desired_uri = 'private://resources/' . $modUri . '/image/' . $workflow_image;
       $files = \Drupal::entityTypeManager()
         ->getStorage('file')
         ->loadByProperties(['uri' => $desired_uri]);
@@ -327,7 +327,7 @@ class EditProcessForm extends FormBase {
     }
 
     // 5. Managed file element for uploading a new document.
-    $form['process_information']['process_image_upload_wrapper']['process_image_upload'] = [
+    $form['process_information']['workflow_image_upload_wrapper']['workflow_image_upload'] = [
       '#type' => 'managed_file',
       '#title' => $this->t('Upload Image'),
       '#upload_location' => 'private://resources/' . $modUri . '/image',
@@ -341,19 +341,19 @@ class EditProcessForm extends FormBase {
 
     // **** WEBDOCUMENT ****
     // Retrieve the current web document value.
-    $process_webdocument = $process->hasWebDocument ?? '';
+    $workflow_webdocument = $process->hasWebDocument ?? '';
 
     // Determine if the existing web document is a URL or a file.
     $webdocument_type = '';
-    if (!empty($process_webdocument) && stripos(trim($process_webdocument), 'http') === 0) {
+    if (!empty($workflow_webdocument) && stripos(trim($workflow_webdocument), 'http') === 0) {
       $webdocument_type = 'url';
     }
-    elseif (!empty($process_webdocument)) {
+    elseif (!empty($workflow_webdocument)) {
       $webdocument_type = 'upload';
     }
 
     // Web Document Type selector (URL or Upload).
-    $form['process_information']['process_webdocument_type'] = [
+    $form['process_information']['workflow_webdocument_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Web Document Type'),
       '#options' => [
@@ -365,35 +365,35 @@ class EditProcessForm extends FormBase {
     ];
 
     // Textfield for URL mode (only visible when type = 'url').
-    $form['process_information']['process_webdocument_url'] = [
+    $form['process_information']['workflow_webdocument_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Web Document'),
-      '#default_value' => ($webdocument_type === 'url') ? $process_webdocument : '',
+      '#default_value' => ($webdocument_type === 'url') ? $workflow_webdocument : '',
       '#attributes' => [
         'placeholder' => 'http://',
       ],
       '#states' => [
         'visible' => [
-          ':input[name="process_webdocument_type"]' => ['value' => 'url'],
+          ':input[name="workflow_webdocument_type"]' => ['value' => 'url'],
         ],
       ],
     ];
 
     // Container for the file upload elements (only visible when type = 'upload').
-    $form['process_information']['process_webdocument_upload_wrapper'] = [
+    $form['process_information']['workflow_webdocument_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [
         'visible' => [
-          ':input[name="process_webdocument_type"]' => ['value' => 'upload'],
+          ':input[name="workflow_webdocument_type"]' => ['value' => 'upload'],
         ],
       ],
     ];
 
     // Attempt to load an existing file if the document is not a URL.
     $existing_fid = NULL;
-    if ($webdocument_type === 'upload' && !empty($process_webdocument)) {
+    if ($webdocument_type === 'upload' && !empty($workflow_webdocument)) {
       // Build the expected file URI in the private filesystem.
-      $desired_uri = 'private://resources/' . $modUri . '/webdoc/' . $process_webdocument;
+      $desired_uri = 'private://resources/' . $modUri . '/webdoc/' . $workflow_webdocument;
       $files = \Drupal::entityTypeManager()
         ->getStorage('file')
         ->loadByProperties(['uri' => $desired_uri]);
@@ -404,7 +404,7 @@ class EditProcessForm extends FormBase {
     }
 
     // 5. Managed file element for uploading a new document.
-    $form['process_information']['process_webdocument_upload_wrapper']['process_webdocument_upload'] = [
+    $form['process_information']['workflow_webdocument_upload_wrapper']['workflow_webdocument_upload'] = [
       '#type' => 'managed_file',
       '#title' => $this->t('Upload Image'),
       '#upload_location' => 'private://resources/' . $modUri . '/image',
@@ -467,8 +467,8 @@ class EditProcessForm extends FormBase {
     $button_name = $triggering_element['#name'];
 
     if ($button_name !== 'back') {
-      if(strlen($form_state->getValue('process_processstem')) < 1) {
-        $form_state->setErrorByName('process_processstem', $this->t('Please enter a valid Workflow stem'));
+      if(strlen($form_state->getValue('workflow_workflowstem')) < 1) {
+        $form_state->setErrorByName('workflow_workflowstem', $this->t('Please enter a valid Workflow stem'));
       }
     } else {
       self::backUrl();
@@ -495,17 +495,17 @@ class EditProcessForm extends FormBase {
       $useremail = \Drupal::currentUser()->getEmail();
 
       // Determine the chosen document type.
-      $doc_type = $form_state->getValue('process_webdocument_type');
-      $process_webdocument = $this->getProcess()->hasWebDocument;
+      $doc_type = $form_state->getValue('workflow_webdocument_type');
+      $workflow_webdocument = $this->getProcess()->hasWebDocument;
 
       // If user selected URL, use the textfield value.
       if ($doc_type === 'url') {
-        $process_webdocument = $form_state->getValue('process_webdocument_url');
+        $workflow_webdocument = $form_state->getValue('workflow_webdocument_url');
       }
       // If user selected Upload, load the file entity and get its filename.
       elseif ($doc_type === 'upload') {
         // Get the file IDs from the managed_file element.
-        $fids = $form_state->getValue('process_webdocument_upload');
+        $fids = $form_state->getValue('workflow_webdocument_upload');
         if (!empty($fids)) {
           // Load the first file (file ID is returned, e.g. "374").
           $file = File::load(reset($fids));
@@ -514,25 +514,25 @@ class EditProcessForm extends FormBase {
             $file->setPermanent();
             $file->save();
             // Optionally register file usage to prevent cleanup.
-            \Drupal::service('file.usage')->add($file, 'sir', 'process', 1);
+            \Drupal::service('file.usage')->add($file, 'sir', 'workflow', 1);
             // Now get the filename from the file entity.
-            $process_webdocument = $file->getFilename();
+            $workflow_webdocument = $file->getFilename();
           }
         }
       }
 
       // Determine the chosen image type.
-      $image_type = $form_state->getValue('process_image_type');
-      $process_image = $this->getProcess()->hasImageUri;
+      $image_type = $form_state->getValue('workflow_image_type');
+      $workflow_image = $this->getProcess()->hasImageUri;
 
       // If user selected URL, use the textfield value.
       if ($image_type === 'url') {
-        $process_image = $form_state->getValue('process_image_url');
+        $workflow_image = $form_state->getValue('workflow_image_url');
       }
       // If user selected Upload, load the file entity and get its filename.
       elseif ($image_type === 'upload') {
         // Get the file IDs from the managed_file element.
-        $fids = $form_state->getValue('process_image_upload');
+        $fids = $form_state->getValue('workflow_image_upload');
         if (!empty($fids)) {
           // Load the first file (file ID is returned, e.g. "374").
           $file = File::load(reset($fids));
@@ -541,9 +541,9 @@ class EditProcessForm extends FormBase {
             $file->setPermanent();
             $file->save();
             // Optionally register file usage to prevent cleanup.
-            \Drupal::service('file.usage')->add($file, 'sir', 'process', 1);
+            \Drupal::service('file.usage')->add($file, 'sir', 'workflow', 1);
             // Now get the filename from the file entity.
-            $process_image = $file->getFilename();
+            $workflow_image = $file->getFilename();
           }
         }
       }
@@ -556,15 +556,15 @@ class EditProcessForm extends FormBase {
       // CHECK if Status is CURRENT OR DEPRECATED FOR NEW CREATION
       if ($this->getProcess()->hasStatus === VSTOI::CURRENT || $this->getProcess()->hasStatus === VSTOI::DEPRECATED) {
 
-        $newProcessUri = Utils::uriGen('process');
+        $newProcessUri = Utils::uriGen('workflow');
         $processJSON = '{"uri":"' . $newProcessUri . '",'
-          . '"typeUri":"' .Utils::uriFromAutocomplete($form_state->getValue('process_processstem')) . '",'
-          . '"hascoTypeUri":"' . VSTOI::PROCESS . '",'
+          . '"typeUri":"' .Utils::uriFromAutocomplete($form_state->getValue('workflow_workflowstem')) . '",'
+          . '"hascoTypeUri":"' . VSTOI::WORKFLOW . '",'
           . '"hasStatus":"' . VSTOI::DRAFT . '",'
-          . '"label":"' . $form_state->getValue('process_name') . '",'
-          . '"hasLanguage":"' . $form_state->getValue('process_language') . '",'
-          . '"hasVersion":"' . $form_state->getValue('process_version') . '",'
-          . '"comment":"' . $form_state->getValue('process_description') . '",'
+          . '"label":"' . $form_state->getValue('workflow_name') . '",'
+          . '"hasLanguage":"' . $form_state->getValue('workflow_language') . '",'
+          . '"hasVersion":"' . $form_state->getValue('workflow_version') . '",'
+          . '"comment":"' . $form_state->getValue('workflow_description') . '",'
           . '"hasWebDocument":"",'
           . '"hasImageUri":"",'
           . '"hasTopTaskUri":"'. $this->getProcess()->hasTopTaskUri .'",'
@@ -572,7 +572,7 @@ class EditProcessForm extends FormBase {
           . '"hasReviewNote":"'.($this->getProcess()->hasSatus !== null ? $this->getProcess()->hasReviewNote : '').'",'
           . '"hasEditorEmail":"'.($this->getProcess()->hasSatus !== null ? $this->getProcess()->hasEditorEmail : '').'"}';
 
-        $message = $api->elementAdd('process',$processJSON);
+        $message = $api->elementAdd('workflow',$processJSON);
 
         if ($message != null)
           \Drupal::messenger()->addMessage(t("New Version Workflow has been created successfully."));
@@ -580,42 +580,42 @@ class EditProcessForm extends FormBase {
       } else {
 
         // UPLOAD IMAGE TO API
-        if ($image_type === 'upload' && $process_image !== $this->getProcess()->hasImageUri) {
-          $fids = $form_state->getValue('process_image_upload');
-          $msg = $api->parseObjectResponse($api->uploadFile($this->getProcessUri(), reset($fids)), 'uploadFile');
+        if ($image_type === 'upload' && $workflow_image !== $this->getProcess()->hasImageUri) {
+          $fids = $form_state->getValue('workflow_image_upload');
+          $msg = $api->parseObjectResponse($api->uploadFile($this->getWorkflowUri(), reset($fids)), 'uploadFile');
           if ($msg == NULL) {
             \Drupal::messenger()->addError(t("The Uploaded Image FAILED to be submited to API."));
           }
         }
 
         // UPLOAD DOCUMENT TO API
-        if ($doc_type === 'upload' && $process_webdocument !== $this->getProcess()->hasWebDocument) {
-          $fids = $form_state->getValue('process_webdocument_upload');
-          $msg = $api->parseObjectResponse($api->uploadFile($this->getProcessUri(), reset($fids)), 'uploadFile');
+        if ($doc_type === 'upload' && $workflow_webdocument !== $this->getProcess()->hasWebDocument) {
+          $fids = $form_state->getValue('workflow_webdocument_upload');
+          $msg = $api->parseObjectResponse($api->uploadFile($this->getWorkflowUri(), reset($fids)), 'uploadFile');
           if ($msg == NULL) {
             \Drupal::messenger()->addError(t("The Uploaded WebDocument FAILED to be submited to API."));
           }
         }
 
-        $processJSON = '{"uri":"'.$this->getProcessUri().'",'.
-          '"typeUri":"'.Utils::uriFromAutocomplete($form_state->getValue('process_processstem')).'",'.
-          '"hascoTypeUri":"'.VSTOI::PROCESS.'",'.
+        $processJSON = '{"uri":"'.$this->getWorkflowUri().'",'.
+          '"typeUri":"'.Utils::uriFromAutocomplete($form_state->getValue('workflow_workflowstem')).'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOW.'",'.
           '"hasStatus":"'.VSTOI::DRAFT.'",'.
           '"hasSIRManagerEmail":"'.$useremail.'",'.
-          '"hasLanguage":"' . $form_state->getValue('process_language') . '",'.
-          '"label":"'.$form_state->getValue('process_name').'",'.
-          '"hasVersion":"'.$form_state->getValue('process_version').'",'.
-          '"comment":"' . $form_state->getValue('process_description') . '",'.
+          '"hasLanguage":"' . $form_state->getValue('workflow_language') . '",'.
+          '"label":"'.$form_state->getValue('workflow_name').'",'.
+          '"hasVersion":"'.$form_state->getValue('workflow_version').'",'.
+          '"comment":"' . $form_state->getValue('workflow_description') . '",'.
           '"hasTopTaskUri":"'. $this->getProcess()->hasTopTaskUri .'",'.
-          '"hasWebDocument":"' . $process_webdocument . '",' .
-          '"hasImageUri":"' . $process_image . '",' .
+          '"hasWebDocument":"' . $workflow_webdocument . '",' .
+          '"hasImageUri":"' . $workflow_image . '",' .
           '"hasReviewNote":"'.$this->getProcess()->hasReviewNote.'",'.
           '"hasEditorEmail":"'.$this->getProcess()->hasEditorEmail.'"}';
 
         // dpm($processJSON, 'Workflow JSON');return false;
         // UPDATE BY DELETING AND CREATING
-        $api->elementDel('process',$this->getProcessUri());
-        $message = $api->elementAdd('process',$processJSON);
+        $api->elementDel('workflow',$this->getWorkflowUri());
+        $message = $api->elementAdd('workflow',$processJSON);
 
         if ($message != null)
           \Drupal::messenger()->addMessage(t("Workflow has been updated successfully."));
@@ -631,9 +631,9 @@ class EditProcessForm extends FormBase {
     }
   }
 
-  public function retrieveProcess($processUri) {
+  public function retrieveProcess($workflowUri) {
     $api = \Drupal::service('rep.api_connector');
-    $rawresponse = $api->getUri($processUri);
+    $rawresponse = $api->getUri($workflowUri);
     $obj = json_decode($rawresponse);
     if ($obj->isSuccessful) {
       return $obj->body;
@@ -648,12 +648,12 @@ class EditProcessForm extends FormBase {
       return;
     } else {
       $uid = \Drupal::currentUser()->id();
-      $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_process');
+      $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_workflow');
 
       if ($previousUrl && strpos($previousUrl, '/load-more-data') !== false) {
         parse_str(parse_url($previousUrl, PHP_URL_QUERY), $params);
         $page = isset($params['page']) ? $params['page'] : 1;
-        $element_type = isset($params['element_type']) ? $params['element_type'] : 'process';
+        $element_type = isset($params['element_type']) ? $params['element_type'] : 'workflow';
         $pagesize = 9;
 
         $previousUrl = Url::fromRoute('std.select_process', [
@@ -670,7 +670,7 @@ class EditProcessForm extends FormBase {
       } else {
 
         $default_url = Url::fromRoute('std.select_process', [
-          'elementtype' => 'process',
+          'elementtype' => 'workflow',
           'page' => 1,
           'pagesize' => 9,
         ])->toString();
@@ -691,7 +691,7 @@ class EditProcessForm extends FormBase {
     $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
 
     $url = Url::fromRoute('std.edit_task', [
-        'processuri' => base64_encode($this->getProcessUri()),
+        'processuri' => base64_encode($this->getWorkflowUri()),
         'state' => $topTask->typeUri === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
     ]);
@@ -702,3 +702,6 @@ class EditProcessForm extends FormBase {
   }
 
 }
+
+
+

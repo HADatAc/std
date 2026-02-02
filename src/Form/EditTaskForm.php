@@ -1744,7 +1744,7 @@ class EditTaskForm extends FormBase {
         'taskuri' => base64_encode($this->getTask()->hasSupertaskUri),
       ])->toString();
     } else {
-      $default_url = Url::fromRoute('std.edit_process', [
+      $default_url = Url::fromRoute('std.edit_workflow', [
         'processuri' => base64_encode($this->getProcessUri()),
       ])->toString();
     }
@@ -1755,3 +1755,4 @@ class EditTaskForm extends FormBase {
   }
 
 }
+

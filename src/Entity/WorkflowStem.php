@@ -7,7 +7,7 @@ use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\REPGUI;
 
-class ProcessStem {
+class WorkflowStem {
 
   public static function generateHeader() {
 

@@ -1,19 +1,19 @@
 (function ($, Drupal) {
-  Drupal.behaviors.processstemForm = {
+  Drupal.behaviors.workflowstemForm = {
     attach: function (context, settings) {
       setTimeout(function () {
         var previousValue = ''; // Store the previous value before any change
 
         $('#cancel_button').on('click', function () {
-          var $languageField = $('#processstem_language');
+          var $languageField = $('#workflowstem_language');
           $languageField.prop('required', false);
         });
 
-        $('#processstem_was_generated_by').on('change', function () {
+        $('#workflowstem_was_generated_by').on('change', function () {
           var selectedValue = $(this).val();
           var translation = 'http://hadatac.org/ont/vstoi#Translation';
-          var $languageField = $('#processstem_language');
-          var $errorMessage = $('#processstem_language_error');
+          var $languageField = $('#workflowstem_language');
+          var $errorMessage = $('#workflowstem_language_error');
 
           if (selectedValue === translation) {
             // Save the current value before resetting it
@@ -31,7 +31,7 @@
 
             // Display error message if it does not already exist
             if (!$errorMessage.length) {
-              $languageField.after('<div id="processstem_language_error" style="color: red;">Must select a different Language.</div>');
+              $languageField.after('<div id="workflowstem_language_error" style="color: red;">Must select a different Language.</div>');
             }
 
           } else {
@@ -47,7 +47,7 @@
             }
 
             // Remove the error message
-            $('#processstem_language_error').remove();
+            $('#workflowstem_language_error').remove();
           }
         });
       }, 1000);

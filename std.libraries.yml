@@ -16,19 +16,19 @@ json_table:
   dependencies:
     - core/jquery
 
-std_process:
+std_workflow:
   version: 1.x
   js:
-    js/std_process.js: {}
+    js/std_workflow.js: {}
   dependencies:
     - core/jquery
     - core/drupal
     - core/drupal.dialog
 
-std_processstem:
+std_workflowstem:
   version: 1.x
   js:
-    js/std_processstem.js: {}
+    js/std_workflowstem.js: {}
   dependencies:
     - core/jquery
     - core/drupal
