@@ -102,8 +102,8 @@ class STDSearchForm extends FormBase {
     'virtualcolumn' => ['label' => 'Virtual Columns', 'image' => 'white/virtualcolumn_placeholder.png'],
     'studyobjectcollection' => ['label' => 'Object Collections', 'image' => 'white/studyobjectcollection_placeholder.png'],
     'studyobject' => ['label' => ucfirst($preferred_study).' Objects', 'image' => 'white/studyobject_placeholder.png'],
-    'processstem' => ['label' => ucfirst($preferred_process).' Stems', 'image' => 'white/processstem_placeholder.png'],
-    'process' => ['label' => ucfirst($preferred_process).'s', 'image' => 'white/process_placeholder.png'],
+    'workflowstem' => ['label' => ucfirst($preferred_process).' Stems', 'image' => 'white/workflowstem_placeholder.png'],
+    'workflow' => ['label' => ucfirst($preferred_process).'s', 'image' => 'white/workflow_placeholder.png'],
   ];
 
   foreach ($element_types as $type => $info) {
@@ -202,3 +202,4 @@ class STDSearchForm extends FormBase {
   $form_state->setValue('search_keyword', '');
 }
 }
+

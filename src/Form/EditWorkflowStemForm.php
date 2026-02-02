@@ -20,7 +20,7 @@ class EditWorkflowStemForm extends FormBase {
 
   protected $componentStem;
 
-  protected $sourceProcessStem;
+  protected $sourceWorkflowStem;
 
   public function getWorkflowStemUri() {
     return $this->componentStemUri;
@@ -30,20 +30,20 @@ class EditWorkflowStemForm extends FormBase {
     return $this->componentStemUri = $uri;
   }
 
-  public function getProcessStem() {
+  public function getWorkflowStem() {
     return $this->componentStem;
   }
 
-  public function setProcessStem($obj) {
+  public function setWorkflowStem($obj) {
     return $this->componentStem = $obj;
   }
 
-  public function getSourceProcessStem() {
-    return $this->sourceProcessStem;
+  public function getSourceWorkflowStem() {
+    return $this->sourceWorkflowStem;
   }
 
-  public function setSourceProcessStem($obj) {
-    return $this->sourceProcessStem = $obj;
+  public function setSourceWorkflowStem($obj) {
+    return $this->sourceWorkflowStem = $obj;
   }
 
   /**
@@ -71,8 +71,8 @@ class EditWorkflowStemForm extends FormBase {
     $uri_decode=base64_decode($uri);
     $this->setWorkflowStemUri($uri_decode);
 
-    $this->setProcessStem($this->retrieveProcessStem($this->getWorkflowStemUri()));
-    if ($this->getProcessStem() == NULL) {
+    $this->setWorkflowStem($this->retrieveWorkflowStem($this->getWorkflowStemUri()));
+    if ($this->getWorkflowStem() == NULL) {
       \Drupal::messenger()->addError(t("Failed to retrieve Workflow."));
       self::backUrl();
       return;
@@ -83,7 +83,7 @@ class EditWorkflowStemForm extends FormBase {
     $derivations = $tables->getGenerationActivities();
 
     // IN CASE ITS A DERIVATION ORIGINAL MUST BE REMOVED ALSO
-    if ($this->getProcessStem()->hasStatus === VSTOI::CURRENT || $this->getProcessStem()->hasVersion > 1) {
+    if ($this->getWorkflowStem()->hasStatus === VSTOI::CURRENT || $this->getWorkflowStem()->hasVersion > 1) {
       unset($derivations[Constant::DEFAULT_WAS_GENERATED_BY]);
     }
 
@@ -95,9 +95,9 @@ class EditWorkflowStemForm extends FormBase {
       '#title' => $this->t('URI: '),
       '#markup' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($this->getWorkflowStemUri()).'">'.$this->getWorkflowStemUri().'</a>'),
     ];
-    // dpm($this->getProcessStem());
-    if ($this->getProcessStem()->superUri) {
-      $form['processstem_type'] = [
+    // dpm($this->getWorkflowStem());
+    if ($this->getWorkflowStem()->superUri) {
+      $form['workflowstem_type'] = [
         'top' => [
           '#type' => 'markup',
           '#markup' => '<div class="col border border-white">',
@@ -105,10 +105,10 @@ class EditWorkflowStemForm extends FormBase {
         'main' => [
           '#type' => 'textfield',
           '#title' => $this->t('Parent Type'),
-          '#name' => 'processstem_type',
-          '#default_value' => $this->getProcessStem()->superUri ? Utils::fieldToAutocomplete($this->getProcessStem()->superUri, $this->getProcessStem()->superClassLabel) : '',
-          '#id' => 'processstem_type',
-          '#parents' => ['processstem_type'],
+          '#name' => 'workflowstem_type',
+          '#default_value' => $this->getWorkflowStem()->superUri ? Utils::fieldToAutocomplete($this->getWorkflowStem()->superUri, $this->getWorkflowStem()->superClassLabel) : '',
+          '#id' => 'workflowstem_type',
+          '#parents' => ['workflowstem_type'],
           '#attributes' => [
             'class' => ['open-tree-modal'],
             'data-dialog-type' => 'modal',
@@ -116,10 +116,10 @@ class EditWorkflowStemForm extends FormBase {
             'data-url' => Url::fromRoute('rep.tree_form', [
               'mode' => 'modal',
               'elementtype' => 'workflowstem',
-            ], ['query' => ['field_id' => 'processstem_type']])->toString(),
-            'data-field-id' => 'processstem_type',
+            ], ['query' => ['field_id' => 'workflowstem_type']])->toString(),
+            'data-field-id' => 'workflowstem_type',
             'data-elementtype' => 'workflowstem',
-            'data-search-value' => $this->getProcessStem()->superUri ?? '',
+            'data-search-value' => $this->getWorkflowStem()->superUri ?? '',
           ],
         ],
         'bottom' => [
@@ -129,16 +129,16 @@ class EditWorkflowStemForm extends FormBase {
       ];
     }
 
-    $form['processstem_content'] = [
+    $form['workflowstem_content'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Name'),
-      '#default_value' => $this->getProcessStem()->hasContent,
+      '#default_value' => $this->getWorkflowStem()->hasContent,
     ];
     $form['workflowstem_language'] = [
       '#type' => 'select',
       '#title' => $this->t('Language'),
       '#options' => $languages,
-      '#default_value' => $this->getProcessStem()->hasLanguage,
+      '#default_value' => $this->getWorkflowStem()->hasLanguage,
       '#attributes' => [
         'id' => 'workflowstem_language'
       ]
@@ -147,8 +147,8 @@ class EditWorkflowStemForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Version'),
       '#default_value' =>
-        ($this->getProcessStem()->hasStatus === VSTOI::CURRENT || $this->getProcessStem()->hasStatus === VSTOI::DEPRECATED) ?
-        $this->getProcessStem()->hasVersion + 1 : $this->getProcessStem()->hasVersion,
+        ($this->getWorkflowStem()->hasStatus === VSTOI::CURRENT || $this->getWorkflowStem()->hasStatus === VSTOI::DEPRECATED) ?
+        $this->getWorkflowStem()->hasVersion + 1 : $this->getWorkflowStem()->hasVersion,
       '#attributes' => [
         'disabled' => 'disabled',
       ],
@@ -156,11 +156,11 @@ class EditWorkflowStemForm extends FormBase {
     $form['workflowstem_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
-      '#default_value' => $this->getProcessStem()->comment,
+      '#default_value' => $this->getWorkflowStem()->comment,
     ];
 
-    if ($this->getProcessStem()->wasDerivedFrom !== NULL) {
-      $form['processstem_df_wrapper'] = [
+    if ($this->getWorkflowStem()->wasDerivedFrom !== NULL) {
+      $form['workflowstem_df_wrapper'] = [
         '#type' => 'container',
         '#attributes' => [
           'class' => ['d-flex', 'align-items-center', 'w-100'], // Flex container para alinhamento correto
@@ -168,11 +168,11 @@ class EditWorkflowStemForm extends FormBase {
         ],
       ];
 
-      if ($this->getProcessStem()->wasDerivedFrom !== NULL) {
-        $form['processstem_df_wrapper']['processstem_wasderivedfrom'] = [
+      if ($this->getWorkflowStem()->wasDerivedFrom !== NULL) {
+        $form['workflowstem_df_wrapper']['workflowstem_wasderivedfrom'] = [
           '#type' => 'textfield',
           '#title' => $this->t('Derived From'),
-          '#default_value' => $this->getProcessStem()->wasDerivedFrom,
+          '#default_value' => $this->getWorkflowStem()->wasDerivedFrom,
           '#attributes' => [
             'class' => ['flex-grow-1'],
             'style' => "width: 100%; min-width: 0;",
@@ -181,11 +181,11 @@ class EditWorkflowStemForm extends FormBase {
         ];
       }
 
-      $elementUri = Utils::namespaceUri($this->getProcessStem()->wasDerivedFrom);
+      $elementUri = Utils::namespaceUri($this->getWorkflowStem()->wasDerivedFrom);
       $elementUriEncoded = base64_encode($elementUri);
       $url = Url::fromRoute('rep.describe_element', ['elementuri' => $elementUriEncoded], ['absolute' => TRUE])->toString();
 
-      $form['processstem_df_wrapper']['processstem_wasderivedfrom_button'] = [
+      $form['workflowstem_df_wrapper']['workflowstem_wasderivedfrom_button'] = [
         '#type' => 'markup',
         '#markup' => '<a href="' . $url . '" target="_blank" class="btn btn-primary text-nowrap mt-2" style="min-width: 160px; height: 38px; display: flex; align-items: center; justify-content: center;">' . $this->t('Check Element') . '</a>',
       ];
@@ -194,19 +194,19 @@ class EditWorkflowStemForm extends FormBase {
       '#type' => 'select',
       '#title' => $this->t('Was Derived By'),
       '#options' => $derivations,
-      '#default_value' => $this->getProcessStem()->wasGeneratedBy,
+      '#default_value' => $this->getWorkflowStem()->wasGeneratedBy,
       '#attributes' => [
         'id' => 'workflowstem_was_generated_by'
       ],
-      '#disabled' => ($this->getProcessStem()->wasGeneratedBy === Constant::WGB_ORIGINAL ? true:false)
+      '#disabled' => ($this->getWorkflowStem()->wasGeneratedBy === Constant::WGB_ORIGINAL ? true:false)
     ];
 
     // **** IMAGE ****
     // Retrieve the current image value.
-    // Retrieve the current processstem and its image.
-    $processstem = $this->getProcessStem();
-    $processstem_uri = Utils::namespaceUri($this->getWorkflowStemUri());
-    $workflowstem_image = $processstem->hasImageUri ?? '';
+    // Retrieve the current workflowstem and its image.
+    $workflowstem = $this->getWorkflowStem();
+    $workflowstem_uri = Utils::namespaceUri($this->getWorkflowStemUri());
+    $workflowstem_image = $workflowstem->hasImageUri ?? '';
 
     // Determine if the existing web document is a URL or a file.
     $image_type = '';
@@ -218,16 +218,16 @@ class EditWorkflowStemForm extends FormBase {
     }
 
     $modUri = '';
-    if (!empty($processstem_uri)) {
-      // Example of extracting part of the URI. Adjust or remove if not needed.
-      $parts = explode(':/', $processstem_uri);
+    if (!empty($workflowstem_uri)) {
+      // Split the URI into parts using ':/'
+      $parts = explode(':/', $workflowstem_uri);
       if (count($parts) > 1) {
         $modUri = $parts[1];
       }
     }
 
     // Image Type selector (URL or Upload).
-    $form['processstem_information']['workflowstem_image_type'] = [
+    $form['workflowstem_information']['workflowstem_image_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Image Type'),
       '#options' => [
@@ -239,7 +239,7 @@ class EditWorkflowStemForm extends FormBase {
     ];
 
     // Textfield for URL mode (only visible when type = 'url').
-    $form['processstem_information']['workflowstem_image_url'] = [
+    $form['workflowstem_information']['workflowstem_image_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Image'),
       '#default_value' => ($image_type === 'url') ? $workflowstem_image : '',
@@ -254,7 +254,7 @@ class EditWorkflowStemForm extends FormBase {
     ];
 
     // Container for the file upload elements (only visible when type = 'upload').
-    $form['processstem_information']['workflowstem_image_upload_wrapper'] = [
+    $form['workflowstem_information']['workflowstem_image_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [
         'visible' => [
@@ -278,7 +278,7 @@ class EditWorkflowStemForm extends FormBase {
     }
 
     // 5. Managed file element for uploading a new document.
-    $form['processstem_information']['workflowstem_image_upload_wrapper']['workflowstem_image_upload'] = [
+    $form['workflowstem_information']['workflowstem_image_upload_wrapper']['workflowstem_image_upload'] = [
       '#type' => 'managed_file',
       '#title' => $this->t('Upload Document'),
       '#upload_location' => 'private://resources/' . $modUri . '/image',
@@ -292,7 +292,7 @@ class EditWorkflowStemForm extends FormBase {
 
     // **** WEBDOCUMENT ****
     // Retrieve the current web document value.
-    $workflowstem_webdocument = $processstem->hasWebDocument ?? '';
+    $workflowstem_webdocument = $workflowstem->hasWebDocument ?? '';
 
     // Determine if the existing web document is a URL or a file.
     $webdocument_type = '';
@@ -304,7 +304,7 @@ class EditWorkflowStemForm extends FormBase {
     }
 
     // Web Document Type selector (URL or Upload).
-    $form['processstem_information']['workflowstem_webdocument_type'] = [
+    $form['workflowstem_information']['workflowstem_webdocument_type'] = [
       '#type' => 'select',
       '#title' => $this->t('Web Document Type'),
       '#options' => [
@@ -316,7 +316,7 @@ class EditWorkflowStemForm extends FormBase {
     ];
 
     // Textfield for URL mode (only visible when type = 'url').
-    $form['processstem_information']['workflowstem_webdocument_url'] = [
+    $form['workflowstem_information']['workflowstem_webdocument_url'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Web Document'),
       '#default_value' => ($webdocument_type === 'url') ? $workflowstem_webdocument : '',
@@ -331,7 +331,7 @@ class EditWorkflowStemForm extends FormBase {
     ];
 
     // Container for the file upload elements (only visible when type = 'upload').
-    $form['processstem_information']['workflowstem_webdocument_upload_wrapper'] = [
+    $form['workflowstem_information']['workflowstem_webdocument_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [
         'visible' => [
@@ -355,7 +355,7 @@ class EditWorkflowStemForm extends FormBase {
     }
 
     // 5. Managed file element for uploading a new document.
-    $form['processstem_information']['workflowstem_webdocument_upload_wrapper']['workflowstem_webdocument_upload'] = [
+    $form['workflowstem_information']['workflowstem_webdocument_upload_wrapper']['workflowstem_webdocument_upload'] = [
       '#type' => 'managed_file',
       '#title' => $this->t('Upload Document'),
       '#upload_location' => 'private://resources/' . $modUri . '/webdoc',
@@ -366,14 +366,14 @@ class EditWorkflowStemForm extends FormBase {
       '#default_value' => $existing_fid ? [$existing_fid] : NULL,
     ];
 
-    if ($this->getProcessStem()->hasReviewNote !== NULL && $this->getProcessStem()->hasStatus !== null) {
-      $form['processstem_hasreviewnote'] = [
+    if ($this->getWorkflowStem()->hasReviewNote !== NULL && $this->getWorkflowStem()->hasStatus !== null) {
+      $form['workflowstem_hasreviewnote'] = [
         '#type' => 'textarea',
         '#title' => $this->t('Review Notes'),
-        '#default_value' => $this->getProcessStem()->hasReviewNote,
+        '#default_value' => $this->getWorkflowStem()->hasReviewNote,
         '#disabled' => TRUE
       ];
-      $form['processstem_haseditoremail'] = [
+      $form['workflowstem_haseditoremail'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Reviewer Email'),
         '#default_value' => \Drupal::currentUser()->getEmail(),
@@ -414,8 +414,8 @@ class EditWorkflowStemForm extends FormBase {
     $button_name = $triggering_element['#name'];
 
     if ($button_name != 'back') {
-      if(strlen($form_state->getValue('processstem_content')) < 1) {
-        $form_state->setErrorByName('processstem_content', $this->t('Please enter a valid Name'));
+      if(strlen($form_state->getValue('workflowstem_content')) < 1) {
+        $form_state->setErrorByName('workflowstem_content', $this->t('Please enter a valid Name'));
       }
     }
   }
@@ -440,25 +440,25 @@ class EditWorkflowStemForm extends FormBase {
       $useremail = \Drupal::currentUser()->getEmail();
 
       // CHECK if Status is CURRENT OR DEPRECATED FOR NEW CREATION
-      if ($this->getProcessStem()->hasStatus === VSTOI::CURRENT || $this->getProcessStem()->hasStatus === VSTOI::DEPRECATED) {
+      if ($this->getWorkflowStem()->hasStatus === VSTOI::CURRENT || $this->getWorkflowStem()->hasStatus === VSTOI::DEPRECATED) {
 
-        $processStemJson = '{"uri":"'.Utils::uriGen('workflowstem').'",'.
-          '"superUri":"'.Utils::uriFromAutocomplete($this->getProcessStem()->superUri).'",'.
-          '"label":"'.$form_state->getValue('processstem_content').'",'.
-          '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
+        $workflowStemJson = '{"uri":"'.Utils::uriGen('workflowstem').'",'.
+          '"superUri":"'.Utils::uriFromAutocomplete($this->getWorkflowStem()->superUri).'",'.
+          '"label":"'.$form_state->getValue('workflowstem_content').'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
           '"hasStatus":"'.VSTOI::DRAFT.'",'.
-          '"hasContent":"'.$form_state->getValue('processstem_content').'",'.
+          '"hasContent":"'.$form_state->getValue('workflowstem_content').'",'.
           '"hasLanguage":"'.$form_state->getValue('workflowstem_language').'",'.
           '"hasVersion":"'.$form_state->getValue('workflowstem_version').'",'.
           '"comment":"'.$form_state->getValue('workflowstem_description').'",'.
           '"hasWebDocument":"",'.
           '"hasImageUri":"",' .
-          '"wasDerivedFrom":"'.$this->getProcessStem()->uri.'",'. //Previous Version is the New Derivation Value
+          '"wasDerivedFrom":"'.$this->getWorkflowStem()->uri.'",'. //Previous Version is the New Derivation Value
           '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
           '"hasSIRManagerEmail":"'.$useremail.'"}';
 
         // UPDATE BY DELETING AND CREATING
-        $api->elementAdd('processtem', $processStemJson);
+        $api->elementAdd('workflowstem', $workflowStemJson);
         \Drupal::messenger()->addMessage(t("New Version Workflow Stem has been created successfully."));
 
       } else {
@@ -517,25 +517,25 @@ class EditWorkflowStemForm extends FormBase {
           }
         }
 
-        $processStemJson = '{"uri":"'.$this->getProcessStem()->uri.'",'.
-        '"superUri":"'.Utils::uriFromAutocomplete($this->getProcessStem()->superUri).'",'.
-        '"label":"'.$form_state->getValue('processstem_content').'",'.
-        '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
-        '"hasStatus":"'.$this->getProcessStem()->hasStatus.'",'.
-        '"hasContent":"'.$form_state->getValue('processstem_content').'",'.
+        $workflowStemJson = '{"uri":"'.$this->getWorkflowStem()->uri.'",'.
+        '"superUri":"'.Utils::uriFromAutocomplete($this->getWorkflowStem()->superUri).'",'.
+        '"label":"'.$form_state->getValue('workflowstem_content').'",'.
+        '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
+        '"hasStatus":"'.$this->getWorkflowStem()->hasStatus.'",'.
+        '"hasContent":"'.$form_state->getValue('workflowstem_content').'",'.
         '"hasLanguage":"'.$form_state->getValue('workflowstem_language').'",'.
         '"hasVersion":"'.$form_state->getValue('workflowstem_version').'",'.
         '"comment":"'.$form_state->getValue('workflowstem_description').'",'.
         '"hasWebDocument":"' . $workflowstem_webdocument . '",' .
         '"hasImageUri":"' . $workflowstem_image . '",' .
-        '"wasDerivedFrom":"'.$this->getProcessStem()->wasDerivedFrom.'",'.
+        '"wasDerivedFrom":"'.$this->getWorkflowStem()->wasDerivedFrom.'",'.
         '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
-        '"hasReviewNote":"'.($this->getProcessStem()->hasStatus !== null ? $this->getProcessStem()->hasReviewNote : '').'",'.
-        '"hasEditorEmail":"'.($this->getProcessStem()->hasStatus !== null ? $this->getProcessStem()->hasEditorEmail : '').'",'.
+        '"hasReviewNote":"'.($this->getWorkflowStem()->hasStatus !== null ? $this->getWorkflowStem()->hasReviewNote : '').'",'.
+        '"hasEditorEmail":"'.($this->getWorkflowStem()->hasStatus !== null ? $this->getWorkflowStem()->hasEditorEmail : '').'",'.
         '"hasSIRManagerEmail":"'.$useremail.'"}';
 
         $api->elementDel('workflowstem', $this->getWorkflowStemUri());
-        $api->elementAdd('workflowstem', $processStemJson);
+        $api->elementAdd('workflowstem', $workflowStemJson);
         \Drupal::messenger()->addMessage(t("Workflow Stem has been updated successfully."));
       }
 
@@ -549,7 +549,7 @@ class EditWorkflowStemForm extends FormBase {
     }
   }
 
-  public function retrieveProcessStem($componentStemUri) {
+  public function retrieveWorkflowStem($componentStemUri) {
     $api = \Drupal::service('rep.api_connector');
     $rawresponse = $api->getUri($componentStemUri);
     $obj = json_decode($rawresponse);
@@ -570,6 +570,9 @@ class EditWorkflowStemForm extends FormBase {
   }
 
 }
+
+
+
 
 
 

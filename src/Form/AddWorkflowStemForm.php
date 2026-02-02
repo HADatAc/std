@@ -17,11 +17,11 @@ class AddWorkflowStemForm extends FormBase {
   protected $workflowstemUri;
 
   public function setWorkflowStemUri() {
-    $this->processstemUri = Utils::uriGen('workflowstem');
+    $this->workflowstemUri = Utils::uriGen('workflowstem');
   }
 
   public function getWorkflowStemUri() {
-    return $this->processstemUri;
+    return $this->workflowstemUri;
   }
 
   /**
@@ -31,32 +31,32 @@ class AddWorkflowStemForm extends FormBase {
     return 'add_workflowstem_form';
   }
 
-  protected $sourceProcessStemUri;
+  protected $sourceWorkflowStemUri;
 
-  protected $sourceProcessStem;
+  protected $sourceWorkflowStem;
 
-  public function getSourceProcessStemUri() {
-    return $this->sourceProcessStemUri;
+  public function getSourceWorkflowStemUri() {
+    return $this->sourceWorkflowStemUri;
   }
 
-  public function setSourceProcessStemUri($uri) {
-    return $this->sourceProcessStemUri = $uri;
+  public function setSourceWorkflowStemUri($uri) {
+    return $this->sourceWorkflowStemUri = $uri;
   }
 
-  public function getSourceProcessStem() {
-    return $this->sourceProcessStem;
+  public function getSourceWorkflowStem() {
+    return $this->sourceWorkflowStem;
   }
 
-  public function setSourceProcessStem($obj) {
-    return $this->sourceProcessStem = $obj;
+  public function setSourceWorkflowStem($obj) {
+    return $this->sourceWorkflowStem = $obj;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $sourceprocessstemuri = NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $sourceworkflowstemuri = NULL) {
 
-    // Check if the processstem URI already exists in the form state.
+    // Check if the workflowstem URI already exists in the form state.
     // If not, generate a new URI and store it in the form state.
     if (!$form_state->has('workflowstem_uri')) {
       $this->setWorkflowStemUri();
@@ -64,21 +64,21 @@ class AddWorkflowStemForm extends FormBase {
     }
     else {
       // Retrieve the persisted URI from form state.
-      $this->processstemUri = $form_state->get('workflowstem_uri');
+      $this->workflowstemUri = $form_state->get('workflowstem_uri');
     }
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
-    $form['#attached']['library'][] = 'sir/sir_processstem';
+    $form['#attached']['library'][] = 'sir/sir_workflowstem';
 
     // ESTABLISH API SERVICE
     $api = \Drupal::service('rep.api_connector');
 
-    // HANDLE SOURCE PROCESS STEM,  IF ANY
-    $sourceuri = $sourceprocessstemuri;
-    $this->setSourceProcessStemUri($sourceuri);
+    // HANDLE SOURCE WORKFLOW STEM,  IF ANY
+    $sourceuri = $sourceworkflowstemuri;
+    $this->setSourceWorkflowStemUri($sourceuri);
 
     $tables = new Tables;
     $languages = $tables->getLanguages();
@@ -93,11 +93,11 @@ class AddWorkflowStemForm extends FormBase {
       $derivations = ['' => $this->t('Select derivation please')] + $derivations;
 
     $sourceContent = '';
-    if ($this->getSourceProcessStem() != NULL) {
-      $sourceContent = Utils::fieldToAutocomplete($this->getSourceProcessStem()->uri,$this->getSourceProcessStem()->hasContent);
+    if ($this->getSourceWorkflowStem() != NULL) {
+      $sourceContent = Utils::fieldToAutocomplete($this->getSourceWorkflowStem()->uri,$this->getSourceWorkflowStem()->hasContent);
     }
 
-    $form['processstem_type'] = [
+    $form['workflowstem_type'] = [
       'top' => [
         '#type' => 'markup',
         '#markup' => '<div class="pt-3 col border border-white">',
@@ -105,10 +105,10 @@ class AddWorkflowStemForm extends FormBase {
       'main' => [
         '#type' => 'textfield',
         '#title' => $sourceuri === 'EMPTY' ? $this->t('Parent Type') : $this->t('Derive From'),
-        '#name' => 'processstem_type',
+        '#name' => 'workflowstem_type',
         '#default_value' => '',
-        '#id' => 'processstem_type',
-        '#parents' => ['processstem_type'],
+        '#id' => 'workflowstem_type',
+        '#parents' => ['workflowstem_type'],
         '#attributes' => [
           'class' => ['open-tree-modal'],
           'data-dialog-type' => 'modal',
@@ -116,8 +116,8 @@ class AddWorkflowStemForm extends FormBase {
           'data-url' => Url::fromRoute('rep.tree_form', [
             'mode' => 'modal',
             'elementtype' => 'workflowstem',
-          ], ['query' => ['field_id' => 'processstem_type']])->toString(),
-          'data-field-id' => 'processstem_type',
+          ], ['query' => ['field_id' => 'workflowstem_type']])->toString(),
+          'data-field-id' => 'workflowstem_type',
           'data-elementtype' => 'workflowstem',
           'autocomplete' => 'off',
         ],
@@ -127,7 +127,7 @@ class AddWorkflowStemForm extends FormBase {
         '#markup' => '</div>',
       ],
     ];
-    $form['processstem_content'] = [
+    $form['workflowstem_content'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Name'),
     ];
@@ -166,10 +166,10 @@ class AddWorkflowStemForm extends FormBase {
       ]
     ];
 
-    // Add a hidden field to persist the processstem URI between form rebuilds.
+    // Add a hidden field to persist the workflowstem URI between form rebuilds.
     $form['workflowstem_uri'] = [
       '#type' => 'hidden',
-      '#value' => $this->processstemUri,
+      '#value' => $this->workflowstemUri,
     ];
 
     // Add a select box to choose between URL and Upload.
@@ -199,8 +199,8 @@ class AddWorkflowStemForm extends FormBase {
       ],
     ];
 
-    // Because File Upload Path (use the persisted processstem URI for file uploads)
-    $modUri = (explode(":/", utils::namespaceUri($this->processstemUri)))[1];
+    // Because File Upload Path (use the persisted workflowstem URI for file uploads)
+    $modUri = (explode(":/", utils::namespaceUri($this->workflowstemUri)))[1];
     $form['workflowstem_image_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [
@@ -246,7 +246,7 @@ class AddWorkflowStemForm extends FormBase {
       ],
     ];
 
-    // Because File Upload Path (use the persisted processstem URI for file uploads)
+    // Because File Upload Path (use the persisted workflowstem URI for file uploads)
     $form['workflowstem_webdocument_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [
@@ -296,8 +296,8 @@ class AddWorkflowStemForm extends FormBase {
     $button_name = $triggering_element['#name'];
 
     if ($button_name != 'back') {
-      if(strlen($form_state->getValue('processstem_content')) < 1) {
-        $form_state->setErrorByName('processstem_content', $this->t('Please enter a valid Name'));
+      if(strlen($form_state->getValue('workflowstem_content')) < 1) {
+        $form_state->setErrorByName('workflowstem_content', $this->t('Please enter a valid Name'));
       }
       if(strlen($form_state->getValue('workflowstem_language')) < 1) {
         $form_state->setErrorByName('workflowstem_language', $this->t('Please enter a valid language'));
@@ -315,7 +315,7 @@ class AddWorkflowStemForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
-    $sourceuri = $this->getSourceProcessStemUri();
+    $sourceuri = $this->getSourceWorkflowStemUri();
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -326,8 +326,8 @@ class AddWorkflowStemForm extends FormBase {
 
     try {
       $useremail = \Drupal::currentUser()->getEmail();
-      // $newProcessStemUri = Utils::uriGen('workflowstem');
-      $newProcessStemUri = $form_state->getValue('workflowstem_uri');
+      // $newWorkflowStemUri = Utils::uriGen('workflowstem');
+      $newWorkflowStemUri = $form_state->getValue('workflowstem_uri');
 
       // Determine the chosen document type.
       $doc_type = $form_state->getValue('workflowstem_webdocument_type');
@@ -383,15 +383,15 @@ class AddWorkflowStemForm extends FormBase {
         }
       }
 
-      // CREATE A NEW PROCESS
-      // #1 CENARIO - ADD PROCESS NO DERIVED FROM
+      // CREATE A NEW WORKFLOW
+      // #1 CENARIO - ADD WORKFLOW NO DERIVED FROM
       if ($sourceuri === 'EMPTY') {
-        $processStemJson = '{"uri":"'.$newProcessStemUri.'",'.
-          '"superUri":"'.UTILS::uriFromAutocomplete($form_state->getValue('processstem_type')).'",'.
-          '"label":"'.$form_state->getValue('processstem_content').'",'.
-          '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
+        $workflowStemJson = '{"uri":"'.$newWorkflowStemUri.'",'.
+          '"superUri":"'.UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')).'",'.
+          '"label":"'.$form_state->getValue('workflowstem_content').'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
           '"hasStatus":"'.VSTOI::DRAFT.'",'.
-          '"hasContent":"'.$form_state->getValue('processstem_content').'",'.
+          '"hasContent":"'.$form_state->getValue('workflowstem_content').'",'.
           '"hasLanguage":"'.$form_state->getValue('workflowstem_language').'",'.
           '"hasVersion":"'.$form_state->getValue('workflowstem_version').'",'.
           '"comment":"'.$form_state->getValue('workflowstem_description').'",'.
@@ -400,13 +400,13 @@ class AddWorkflowStemForm extends FormBase {
           '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
           '"hasSIRManagerEmail":"'.$useremail.'"}';
 
-        $api->elementAdd('workflowstem', $processStemJson);
+        $api->elementAdd('workflowstem', $workflowStemJson);
 
       } else {
-        // #2 CENARIO - ADD PROCESS THAT WAS DERIVED FROM
+        // #2 CENARIO - ADD WORKFLOW THAT WAS DERIVED FROM
         // DERIVED FROM VALUES
         $parentResult = '';
-        $rawresponse = $api->getUri(UTILS::uriFromAutocomplete($form_state->getValue('processstem_type')));
+        $rawresponse = $api->getUri(UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')));
         $obj = json_decode($rawresponse);
         if ($obj->isSuccessful) {
           $parentResult = $obj->body;
@@ -420,22 +420,22 @@ class AddWorkflowStemForm extends FormBase {
         */
         if ($parentResult !== '') {
 
-          $processStemJson = '{"uri":"'.$newProcessStemUri.'",'.
-            '"superUri":"'.($form_state->getValue('workflowstem_was_generated_by') === Constant::WGB_SPECIALIZATION ? UTILS::uriFromAutocomplete($form_state->getValue('processstem_type')) : $parentResult->superUri).'",'.
-            '"label":"'.$form_state->getValue('processstem_content').'",'.
-            '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
+          $workflowStemJson = '{"uri":"'.$newWorkflowStemUri.'",'.
+            '"superUri":"'.($form_state->getValue('workflowstem_was_generated_by') === Constant::WGB_SPECIALIZATION ? UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')) : $parentResult->superUri).'",'.
+            '"label":"'.$form_state->getValue('workflowstem_content').'",'.
+            '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
             '"hasStatus":"'.VSTOI::DRAFT.'",'.
-            '"hasContent":"'.$form_state->getValue('processstem_content').'",'.
+            '"hasContent":"'.$form_state->getValue('workflowstem_content').'",'.
             '"hasLanguage":"'.$form_state->getValue('workflowstem_language').'",'.
             '"hasVersion":"'.$form_state->getValue('workflowstem_version').'",'.
             '"comment":"'.$form_state->getValue('workflowstem_description').'",'.
             '"hasWebDocument":"' . $workflowstem_webdocument . '",' .
             '"hasImageUri":"' . $workflowstem_image . '",' .
-            '"wasDerivedFrom":"'.UTILS::uriFromAutocomplete($form_state->getValue('processstem_type')).'",'.
+            '"wasDerivedFrom":"'.UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')).'",'.
             '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
             '"hasSIRManagerEmail":"'.$useremail.'"}';
 
-          $api->elementAdd('workflowstem', $processStemJson);
+          $api->elementAdd('workflowstem', $workflowStemJson);
 
         } else {
           \Drupal::messenger()->addError(t("An error occurred while getting Derived From element"));
@@ -444,7 +444,7 @@ class AddWorkflowStemForm extends FormBase {
         }
       }
 
-      \Drupal::messenger()->addMessage(t("Added a new Workflow Stem with URI: ".$newProcessStemUri));
+      \Drupal::messenger()->addMessage(t("Added a new Workflow Stem with URI: ".$newWorkflowStemUri));
       self::backUrl();
       return;
 
@@ -466,6 +466,7 @@ class AddWorkflowStemForm extends FormBase {
   }
 
 }
+
 
 
 

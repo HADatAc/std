@@ -20,11 +20,11 @@ class AddWorkflowForm extends FormBase {
   protected $workflowUri;
 
   public function setWorkflowUri() {
-    $this->processUri = Utils::uriGen('workflow');
+    $this->workflowUri = Utils::uriGen('workflow');
   }
 
   public function getWorkflowUri() {
-    return $this->processUri;
+    return $this->workflowUri;
   }
 
   /**
@@ -47,7 +47,7 @@ class AddWorkflowForm extends FormBase {
     }
     else {
       // Retrieve the persisted URI from form state.
-      $this->processUri = $form_state->get('workflow_uri');
+      $this->workflowUri = $form_state->get('workflow_uri');
     }
 
     // MODAL
@@ -179,7 +179,7 @@ class AddWorkflowForm extends FormBase {
     // Add a hidden field to persist the process URI between form rebuilds.
     $form['workflow_uri'] = [
       '#type' => 'hidden',
-      '#value' => $this->processUri,
+      '#value' => $this->workflowUri,
     ];
 
     // Add a select box to choose between URL and Upload.
@@ -210,7 +210,7 @@ class AddWorkflowForm extends FormBase {
     ];
 
     // Because File Upload Path (use the persisted process URI for file uploads)
-    $modUri = (explode(":/", utils::namespaceUri($this->processUri)))[1];
+    $modUri = (explode(":/", utils::namespaceUri($this->workflowUri)))[1];
     $form['workflow_image_upload_wrapper'] = [
       '#type' => 'container',
       '#states' => [

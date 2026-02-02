@@ -24,27 +24,27 @@ class EditWorkflowForm extends FormBase {
   protected $sourceProcess;
 
   public function getWorkflowUri() {
-    return $this->processUri;
+    return $this->workflowUri;
   }
 
   public function setWorkflowUri($uri) {
-    return $this->processUri = $uri;
+    return $this->workflowUri = $uri;
   }
 
-  public function getProcess() {
-    return $this->process;
+  public function getWorkflow() {
+    return $this->workflow;
   }
 
-  public function setProcess($obj) {
-    return $this->process = $obj;
+  public function setWorkflow($obj) {
+    return $this->workflow = $obj;
   }
 
-  public function getSourceProcess() {
-    return $this->sourceProcess;
+  public function getSourceWorkflow() {
+    return $this->sourceWorkflow;
   }
 
-  public function setSourceProcess($obj) {
-    return $this->sourceProcess = $obj;
+  public function setSourceWorkflow($obj) {
+    return $this->sourceWorkflow = $obj;
   }
 
   /**

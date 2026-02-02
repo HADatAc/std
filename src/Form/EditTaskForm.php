@@ -45,11 +45,11 @@ class EditTaskForm extends FormBase {
     return $this->task = $task;
   }
 
-  public function getProcessUri() {
-    return $this->processUri;
+  public function getWorkflowUri() {
+    return $this->workflowUri;
   }
-  public function setProcessUri($processUri) {
-    return $this->processUri = $processUri;
+  public function setWorkflowUri($workflowUri) {
+    return $this->workflowUri = $workflowUri;
   }
 
   /**

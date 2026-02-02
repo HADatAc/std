@@ -29,7 +29,7 @@ class RouteSubscriber extends RouteSubscriberBase {
 
     $config = $this->configFactory->get('std.settings');
     $std_home = $config->get('std_home');
-    $preferred_processstem = \Drupal::config('rep.settings')->get('preferred_process');
+    $preferred_workflow = \Drupal::config('rep.settings')->get('preferred_process');
 
     if($std_home == '1'){
       if ($route = $collection->get('view.frontpage.page_1')) {
@@ -38,18 +38,19 @@ class RouteSubscriber extends RouteSubscriberBase {
     }
 
     if ($route = $collection->get('std.edit_workflowstem')) {
-      $route->setDefault('_title', 'Edit ' . $preferred_processstem . ' Stem');
+      $route->setDefault('_title', 'Edit ' . $preferred_workflow . ' Stem');
     }
     if ($route = $collection->get('std.add_workflowstem')) {
-      $route->setDefault('_title', 'Add ' . $preferred_processstem . ' Stem');
+      $route->setDefault('_title', 'Add ' . $preferred_workflow . ' Stem');
     }
     if ($route = $collection->get('std.edit_workflow')) {
-      $route->setDefault('_title', 'Edit ' . $preferred_processstem);
+      $route->setDefault('_title', 'Edit ' . $preferred_workflow);
     }
     if ($route = $collection->get('std.add_workflow')) {
-      $route->setDefault('_title', 'Add ' . $preferred_processstem);
+      $route->setDefault('_title', 'Add ' . $preferred_workflow);
     }
   }
 
 }
+
 

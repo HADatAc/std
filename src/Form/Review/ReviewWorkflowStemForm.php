@@ -14,34 +14,34 @@ use Drupal\rep\Vocabulary\VSTOI;
 
 class ReviewWorkflowStemForm extends FormBase {
 
-  protected $processStemUri;
+  protected $workflowstemUri;
 
-  protected $processStem;
+  protected $workflowstem;
 
-  protected $sourceProcessStem;
+  protected $sourceWorkflowStem;
 
-  public function getProcessStemUri() {
-    return $this->processStemUri;
+  public function getWorkflowStemUri() {
+    return $this->workflowstemUri;
   }
 
-  public function setProcessStemUri($uri) {
-    return $this->processStemUri = $uri;
+  public function setWorkflowStemUri($uri) {
+    return $this->workflowstemUri = $uri;
   }
 
-  public function getProcessStem() {
-    return $this->processStem;
+  public function getWorkflowStem() {
+    return $this->workflowstem;
   }
 
-  public function setProcessStem($obj) {
-    return $this->processStem = $obj;
+  public function setWorkflowStem($obj) {
+    return $this->workflowstem = $obj;
   }
 
-  public function getSourceProcessStem() {
-    return $this->sourceProcessStem;
+  public function getSourceWorkflowStem() {
+    return $this->sourceWorkflowStem;
   }
 
-  public function setSourceProcessStem($obj) {
-    return $this->sourceProcessStem = $obj;
+  public function setSourceWorkflowStem($obj) {
+    return $this->sourceWorkflowStem = $obj;
   }
 
   /**
@@ -54,15 +54,15 @@ class ReviewWorkflowStemForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $processstemuri = NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $workflowstemuri = NULL) {
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
-    $uri=$processstemuri;
+    $uri=$workflowstemuri;
     $uri_decode=base64_decode($uri);
-    $this->setProcessStemUri($uri_decode);
+    $this->setWorkflowStemUri($uri_decode);
 
     $tables = new Tables;
     $languages = $tables->getLanguages();
@@ -70,24 +70,24 @@ class ReviewWorkflowStemForm extends FormBase {
 
     $sourceContent = '';
     $wasGeneratedBy = Constant::DEFAULT_WAS_GENERATED_BY;
-    $this->setProcessStem($this->retrieveProcessStem($this->getProcessStemUri()));
-    if ($this->getProcessStem() == NULL) {
+    $this->setWorkflowStem($this->retrieveWorkflowStem($this->getWorkflowStemUri()));
+    if ($this->getWorkflowStem() == NULL) {
       \Drupal::messenger()->addError(t("Failed to retrieve Workflow Stem."));
       self::backUrl();
       return;
     } else {
-      $wasGeneratedBy = $this->getProcessStem()->wasGeneratedBy;
-      if ($this->getProcessStem()->wasDerivedFrom != NULL) {
-        $this->setSourceProcessStem($this->retrieveProcessStem($this->getProcessStem()->wasDerivedFrom));
-        if ($this->getSourceProcessStem() != NULL && $this->getSourceProcessStem()->hasContent != NULL) {
-          $sourceContent = Utils::fieldToAutocomplete($this->getSourceProcessStem()->uri,$this->getSourceProcessStem()->hasContent);
+      $wasGeneratedBy = $this->getWorkflowStem()->wasGeneratedBy;
+      if ($this->getWorkflowStem()->wasDerivedFrom != NULL) {
+        $this->setSourceWorkflowStem($this->retrieveWorkflowStem($this->getWorkflowStem()->wasDerivedFrom));
+        if ($this->getSourceWorkflowStem() != NULL && $this->getSourceWorkflowStem()->hasContent != NULL) {
+          $sourceContent = Utils::fieldToAutocomplete($this->getSourceWorkflowStem()->uri,$this->getSourceWorkflowStem()->hasContent);
         }
       }
     }
 
     //dpm($this->getProcess());
-    if ($this->getProcessStem()->superUri) {
-      $form['processstem_type'] = [
+    if ($this->getWorkflowStem()->superUri) {
+      $form['workflowstem_type'] = [
         'top' => [
           '#type' => 'markup',
           '#markup' => '<div class="pt-3 col border border-white">',
@@ -95,11 +95,11 @@ class ReviewWorkflowStemForm extends FormBase {
         'main' => [
           '#type' => 'textfield',
           '#title' => $this->t('Type'),
-          '#name' => 'processstem_type',
-          '#default_value' => $this->getProcessStem()->superUri ? Utils::fieldToAutocomplete($this->getProcessStem()->superUri, $this->getProcessStem()->superClassLabel) : '',
+          '#name' => 'workflowstem_type',
+          '#default_value' => $this->getWorkflowStem()->superUri ? Utils::fieldToAutocomplete($this->getWorkflowStem()->superUri, $this->getWorkflowStem()->superClassLabel) : '',
           '#disabled' => TRUE,
-          '#id' => 'processstem_type',
-          '#parents' => ['processstem_type'],
+          '#id' => 'workflowstem_type',
+          '#parents' => ['workflowstem_type'],
           '#attributes' => [
             'class' => ['open-tree-modal'],
             'data-dialog-type' => 'modal',
@@ -107,10 +107,10 @@ class ReviewWorkflowStemForm extends FormBase {
             'data-url' => Url::fromRoute('rep.tree_form', [
               'mode' => 'modal',
               'elementtype' => 'workflowstem',
-            ], ['query' => ['field_id' => 'processstem_type']])->toString(),
-            'data-field-id' => 'processstem_type',
+            ], ['query' => ['field_id' => 'workflowstem_type']])->toString(),
+            'data-field-id' => 'workflowstem_type',
             'data-elementtype' => 'workflowstem',
-            'data-search-value' => $this->getProcessStem()->superUri ?? '',
+            'data-search-value' => $this->getWorkflowStem()->superUri ?? '',
           ],
         ],
         'bottom' => [
@@ -119,53 +119,53 @@ class ReviewWorkflowStemForm extends FormBase {
         ],
       ];
     }
-    $form['processstem_content'] = [
+    $form['workflowstem_content'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Name'),
-      '#default_value' => $this->getProcessStem()->hasContent,
+      '#default_value' => $this->getWorkflowStem()->hasContent,
       '#disabled' => TRUE,
     ];
-    $form['processstem_language'] = [
+    $form['workflowstem_language'] = [
       '#type' => 'select',
       '#title' => $this->t('Language'),
       '#options' => $languages,
-      '#default_value' => $this->getProcessStem()->hasLanguage,
+      '#default_value' => $this->getWorkflowStem()->hasLanguage,
       '#disabled' => TRUE,
     ];
-    $form['processstem_version'] = [
+    $form['workflowstem_version'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Version'),
-      '#default_value' => $this->getProcessStem()->hasVersion,
+      '#default_value' => $this->getWorkflowStem()->hasVersion,
       '#default_value' =>
-        ($this->getProcessStem()->hasStatus === VSTOI::CURRENT || $this->getProcessStem()->hasStatus === VSTOI::DEPRECATED) ?
-        $this->getProcessStem()->hasVersion + 1 : $this->getProcessStem()->hasVersion,
+        ($this->getWorkflowStem()->hasStatus === VSTOI::CURRENT || $this->getWorkflowStem()->hasStatus === VSTOI::DEPRECATED) ?
+        $this->getWorkflowStem()->hasVersion + 1 : $this->getWorkflowStem()->hasVersion,
       '#attributes' => [
         'disabled' => 'disabled',
       ],
     ];
-    $form['processstem_description'] = [
+    $form['workflowstem_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
-      '#default_value' => $this->getProcessStem()->comment,
+      '#default_value' => $this->getWorkflowStem()->comment,
       '#disabled' => TRUE,
     ];
-    $form['processstem_webdocument'] = [
+    $form['workflowstem_webdocument'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Web Document'),
-      '#default_value' => $this->getProcessStem()->hasWebDocument,
+      '#default_value' => $this->getWorkflowStem()->hasWebDocument,
       '#attributes' => [
         'placeholder' => 'http://',
       ],
       '#disabled' => TRUE,
     ];
-    if ($this->getProcessStem()->wasDerivedFrom !== NULL) {
+    if ($this->getWorkflowStem()->wasDerivedFrom !== NULL) {
       $api = \Drupal::service('rep.api_connector');
-      $rawresponse = $api->getUri($this->getProcessStem()->wasDerivedFrom);
+      $rawresponse = $api->getUri($this->getWorkflowStem()->wasDerivedFrom);
       $obj = json_decode($rawresponse);
       if ($obj->isSuccessful) {
         $result = $obj->body;
 
-        $form['processstem__df_wrapper'] = [
+        $form['workflowstem__df_wrapper'] = [
           '#type' => 'container',
           '#attributes' => [
             'class' => ['d-flex', 'align-items-center', 'w-100'], // Flex container para alinhamento correto
@@ -173,10 +173,10 @@ class ReviewWorkflowStemForm extends FormBase {
           ],
         ];
 
-        $form['processstem__df_wrapper']['processstem__wasderivedfrom'] = [
+        $form['workflowstem__df_wrapper']['workflowstem__wasderivedfrom'] = [
           '#type' => 'textfield',
           '#title' => $this->t('Derived From'),
-          '#default_value' => Utils::fieldToAutocomplete($this->getProcessStem()->wasDerivedFrom, $result->label),
+          '#default_value' => Utils::fieldToAutocomplete($this->getWorkflowStem()->wasDerivedFrom, $result->label),
           '#attributes' => [
             'class' => ['flex-grow-1'],
             'style' => "width: 100%; min-width: 1045px;",
@@ -184,18 +184,18 @@ class ReviewWorkflowStemForm extends FormBase {
           ],
         ];
 
-        $elementUri = Utils::namespaceUri($this->getProcessStem()->wasDerivedFrom);
+        $elementUri = Utils::namespaceUri($this->getWorkflowStem()->wasDerivedFrom);
         $elementUriEncoded = base64_encode($elementUri);
         $url = Url::fromRoute('rep.describe_element', ['elementuri' => $elementUriEncoded], ['absolute' => TRUE])->toString();
 
-        $form['processstem__df_wrapper']['processstem__wasderivedfrom_button'] = [
+        $form['workflowstem__df_wrapper']['workflowstem__wasderivedfrom_button'] = [
           '#type' => 'markup',
           '#markup' => '<a href="' . $url . '" target="_blank" class="btn btn-primary text-nowrap mt-2" style="min-width: 160px; height: 38px; display: flex; align-items: center; justify-content: center;">' . $this->t('Check Element') . '</a>',
         ];
       }
     }
 
-    $form['processstem_was_generated_by'] = [
+    $form['workflowstem_was_generated_by'] = [
       '#type' => 'select',
       '#title' => $this->t('Was Derived By'),
       '#options' => $derivations,
@@ -203,20 +203,20 @@ class ReviewWorkflowStemForm extends FormBase {
       '#disabled' => TRUE,
     ];
 
-    $form['processstem_owner'] = [
+    $form['workflowstem_owner'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Owner'),
-      '#default_value' => $this->getProcessStem()->hasSIRManagerEmail,
+      '#default_value' => $this->getWorkflowStem()->hasSIRManagerEmail,
       '#attributes' => [
         'disabled' => 'disabled',
       ],
     ];
-    $form['processstem_hasreviewnote'] = [
+    $form['workflowstem_hasreviewnote'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Review Notes'),
-      '#default_value' => $this->getProcessStem()->hasReviewNote,
+      '#default_value' => $this->getWorkflowStem()->hasReviewNote,
     ];
-    $form['processstem_haseditoremail'] = [
+    $form['workflowstem_haseditoremail'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Reviewer Email'),
       '#default_value' => \Drupal::currentUser()->getEmail(),
@@ -290,7 +290,7 @@ class ReviewWorkflowStemForm extends FormBase {
       return;
     }
 
-    if ($button_name === 'review_reject' && strlen($form_state->getValue('processstem_hasreviewnote')) === 0) {
+    if ($button_name === 'review_reject' && strlen($form_state->getValue('workflowstem_hasreviewnote')) === 0) {
       \Drupal::messenger()->addWarning(t("To reject you must type a Review Note!"));
       return false;
     }
@@ -300,30 +300,30 @@ class ReviewWorkflowStemForm extends FormBase {
     try{
 
       $useremail = \Drupal::currentUser()->getEmail();
-      $result = $this->getProcessStem();
+      $result = $this->getWorkflowStem();
 
       //APROVE
       if ($button_name !== 'review_reject') {
 
-        $processStemJson = '{"uri":"'.$this->getProcessStem()->uri.'",'.
-          '"superUri":"'.$this->getProcessStem()->superUri.'",'.
-          '"label":"'.$this->getProcessStem()->label.'",'.
-          '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
+        $workflowStemJson = '{"uri":"'.$this->getWorkflowStem()->uri.'",'.
+          '"superUri":"'.$this->getWorkflowStem()->superUri.'",'.
+          '"label":"'.$this->getWorkflowStem()->label.'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
           '"hasStatus":"'.VSTOI::CURRENT.'",'.
-          '"hasContent":"'.$this->getProcessStem()->hasContent.'",'.
-          '"hasLanguage":"'.$this->getProcessStem()->hasLanguage.'",'.
-          '"hasVersion":"'.$this->getProcessStem()->hasVersion.'",'.
-          '"comment":"'.$this->getProcessStem()->comment.'",'.
-          '"wasDerivedFrom":"'.$this->getProcessStem()->wasDerivedFrom.'",'.
-          '"wasGeneratedBy":"'.$this->getProcessStem()->wasGeneratedBy.'",'.
-          '"hasReviewNote":"'.$form_state->getValue('processstem_hasreviewnote').'",'.
-          '"hasWebDocument":"'.$form_state->getValue('processstem_webdocument').'",'.
+          '"hasContent":"'.$this->getWorkflowStem()->hasContent.'",'.
+          '"hasLanguage":"'.$this->getWorkflowStem()->hasLanguage.'",'.
+          '"hasVersion":"'.$this->getWorkflowStem()->hasVersion.'",'.
+          '"comment":"'.$this->getWorkflowStem()->comment.'",'.
+          '"wasDerivedFrom":"'.$this->getWorkflowStem()->wasDerivedFrom.'",'.
+          '"wasGeneratedBy":"'.$this->getWorkflowStem()->wasGeneratedBy.'",'.
+          '"hasReviewNote":"'.$form_state->getValue('workflowstem_hasreviewnote').'",'.
+          '"hasWebDocument":"'.$form_state->getValue('workflowstem_webdocument').'",'.
           '"hasEditorEmail":"'.$useremail.'",'.
-          '"hasSIRManagerEmail":"'.$this->getProcessStem()->hasSIRManagerEmail.'"}';
+          '"hasSIRManagerEmail":"'.$this->getWorkflowStem()->hasSIRManagerEmail.'"}';
 
         // UPDATE BY DELETING AND CREATING
-        $api->processStemDel($this->getProcessStemUri());
-        $api->processStemAdd($processStemJson);
+        $api->workflowstemDel($this->getWorkflowStemUri());
+        $api->workflowstemAdd($workflowStemJson);
 
         // IF ITS A DERIVATION APROVAL PARENT MUST BECOME DEPRECATED, but in this case version must be also greater than 1, because
         // Process Stems can start to be like a derivation element by itself
@@ -332,10 +332,10 @@ class ReviewWorkflowStemForm extends FormBase {
           $obj = json_decode($rawresponse);
           $resultParent = $obj->body;
 
-          $parentProcessStemJson = '{"uri":"'.$resultParent->uri.'",'.
+          $parentworkflowStemJson = '{"uri":"'.$resultParent->uri.'",'.
           (!empty($resultParent->superUri) ? '"superUri":"'.$resultParent->superUri.'",' : '').
           '"label":"'.$resultParent->label.'",'.
-          '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
           '"hasStatus":"'.VSTOI::DEPRECATED.'",'.
           '"hasContent":"'.$resultParent->hasContent.'",'.
           '"hasLanguage":"'.$resultParent->hasLanguage.'",'.
@@ -349,33 +349,33 @@ class ReviewWorkflowStemForm extends FormBase {
           '"hasSIRManagerEmail":"'.$resultParent->hasSIRManagerEmail.'"}';
 
           // UPDATE BY DELETING AND CREATING
-          $api->processStemDel($resultParent->uri);
-          $api->processStemAdd($parentProcessStemJson);
+          $api->workflowstemDel($resultParent->uri);
+          $api->workflowstemAdd($parentworkflowStemJson);
         }
 
         \Drupal::messenger()->addMessage(t("Workflow Stem has been updated successfully."));
       // REJECT
       } else {
 
-        $processStemJson = '{"uri":"'.$this->getProcessStem()->uri.'",'.
-          '"superUri":"'.$this->getProcessStem()->superUri.'",'.
-          '"label":"'.$this->getProcessStem()->label.'",'.
-          '"hascoTypeUri":"'.VSTOI::PROCESS_STEM.'",'.
+        $workflowStemJson = '{"uri":"'.$this->getWorkflowStem()->uri.'",'.
+          '"superUri":"'.$this->getWorkflowStem()->superUri.'",'.
+          '"label":"'.$this->getWorkflowStem()->label.'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
           '"hasStatus":"'.VSTOI::DRAFT.'",'.
-          '"hasContent":"'.$this->getProcessStem()->hasContent.'",'.
-          '"hasLanguage":"'.$this->getProcessStem()->hasLanguage.'",'.
-          '"hasVersion":"'.$this->getProcessStem()->hasVersion.'",'.
-          '"comment":"'.$this->getProcessStem()->comment.'",'.
-          '"wasDerivedFrom":"'.$this->getProcessStem()->wasDerivedFrom.'",'.
-          '"wasGeneratedBy":"'.$this->getProcessStem()->wasGeneratedBy.'",'.
-          '"hasReviewNote":"'.$form_state->getValue('processstem_hasreviewnote').'",'.
-          '"hasWebDocument":"'.$form_state->getValue('processstem_webdocument').'",'.
+          '"hasContent":"'.$this->getWorkflowStem()->hasContent.'",'.
+          '"hasLanguage":"'.$this->getWorkflowStem()->hasLanguage.'",'.
+          '"hasVersion":"'.$this->getWorkflowStem()->hasVersion.'",'.
+          '"comment":"'.$this->getWorkflowStem()->comment.'",'.
+          '"wasDerivedFrom":"'.$this->getWorkflowStem()->wasDerivedFrom.'",'.
+          '"wasGeneratedBy":"'.$this->getWorkflowStem()->wasGeneratedBy.'",'.
+          '"hasReviewNote":"'.$form_state->getValue('workflowstem_hasreviewnote').'",'.
+          '"hasWebDocument":"'.$form_state->getValue('workflowstem_webdocument').'",'.
           '"hasEditorEmail":"'.$useremail.'",'.
-          '"hasSIRManagerEmail":"'.$this->getProcessStem()->hasSIRManagerEmail.'"}';
+          '"hasSIRManagerEmail":"'.$this->getWorkflowStem()->hasSIRManagerEmail.'"}';
 
         // UPDATE BY DELETING AND CREATING
-        $api->processStemDel($this->getProcessStemUri());
-        $api->processStemAdd($processStemJson);
+        $api->workflowstemDel($this->getWorkflowStemUri());
+        $api->workflowstemAdd($workflowStemJson);
       }
 
       self::backUrl();
@@ -388,9 +388,9 @@ class ReviewWorkflowStemForm extends FormBase {
     }
   }
 
-  public function retrieveProcessStem($processStemUri) {
+  public function retrieveWorkflowStem($workflowstemUri) {
     $api = \Drupal::service('rep.api_connector');
-    $rawresponse = $api->getUri($processStemUri);
+    $rawresponse = $api->getUri($workflowstemUri);
     $obj = json_decode($rawresponse);
     if ($obj->isSuccessful) {
       return $obj->body;
@@ -409,4 +409,7 @@ class ReviewWorkflowStemForm extends FormBase {
   }
 
 }
+
+
+
 

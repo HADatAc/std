@@ -16,8 +16,8 @@ use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\ScrollCommand;
-use Drupal\std\Entity\ProcessStem;
-use Drupal\std\Entity\Process;
+use Drupal\std\Entity\WorkflowStem;
+use Drupal\std\Entity\Workflow;
 
 /**
  * Provides a STD List Form with table and card view logic.
@@ -267,17 +267,17 @@ class STDListForm extends FormBase {
         break;
 
       // PROCESS STEM
-      case "processstem":
+      case "workflowstem":
         $class_name = ucfirst($preferred_process)." Stems";
-        $header = ProcessStem::generateHeader();
-        $output = ProcessStem::generateOutput($this->getList());
+        $header = WorkflowStem::generateHeader();
+        $output = WorkflowStem::generateOutput($this->getList());
         break;
 
       // PROCESS
-      case "process":
+      case "workflow":
         $class_name = ucfirst($preferred_process)."s";
-        $header = Process::generateHeader();
-        $output = Process::generateOutput($this->getList());
+        $header = Workflow::generateHeader();
+        $output = Workflow::generateOutput($this->getList());
         break;
 
       default:
@@ -481,3 +481,4 @@ class STDListForm extends FormBase {
   }
 
 }
+
