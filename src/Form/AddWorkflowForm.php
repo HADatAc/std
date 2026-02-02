@@ -431,7 +431,7 @@ class AddWorkflowForm extends FormBase {
 
       $message = $api->elementAdd('workflow',$processJSON);
       if ($message != null)
-        \Drupal::messenger()->addMessage(t("Workflow has been added successfully."));
+        \Drupal::messenger()->addMessage($this->t("Workflow has been added successfully."));
 
       // UPLOAD IMAGE AND WEBDOCUMENT TO API
       if ($image_type === 'upload') {
