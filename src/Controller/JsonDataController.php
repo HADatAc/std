@@ -135,10 +135,11 @@ class JsonDataController extends ControllerBase
         // GET TOTAL NUMBER OF ELEMENTS AND TOTAL NUMBER OF PAGES
         $this->element_type = $elementtype;
         $this->setListSize(-1);
-        if ($this->element_type != NULL) {
-          //OLD $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
-          $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
-        }
+                if ($this->element_type != NULL) {
+                    //OLD $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+                    $total = $api->parseTotalResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri), 'getTotalStudyDAsByStudy');
+                    $this->setListSize(is_numeric($total) ? (int) $total : 0);
+                }
 
         if (gettype($this->list_size) == 'string') {
             $total_pages = "0";
@@ -148,42 +149,42 @@ class JsonDataController extends ControllerBase
             } else {
                 $total_pages = floor($this->list_size / $pagesize) + 1;
             }
-        }
+          }
 
-        //AVOID NON EXISTING PAGES
-        if ($this->list_size <= (($page - 1) * 5)) {
-            $page--;
-            $total_pages--;
-        }
-
-        // CREATE LINK FOR NEXT PAGE AND PREVIOUS PAGE
-        if ($page < $total_pages) {
-            $next_page = $page + 1;
-            $next_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $next_page, $pagesize);
-        } else {
-            $next_page_link = '';
-        }
-        if ($page > 1) {
-            $previous_page = $page - 1;
-            $previous_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $previous_page, $pagesize);
-        } else {
-            $previous_page_link = '';
-        }
-
-        // RETRIEVE ELEMENTS
-        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page),'getStudyDAsByStudy');
+            // RETRIEVE ELEMENTS (get all, then paginate unassociated)
+            $allSize = is_numeric($this->list_size) && $this->list_size > 0 ? (int) $this->list_size : $pagesize;
+            $allSize = max($allSize, $pagesize);
+            $allItems = $api->parseObjectResponse(
+              $api->getStudyDAsByStudy($this->getStudy()->uri, $allSize, 0),
+              'getStudyDAsByStudy'
+            );
 
         $unassociated = array_filter($allItems, function ($item) {
           return empty($item->hasDataFile->streamUri);
         });
 
-        $totalUnassociated = count($unassociated);
-        $this->setListSize($totalUnassociated);
-        $total_pages = (int) ceil($totalUnassociated / $pagesize);
+                $totalUnassociated = count($unassociated);
+                $this->setListSize($totalUnassociated);
+                $total_pages = (int) ceil($totalUnassociated / $pagesize);
+                $total_pages = max(1, $total_pages);
 
-        if (($page - 1) * $pagesize >= $totalUnassociated) {
-          $page = max(1, $page - 1);
-        }
+                if (($page - 1) * $pagesize >= $totalUnassociated) {
+                    $page = max(1, $page - 1);
+                }
+
+                // CREATE LINK FOR NEXT PAGE AND PREVIOUS PAGE (after unassociated filter)
+                if ($page < $total_pages) {
+                        $next_page = $page + 1;
+                        $next_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $next_page, $pagesize);
+                } else {
+                        $next_page_link = '';
+                }
+                if ($page > 1) {
+                        $previous_page = $page - 1;
+                        $previous_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $previous_page, $pagesize);
+                } else {
+                        $previous_page_link = '';
+                }
 
         $offset = ($page - 1) * $pagesize;
         $paged = array_slice($unassociated, $offset, $pagesize);

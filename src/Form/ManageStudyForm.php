@@ -146,7 +146,7 @@ class ManageStudyForm extends FormBase
       'elementtype'=> 'da',
       'mode'       => 'compact',
       'page'       => $da_page_from_session,
-      'pagesize'   => 5,
+      'pagesize'   => 10,
       'ajaxUrl'         => Url::fromRoute('std.stream_data_ajax')->toString(),
       'streamDataUrl'   => Url::fromRoute('std.stream_data_ajax')->toString(),
       'latestUrl'       => (\Drupal::request()->headers->get('x-forwarded-proto') === 'https' ? 'https://':'http://'). \Drupal::request()->getHost() . \Drupal::request()->getBaseUrl()

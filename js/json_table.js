@@ -5,6 +5,37 @@
     media: 0, // Inicialmente zero, pode ser adicionado futuramente
   };
 
+  const setCardBusy = function ($anchor, isBusy, message = "Loading...") {
+    const $card = $anchor.closest(".card");
+    if (!$card.length) {
+      return;
+    }
+
+    if (isBusy) {
+      if (!$card.hasClass("std-busy")) {
+        $card.addClass("std-busy");
+      }
+      if (!$card.find(".std-card-overlay").length) {
+        $card.css("position", "relative");
+        const overlayHtml = `
+          <div class="std-card-overlay" style="
+            position:absolute; inset:0; background:rgba(255,255,255,0.75);
+            display:flex; align-items:center; justify-content:center; z-index:5;">
+            <div style="text-align:center;">
+              <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+              <div class="mt-2" data-std-overlay-message>${message}</div>
+            </div>
+          </div>`;
+        $card.append(overlayHtml);
+      } else {
+        $card.find("[data-std-overlay-message]").text(message);
+      }
+    } else {
+      $card.removeClass("std-busy");
+      $card.find(".std-card-overlay").remove();
+    }
+  };
+
   // Função para recalcular e atualizar o total no DOM
   const updateTotal = function () {
     const total = totals.daFiles + totals.publications + totals.media;
@@ -17,13 +48,20 @@
   };
 
   // Função para carregar os dados da tabela dinamicamente
-  const loadTableData = function (page) {
+  const loadTableData = function (page, onComplete) {
     if (typeof $ === "undefined") {
       showToast("jQuery not available", "danger");
+      if (typeof onComplete === "function") {
+        onComplete();
+      }
       return;
     }
 
-    const studyuri = drupalSettings.std.studyUri;
+    const studyuri = drupalSettings.std.studyuri || drupalSettings.std.studyUri;
+    if (!studyuri) {
+      showToast("Study URI not found in settings.", "danger");
+      return;
+    }
     const elementtype = drupalSettings.std.elementtype;
     const mode = drupalSettings.std.mode;
     const pagesize = drupalSettings.std.pagesize;
@@ -34,10 +72,12 @@
       drupalSettings.path.baseUrl +
       `std/json-data/${encodeURIComponent(studyuri)}/${encodeURIComponent(elementtype)}/${encodeURIComponent(mode)}/${encodeURIComponent(page)}/${encodeURIComponent(pagesize)}/true`;
 
+    setCardBusy($("#json-table-container"), true, "Loading files...");
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
+      setCardBusy($("#json-table-container"), false);
 
         if (Array.isArray(response.headers) && Array.isArray(response.output) && response.output.length === 0) {
           // build an “empty” table with header + one row
@@ -45,16 +85,20 @@
           let table  = '<table class="table table-striped table-bordered">';
           // header
           table += '<thead><tr>';
+          table += '<th style="width:1%; white-space:nowrap;"><input type="checkbox" id="da-select-all" disabled></th>';
           response.headers.forEach(h => {
             table += `<th>${h}</th>`;
           });
           table += '</tr></thead>';
           // body with one “no results” row
           table += '<tbody>';
-          table += `<tr><td colspan="${colCount}" class="text-center text-muted">No results found.</td></tr>`;
+          table += `<tr><td colspan="${colCount + 1}" class="text-center text-muted">No results found.</td></tr>`;
           table += '</tbody></table>';
           // inject
           $("#json-table-container").html(table);
+
+          ensureBulkDeleteButton();
+          updateBulkDeleteState();
 
           // reset count + pagination
           $("#data_files_count").text("Study Data Files (0)");
@@ -62,6 +106,9 @@
           updateTotal();
           $("#json-table-pager").empty();
           $("#json-table-stream-pager").empty();
+          if (typeof onComplete === "function") {
+            onComplete();
+          }
           return;
         }
 
@@ -69,13 +116,23 @@
           // Render table
           let table = '<table class="table table-striped table-bordered">';
           table += "<thead><tr>";
+          table += '<th style="width:1%; white-space:nowrap;"><input type="checkbox" id="da-select-all"></th>';
           response.headers.forEach(function (header) {
             table += `<th>${header}</th>`;
           });
           table += "</tr></thead><tbody>";
 
           response.output.forEach(function (row) {
+            const opsHtml = row.element_operations || "";
+            const decodedOps = $("<textarea/>").html(opsHtml).text();
+            const htmlToScan = opsHtml.indexOf("delete-button") >= 0 ? opsHtml : decodedOps;
+            const deleteUrlMatch = htmlToScan.match(/data-url=\\?"([^\"]+)\\?"/);
+            const hasDelete = /delete-button/.test(htmlToScan) && deleteUrlMatch && deleteUrlMatch[1];
+            const deleteUrl = hasDelete ? deleteUrlMatch[1] : "";
             table += "<tr>";
+            table += hasDelete
+              ? `<td><input type="checkbox" class="da-select" data-delete-url="${deleteUrl}"></td>`
+              : `<td></td>`;
             for (const key in row) {
               table += `<td>${row[key]}</td>`;
             }
@@ -97,6 +154,8 @@
 
           // Reanexa os eventos aos novos elementos carregados
           attachDAEvents();
+          attachBulkDeleteEvents();
+          $("#da-select-all").prop("checked", false);
 
           // Renderiza a paginação
           if (response.pagination) {
@@ -109,9 +168,16 @@
           $("#json-table-pager").empty();
           $("#json-table-stream-pager").empty();
         }
+        if (typeof onComplete === "function") {
+          onComplete();
+        }
       },
       error: function () {
+        setCardBusy($("#json-table-container"), false);
         showToast("Error loading table data.", "danger");
+        if (typeof onComplete === "function") {
+          onComplete();
+        }
       },
     });
   };
@@ -120,6 +186,9 @@
   const renderPagination = function (pagination, currentPage) {
     const $pager = $("#json-table-pager");
     $pager.empty(); // Limpar o pager existente
+
+    ensureBulkDeleteButton();
+    updateBulkDeleteState();
 
     const totalPages = pagination.last_page; // Número total de páginas
     const startPage = Math.max(1, currentPage - 1); // Página inicial
@@ -202,10 +271,12 @@
       const deleteUrl = $(this).data("url");
 
       if (confirm("Are you sure you want to delete this file?")) {
+        setCardBusy($("#json-table-container"), true, "Deleting...");
         $.ajax({
           url: deleteUrl,
           type: "POST",
           success: function (response) {
+            setCardBusy($("#json-table-container"), false);
             if (response.status === "success") {
               showToast("File deleted successfully!", "success");
               const currentPage = drupalSettings.std.page || 1;
@@ -218,6 +289,7 @@
             }
           },
           error: function (xhr, status, error) {
+            setCardBusy($("#json-table-container"), false);
             showToast("Failed to delete the file. Please try again.", "danger");
             console.error("Error details:", error);
           },
@@ -447,6 +519,107 @@
 
   };
 
+  const ensureBulkDeleteButton = function () {
+    if (!$("#bulk-delete-container").length) {
+      const btnHtml = `
+        <div id="bulk-delete-container" style="margin-top:6px;">
+          <button id="bulk-delete-btn" class="btn btn-sm btn-danger" disabled>
+            Delete selected
+          </button>
+        </div>`;
+      $("#json-table-pager").before(btnHtml);
+      $("#bulk-delete-container").hide();
+    }
+  };
+
+  const updateBulkDeleteState = function () {
+    const selectableCount = $(".da-select").length;
+    const selectedCount = $(".da-select:checked").length;
+
+    if (selectableCount === 0) {
+      $("#bulk-delete-container").hide();
+      $("#bulk-delete-btn").prop("disabled", true);
+      $("#da-select-all").prop("checked", false).prop("disabled", true);
+      return;
+    }
+
+    $("#da-select-all").prop("disabled", false);
+
+    if (selectedCount > 1) {
+      $("#bulk-delete-container").show();
+      $("#bulk-delete-btn").prop("disabled", false);
+    } else {
+      $("#bulk-delete-container").hide();
+      $("#bulk-delete-btn").prop("disabled", true);
+    }
+  };
+
+  const attachBulkDeleteEvents = function () {
+    ensureBulkDeleteButton();
+
+    $(document).off("change", "#da-select-all");
+    $(document).off("change", ".da-select");
+    $(document).off("click", "#bulk-delete-btn");
+
+    $(document).on("change", "#da-select-all", function () {
+      const checked = $(this).is(":checked");
+      $(".da-select").prop("checked", checked);
+      updateBulkDeleteState();
+    });
+
+    $(document).on("change", ".da-select", function () {
+      const total = $(".da-select").length;
+      const checked = $(".da-select:checked").length;
+      $("#da-select-all").prop("checked", total > 0 && checked === total);
+      updateBulkDeleteState();
+    });
+
+    $(document).on("click", "#bulk-delete-btn", function (e) {
+      e.preventDefault();
+
+      const urls = $(".da-select:checked")
+        .map(function () {
+          return $(this).data("delete-url");
+        })
+        .get()
+        .filter(Boolean);
+
+      if (urls.length < 2) {
+        return;
+      }
+
+      if (!confirm(`Delete ${urls.length} file(s)?`)) {
+        return;
+      }
+
+      setCardBusy($("#json-table-container"), true, "Deleting selected...");
+
+      const deleteSequential = (index) => {
+        if (index >= urls.length) {
+          const currentPage = drupalSettings.std.page || 1;
+          loadTableData(currentPage);
+          return;
+        }
+
+        $.ajax({
+          url: urls[index],
+          type: "POST",
+          success: function () {
+            deleteSequential(index + 1);
+          },
+          error: function () {
+            showToast("Failed to delete one or more files.", "danger");
+            deleteSequential(index + 1);
+          },
+        });
+      };
+
+      deleteSequential(0);
+    });
+
+    updateBulkDeleteState();
+  };
+
   // This function creates a toast notification with a message and type
 
   const attachDragAndDropEvents = function () {
@@ -481,12 +654,13 @@
         return;
       }
 
-      const file = files[0];
-      const originalFileName = file.name;
-      const fileExtension = originalFileName.split(".").pop().toLowerCase();
       const studyuri = drupalSettings.std.studyuri;
+      let lastStreamKey = null;
 
-      try {
+      const uploadSingleFile = async (file) => {
+        const originalFileName = file.name;
+        const fileExtension = originalFileName.split(".").pop().toLowerCase();
+
         // 1) Check filename
         const checkUrl = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
         const checkResponse = await fetch(checkUrl, { method: "GET" });
@@ -494,8 +668,7 @@
         const json = await checkResponse.json();
 
         if (!(json && json.suggestedFileName)) {
-          showToast("Error generating file name.", "danger");
-          return;
+          throw new Error("Error generating file name.");
         }
 
         // 2) Rename and prepare upload
@@ -507,88 +680,117 @@
 
         // 3) Upload
         const uploadUrl = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${studyuri}`;
-        $.ajax({
-          url: uploadUrl,
-          type: "POST",
-          data: formData,
-          processData: false,
-          contentType: false,
-          success: function (response) {
-            if (!response.fid) {
-              showToast("Failed to upload file. Please try again.", "danger");
-              return;
+        return new Promise((resolve, reject) => {
+          $.ajax({
+            url: uploadUrl,
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+              if (!response.fid) {
+                reject(new Error("Failed to upload file."));
+                return;
+              }
+              if (response.streamKey) {
+                lastStreamKey = response.streamKey;
+              }
+              resolve(response);
+            },
+            error: function () {
+              reject(new Error("Error uploading file."));
             }
-
-            // Refresh other tables
-            showToast("File uploaded successfully!", "success");
-            loadTableData(drupalSettings.std.page || 1);
-            loadPublicationFiles(drupalSettings.pub.page || 1);
-            loadMediaFiles(drupalSettings.media.page || 1);
-
-            // 4) If streamKey present, refresh streams table
-            if (response.streamKey) {
-              $.ajax({
-                url: window.location.href,
-                type: "GET",
-                dataType: "html",
-                cache: false,
-                success: function (pageHtml) {
-                  const tmp = $('<div>').append($.parseHTML(pageHtml));
-
-                  // Find only the real streams table (with radios)
-                  const newTable = tmp
-                    .find('#dpl-streams-table')
-                    .filter(function () {
-                      const hasRadios = $(this).find('input[type=radio]').length > 0;
-                      return hasRadios;
-                    })
-                    .first();
-
-                  if (!newTable.length) {
-                    showToast("Streams table not found in refresh.", "danger");
-                    return;
-                  }
-
-                  // Replace old table
-                  $('#dpl-streams-table').replaceWith(newTable);
-
-                  // *** Crucial: reset the binding flag so we can rebind events ***
-                  newTable.removeData('dpl-bound');
-
-                  // Re-attach only our streamSelection behavior
-                  Drupal.behaviors.streamSelection.attach(
-                    newTable.closest('.card').get(0),
-                    drupalSettings
-                  );
-
-                  // Select the new radio and trigger change
-                  const radio = $(`#dpl-streams-table input[type=radio][value="${response.streamKey}"]`);
-                  if (radio.length) {
-                    radio
-                      .closest('table').find('input[type=radio]')
-                      .prop('checked', false).data('waschecked', false)
-                      .closest('tr').removeClass('selected');
-
-                    // 4a) Mark checked + data
-                    radio.prop('checked', true).data('waschecked', true);
-
-                    // 4b) Fire both click AND change, to hit both handlers
-                    radio.trigger('click');
-                    radio.trigger('change');
-                  }
-                },
-                error: function () {
-                  showToast("Failed to refresh streams table.", "danger");
-                }
-              });
-            }
-          },
-          error: function (xhr, status, error) {
-            showToast("Error uploading file.", "danger");
-          }
+          });
         });
+      };
+
+      setCardBusy($("#drop-card"), true, "Uploading...");
+      try {
+        let fileIndex = 0;
+        for (const file of files) {
+          fileIndex += 1;
+          setCardBusy($("#drop-card"), true, `Uploading ${fileIndex} of ${files.length}...`);
+          await uploadSingleFile(file);
+          showToast(`Uploaded: ${file.name}`, "success");
+        }
+
+        // Refresh other tables once (force page 1 to show newest uploads)
+        drupalSettings.std.page = 1;
+        $.ajax({
+          url: drupalSettings.path.baseUrl + "std/update-session-page",
+          type: "POST",
+          data: {
+            page: 1,
+            element_type: "da",
+          },
+        });
+        loadTableData(1, function () {
+          setCardBusy($("#drop-card"), false);
+        });
+        loadPublicationFiles(drupalSettings.pub.page || 1);
+        loadMediaFiles(drupalSettings.media.page || 1);
+
+        // If streamKey present, refresh streams table
+        if (lastStreamKey) {
+          $.ajax({
+            url: window.location.href,
+            type: "GET",
+            dataType: "html",
+            cache: false,
+            success: function (pageHtml) {
+              const tmp = $('<div>').append($.parseHTML(pageHtml));
+
+              // Find only the real streams table (with radios)
+              const newTable = tmp
+                .find('#dpl-streams-table')
+                .filter(function () {
+                  const hasRadios = $(this).find('input[type=radio]').length > 0;
+                  return hasRadios;
+                })
+                .first();
+
+              if (!newTable.length) {
+                showToast("Streams table not found in refresh.", "danger");
+                return;
+              }
+
+              // Replace old table
+              $('#dpl-streams-table').replaceWith(newTable);
+
+              // *** Crucial: reset the binding flag so we can rebind events ***
+              newTable.removeData('dpl-bound');
+
+              // Re-attach only our streamSelection behavior
+              Drupal.behaviors.streamSelection.attach(
+                newTable.closest('.card').get(0),
+                drupalSettings
+              );
+
+              // Select the new radio and trigger change
+              const radio = $(`#dpl-streams-table input[type=radio][value="${lastStreamKey}"]`);
+              if (radio.length) {
+                radio
+                  .closest('table').find('input[type=radio]')
+                  .prop('checked', false).data('waschecked', false)
+                  .closest('tr').removeClass('selected');
+
+                // Mark checked + data
+                radio.prop('checked', true).data('waschecked', true);
+
+                // Fire both click AND change, to hit both handlers
+                radio.trigger('click');
+                radio.trigger('change');
+              }
+            },
+            error: function () {
+              showToast("Failed to refresh streams table.", "danger");
+            }
+          });
+        }
       } catch (err) {
-        showToast("Error communicating with the server.", "danger");
+        showToast(err.message || "Error communicating with the server.", "danger");
+      } finally {
+        // drop-card busy state is cleared after table refresh
       }
     });
   };
@@ -622,7 +824,7 @@
     }
 
     const studyuri = drupalSettings.std.studyuri;
-    const pagesize = 5;
+    const pagesize = 10;
     const url =
       drupalSettings.path.baseUrl +
       `std/get-publication-files/${encodeURIComponent(
@@ -630,10 +832,12 @@
       )}/${page}/${pagesize}`;
     const loggedUser = drupalSettings.user.logged;
 
+    setCardBusy($("#publication-table-container"), true, "Loading publications...");
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
+      setCardBusy($("#publication-table-container"), false);
         // se não houver arquivos
         if (Array.isArray(response.files) && response.files.length === 0) {
           // define os headers fixos da tabela de publicações
@@ -716,6 +920,7 @@
         }
       },
       error: function () {
+        setCardBusy($("#publication-table-container"), false);
         showToast("Error loading publication files.", "danger");
       },
     });
@@ -730,10 +935,12 @@
         drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
       if (confirm("Do you really want to delete this file?")) {
+        setCardBusy($("#publication-table-container"), true, "Deleting...");
         $.ajax({
           url: deleteUrl,
           type: "POST",
           success: function (response) {
+            setCardBusy($("#publication-table-container"), false);
             if (response.status === "success") {
               const currentPage = drupalSettings.pub.page || 1;
 
@@ -753,6 +960,7 @@
             }
           },
           error: function () {
+            setCardBusy($("#publication-table-container"), false);
             showToast("Error: " + response.error, "danger");
           },
         });
@@ -836,16 +1044,18 @@
     }
 
     const studyuri = drupalSettings.std.studyuri;
-    const pagesize = 5;
+    const pagesize = 10;
     const url =
       drupalSettings.path.baseUrl +
       `std/get-media-files/${encodeURIComponent(studyuri)}/${page}/${pagesize}`;
     const loggedUser = drupalSettings.user.logged;
 
+    setCardBusy($("#media-table-container"), true, "Loading media...");
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
+      setCardBusy($("#media-table-container"), false);
 
       // se não houver arquivos de mídia
       if (Array.isArray(response.files) && response.files.length === 0) {
@@ -921,6 +1131,7 @@
         }
       },
       error: function () {
+        setCardBusy($("#media-table-container"), false);
         showToast("Error loading publication files.", "danger");
       },
     });
@@ -937,10 +1148,12 @@
         drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
       if (confirm("Do you really want to delete this file?")) {
+        setCardBusy($("#media-table-container"), true, "Deleting...");
         $.ajax({
           url: deleteUrl,
           type: "POST",
           success: function (response) {
+            setCardBusy($("#media-table-container"), false);
             if (response.status === "success") {
               const currentPage = drupalSettings.media.page || 1;
 
@@ -957,6 +1170,7 @@
             }
           },
           error: function () {
+            setCardBusy($("#media-table-container"), false);
             showToast("Error: " + response.error, "danger");
           },
         });
