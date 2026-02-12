@@ -399,7 +399,17 @@ class AddWorkflowStemForm extends FormBase {
           '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
           '"hasSIRManagerEmail":"'.$useremail.'"}';
 
-        $api->elementAdd('workflowstem', $workflowStemJson);
+        $rawresponse = $api->elementAdd('workflowstem', $workflowStemJson);
+        $obj = json_decode($rawresponse);
+        if (!$obj || empty($obj->isSuccessful) || !$obj->isSuccessful) {
+          $errorMsg = 'Unknown error.';
+          if ($obj && isset($obj->body)) {
+            $errorMsg = is_string($obj->body) ? $obj->body : json_encode($obj->body);
+          }
+          \Drupal::messenger()->addError(t('HASCOAPI error while adding Workflow Stem: ' . $errorMsg));
+          self::backUrl();
+          return;
+        }
 
       } else {
         // #2 CENARIO - ADD WORKFLOW THAT WAS DERIVED FROM
@@ -434,7 +444,17 @@ class AddWorkflowStemForm extends FormBase {
             '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
             '"hasSIRManagerEmail":"'.$useremail.'"}';
 
-          $api->elementAdd('workflowstem', $workflowStemJson);
+          $rawresponse = $api->elementAdd('workflowstem', $workflowStemJson);
+          $obj = json_decode($rawresponse);
+          if (!$obj || empty($obj->isSuccessful) || !$obj->isSuccessful) {
+            $errorMsg = 'Unknown error.';
+            if ($obj && isset($obj->body)) {
+              $errorMsg = is_string($obj->body) ? $obj->body : json_encode($obj->body);
+            }
+            \Drupal::messenger()->addError(t('HASCOAPI error while adding Workflow Stem: ' . $errorMsg));
+            self::backUrl();
+            return;
+          }
 
         } else {
           \Drupal::messenger()->addError(t("An error occurred while getting Derived From element"));
