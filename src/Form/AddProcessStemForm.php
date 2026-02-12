@@ -71,7 +71,7 @@ class AddProcessStemForm extends FormBase {
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
-    $form['#attached']['library'][] = 'sir/sir_processstem';
+    $form['#attached']['library'][] = 'std/std_processstem';
 
     // ESTABLISH API SERVICE
     $api = \Drupal::service('rep.api_connector');

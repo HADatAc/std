@@ -906,9 +906,9 @@ class STDSelectStudyForm extends FormBase
         'items_loaded' => $items_loaded,
       ]);
     } elseif ($this->element_type == 'processstem') {
-      $url = Url::fromRoute('sir.edit_processstem', ['processstemuri' => base64_encode($uri)]);
+      $url = Url::fromRoute('std.edit_processstem', ['processstemuri' => base64_encode($uri)]);
     } elseif ($this->element_type == 'process') {
-      $url = Url::fromRoute('sir.edit_process', ['state' => 'init', 'processuri' => base64_encode($uri)]);
+      $url = Url::fromRoute('std.edit_process', ['processuri' => base64_encode($uri)]);
     } else {
       \Drupal::messenger()->addError($this->t('No edit route found for this element type.'));
       return;
@@ -1005,8 +1005,8 @@ class STDSelectStudyForm extends FormBase
   protected function performDeriveProcessStem(FormStateInterface $form_state) {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
-    Utils::trackingStoreUrls($uid, $previousUrl, 'sir.add_processstem');
-    $url = Url::fromRoute('sir.add_processstem');
+    Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_processstem');
+    $url = Url::fromRoute('std.add_processstem');
     $url->setRouteParameter('sourceprocessstemuri', 'DERIVED');
     // $url->setRouteParameter('containersloturi', 'DERIVED');
     $form_state->setRedirectUrl($url);
