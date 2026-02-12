@@ -70,8 +70,7 @@ class AddWorkflowStemForm extends FormBase {
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
-
-    $form['#attached']['library'][] = 'sir/sir_workflowstem';
+    $form['#attached']['library'][] = 'std/std_workflowstem';
 
     // ESTABLISH API SERVICE
     $api = \Drupal::service('rep.api_connector');

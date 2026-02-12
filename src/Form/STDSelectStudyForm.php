@@ -906,9 +906,9 @@ class STDSelectStudyForm extends FormBase
         'items_loaded' => $items_loaded,
       ]);
     } elseif ($this->element_type == 'workflowstem') {
-      $url = Url::fromRoute('sir.edit_workflowstem', ['workflowstemuri' => base64_encode($uri)]);
+      $url = Url::fromRoute('std.edit_workflowstem', ['workflowstemuri' => base64_encode($uri)]);
     } elseif ($this->element_type == 'workflow') {
-      $url = Url::fromRoute('sir.edit_workflow', ['state' => 'init', 'workflowuri' => base64_encode($uri)]);
+      $url = Url::fromRoute('std.edit_workflow', ['state' => 'init', 'workflowuri' => base64_encode($uri)]);
     } else {
       \Drupal::messenger()->addError($this->t('No edit route found for this element type.'));
       return;
@@ -1005,8 +1005,8 @@ class STDSelectStudyForm extends FormBase
   protected function performDeriveWorkflowStem(FormStateInterface $form_state) {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
-    Utils::trackingStoreUrls($uid, $previousUrl, 'sir.add_workflowstem');
-    $url = Url::fromRoute('sir.add_workflowstem');
+    Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_workflowstem');
+    $url = Url::fromRoute('std.add_workflowstem');
     $url->setRouteParameter('sourceworkflowstemuri', 'DERIVED');
     // $url->setRouteParameter('containersloturi', 'DERIVED');
     $form_state->setRedirectUrl($url);
