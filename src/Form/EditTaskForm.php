@@ -149,6 +149,9 @@ class EditTaskForm extends FormBase {
     } else {
       $basic = $this->populateBasic();;
       $instruments = \Drupal::state()->get('my_form_instruments', []);
+      if (empty($instruments)) {
+        $instruments = $this->populateInstruments();
+      }
       $tasks = $this->getTask()->hasSubtaskUris;
 
     }
@@ -904,15 +907,72 @@ class EditTaskForm extends FormBase {
   }
 
   protected function populateInstruments() {
-    $required = $this->getTask()->requiredInstrument;
+    $required = [];
+    if (isset($this->getTask()->requiredInstrument) && is_array($this->getTask()->requiredInstrument)) {
+      $required = $this->getTask()->requiredInstrument;
+    }
+
+    // Fallback: some API responses include only hasRequiredInstrumentUris.
+    if (empty($required) && isset($this->getTask()->hasRequiredInstrumentUris) && is_array($this->getTask()->hasRequiredInstrumentUris)) {
+      $api = \Drupal::service('rep.api_connector');
+      foreach ($this->getTask()->hasRequiredInstrumentUris as $riUri) {
+        if (!is_string($riUri) || trim($riUri) === '') {
+          continue;
+        }
+        $riObj = $api->parseObjectResponse($api->getUri($riUri), 'getUri');
+        if ($riObj !== NULL) {
+          $required[] = $riObj;
+        }
+      }
+    }
+
+    $api = \Drupal::service('rep.api_connector');
     $instrumentData = [];
     foreach ($required as $reqInstr) {
-      $uri   = $reqInstr->instrument->uri;
-      $label = $reqInstr->instrument->label;
+      $uri = '';
+      $label = '';
+
+      if (is_object($reqInstr) && isset($reqInstr->instrument) && is_object($reqInstr->instrument)) {
+        $uri = $reqInstr->instrument->uri ?? '';
+        $label = $reqInstr->instrument->label ?? '';
+      }
+
+      // Fallback when RequiredInstrument comes without embedded instrument object.
+      if ($uri === '' && is_object($reqInstr) && isset($reqInstr->usesInstrument)) {
+        $uri = (string) $reqInstr->usesInstrument;
+      }
+      if ($uri === '' && is_object($reqInstr) && isset($reqInstr->instrumentUri)) {
+        $uri = (string) $reqInstr->instrumentUri;
+      }
+
+      if ($uri === '') {
+        continue;
+      }
+
+      if ($label === '') {
+        $instrumentObj = $api->parseObjectResponse($api->getUri($uri), 'getUri');
+        if (is_object($instrumentObj) && isset($instrumentObj->label)) {
+          $label = $instrumentObj->label;
+        }
+      }
+
       $components = [];
-      if (!empty($reqInstr->components) && is_array($reqInstr->components)) {
+      if (is_object($reqInstr) && !empty($reqInstr->components) && is_array($reqInstr->components)) {
         foreach ($reqInstr->components as $c) {
-          $components[] = $c->uri;
+          if (is_object($c) && isset($c->uri)) {
+            $components[] = $c->uri;
+          }
+        }
+      }
+      elseif (is_object($reqInstr) && !empty($reqInstr->hasRequiredComponent) && is_array($reqInstr->hasRequiredComponent)) {
+        foreach ($reqInstr->hasRequiredComponent as $rcUri) {
+          if (!is_string($rcUri) || trim($rcUri) === '') {
+            continue;
+          }
+          $requiredComponentObj = $api->parseObjectResponse($api->getUri($rcUri), 'getUri');
+          if (is_object($requiredComponentObj) && isset($requiredComponentObj->usesComponent)) {
+            $components[] = $requiredComponentObj->usesComponent;
+          }
         }
       }
       $instrumentData[] = [
@@ -1461,7 +1521,6 @@ class EditTaskForm extends FormBase {
     $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
     // Call to get Components
     $api = \Drupal::service('rep.api_connector');
-    // $response = $api->componentListFromInstrument($instrumentUri);
     $response = $api->containersListFromInstrument($instrumentUri);
 
     if (!$response) {
@@ -1477,6 +1536,16 @@ class EditTaskForm extends FormBase {
 
     // Decode Body
     $urls = json_decode($data['body'], true);
+
+    if (!is_array($urls) || empty($urls)) {
+      $response = $api->componentListFromInstrument($instrumentUri);
+      $data = json_decode($response, true);
+      $urls = ($data && isset($data['body'])) ? json_decode($data['body'], true) : [];
+    }
+
+    if (!is_array($urls) || empty($urls)) {
+      return [];
+    }
 
     // Task components
     $components = [];
