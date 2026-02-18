@@ -47,6 +47,22 @@ class EditWorkflowForm extends FormBase {
     return $this->sourceWorkflow = $obj;
   }
 
+  public function getProcess() {
+    return $this->process;
+  }
+
+  public function setProcess($obj) {
+    return $this->process = $obj;
+  }
+
+  public function getSourceProcess() {
+    return $this->sourceProcess;
+  }
+
+  public function setSourceProcess($obj) {
+    return $this->sourceProcess = $obj;
+  }
+
   /**
    * {@inheritdoc}
    */
@@ -66,9 +82,17 @@ class EditWorkflowForm extends FormBase {
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
+    $encoded_workflow_uri = $workflowUri ?? \Drupal::routeMatch()->getParameter('workflowuri');
+    if (!is_string($encoded_workflow_uri) || trim($encoded_workflow_uri) === '') {
+      \Drupal::messenger()->addError($this->t('Missing workflow URI for edit operation.'));
+      self::backUrl();
+      return $form;
+    }
 
-    $uri=$workflowUri;
-    $uri_decode=base64_decode($uri);
+    $uri_decode = base64_decode($encoded_workflow_uri, TRUE);
+    if ($uri_decode === FALSE || $uri_decode === '') {
+      $uri_decode = $encoded_workflow_uri;
+    }
     $this->setWorkflowUri($uri_decode);
 
     $tables = new Tables;
@@ -82,7 +106,6 @@ class EditWorkflowForm extends FormBase {
     // Get Workflow Data
 
     $api = \Drupal::service('rep.api_connector');
-    $uri_decode=base64_decode($workflowUri);
     $process = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
     if ($process == NULL) {
       \Drupal::messenger()->addMessage(t("Failed to retrieve Workflow."));
@@ -153,6 +176,7 @@ class EditWorkflowForm extends FormBase {
         '#title' => $this->t('Workflow Stem'),
         '#name' => 'workflow_workflowstem',
         '#default_value' => UTILS::fieldToAutocomplete($this->getProcess()->typeUri, $this->getProcess()->typeLabel),
+        '#maxlength' => 512,
         '#id' => 'workflow_workflowstem',
         '#parents' => ['workflow_workflowstem'],
         '#attributes' => [
@@ -466,6 +490,11 @@ class EditWorkflowForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
+    $workflow_stem = (string) $form_state->getValue('workflow_workflowstem');
+    if ($workflow_stem !== '') {
+      $form_state->setValue('workflow_workflowstem', Utils::trimPreserveBracket($workflow_stem, 128));
+    }
+
     if ($button_name !== 'back') {
       if(strlen($form_state->getValue('workflow_workflowstem')) < 1) {
         $form_state->setErrorByName('workflow_workflowstem', $this->t('Please enter a valid Workflow stem'));
@@ -688,10 +717,11 @@ class EditWorkflowForm extends FormBase {
     $previousUrl = \Drupal::request()->getRequestUri();
 
     $api = \Drupal::service('rep.api_connector');
+    $this->normalizeAbstractTasks($this->getProcess()->hasTopTaskUri, []);
     $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
 
     $url = Url::fromRoute('std.edit_task', [
-        'processuri' => base64_encode($this->getWorkflowUri()),
+      'workflowuri' => base64_encode($this->getWorkflowUri()),
         'state' => $topTask->typeUri === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
     ]);
@@ -699,6 +729,67 @@ class EditWorkflowForm extends FormBase {
     // Definir redirecionamento explícito
     Utils::trackingStoreUrls($uid,$previousUrl,$url->toString());
     $form_state->setRedirectUrl($url);
+  }
+
+  /**
+   * Ensures tasks that have children are typed as Abstract Task.
+   *
+   * This fixes legacy workflows where tasks were saved as Task even when
+   * hasSubtaskUris is populated, which hides the Sub-Tasks tab in EditTaskForm.
+   *
+   * @param string|null $taskUri
+   *   Task URI to normalize.
+   * @param array $visited
+   *   Guard set to avoid cycles.
+   */
+  protected function normalizeAbstractTasks($taskUri, array $visited = []) {
+    if (!$taskUri || isset($visited[$taskUri])) {
+      return;
+    }
+    $visited[$taskUri] = TRUE;
+
+    $api = \Drupal::service('rep.api_connector');
+    $task = $api->parseObjectResponse($api->getUri($taskUri), 'getUri');
+    if (!$task) {
+      return;
+    }
+
+    $childUris = [];
+    if (!empty($task->hasSubtaskUris) && is_array($task->hasSubtaskUris)) {
+      foreach ($task->hasSubtaskUris as $childUri) {
+        if (is_string($childUri) && $childUri !== '') {
+          $childUris[] = $childUri;
+        }
+      }
+    }
+
+    foreach ($childUris as $childUri) {
+      $this->normalizeAbstractTasks($childUri, $visited);
+    }
+
+    if (empty($childUris) || $task->typeUri === VSTOI::ABSTRACT_TASK) {
+      return;
+    }
+
+    $taskData = [
+      'uri' => $task->uri,
+      'typeUri' => VSTOI::ABSTRACT_TASK,
+      'hascoTypeUri' => VSTOI::TASK,
+      'hasTemporalDependency' => $task->hasTemporalDependency ?? '',
+      'hasStatus' => $task->hasStatus ?? VSTOI::DRAFT,
+      'label' => $task->label ?? '',
+      'hasLanguage' => $task->hasLanguage ?? 'en',
+      'hasVersion' => $task->hasVersion ?? '1',
+      'hasSupertaskUri' => $task->hasSupertaskUri ?? '',
+      'comment' => $task->comment ?? '',
+      'hasWebDocument' => $task->hasWebDocument ?? '',
+      'hasSubtaskUris' => $childUris,
+      'hasSIRManagerEmail' => $task->hasSIRManagerEmail ?? \Drupal::currentUser()->getEmail(),
+      'hasRequiredInstrumentUris' => $task->hasRequiredInstrumentUris ?? [],
+    ];
+
+    $api->elementDel('task', $task->uri);
+    $api->elementAdd('task', json_encode($taskData));
   }
 
 }

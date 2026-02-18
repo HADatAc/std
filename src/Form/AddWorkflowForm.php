@@ -79,6 +79,7 @@ class AddWorkflowForm extends FormBase {
         '#title' => $this->t('Workflow Stem'),
         '#name' => 'workflow_workflowstem',
         '#default_value' => '',
+        '#maxlength' => 512,
         '#id' => 'workflow_workflowstem',
         '#parents' => ['workflow_workflowstem'],
         '#required' => true,
@@ -304,6 +305,11 @@ class AddWorkflowForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+
+    $workflow_stem = (string) $form_state->getValue('workflow_workflowstem');
+    if ($workflow_stem !== '') {
+      $form_state->setValue('workflow_workflowstem', Utils::trimPreserveBracket($workflow_stem, 128));
+    }
 
     // dpm($button_name) ;
     if ($button_name !== "back") {

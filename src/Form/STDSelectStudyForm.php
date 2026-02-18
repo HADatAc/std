@@ -706,15 +706,17 @@ class STDSelectStudyForm extends FormBase
         'currenturl' => $previousUrl,
       ]);
 
-      // Link para Gerenciar Elemento
-      $actions['manage_element'] = [
-        '#type' => 'link',
-        '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
-        '#url' => $manage_elements,
-        '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'btn-sm'],
-        ],
-      ];
+      // Link para Gerenciar Elemento (apenas para Study).
+      if ($this->element_type === 'study') {
+        $actions['manage_element'] = [
+          '#type' => 'link',
+          '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
+          '#url' => $manage_elements,
+          '#attributes' => [
+            'class' => ['btn', 'btn-primary', 'btn-sm'],
+          ],
+        ];
+      }
 
       // Link para Visualizar
       $actions['view'] = [
@@ -908,7 +910,7 @@ class STDSelectStudyForm extends FormBase
     } elseif ($this->element_type == 'workflowstem') {
       $url = Url::fromRoute('std.edit_workflowstem', ['workflowstemuri' => base64_encode($uri)]);
     } elseif ($this->element_type == 'workflow') {
-      $url = Url::fromRoute('std.edit_workflow', ['state' => 'init', 'workflowuri' => base64_encode($uri)]);
+      $url = Url::fromRoute('std.edit_workflow', ['workflowuri' => base64_encode($uri)]);
     } else {
       \Drupal::messenger()->addError($this->t('No edit route found for this element type.'));
       return;

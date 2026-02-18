@@ -29,6 +29,8 @@ class EditTaskForm extends FormBase {
 
   protected $task;
 
+  protected $workflowUri;
+
   protected $processUri;
 
   public function getState() {
@@ -52,6 +54,14 @@ class EditTaskForm extends FormBase {
     return $this->workflowUri = $workflowUri;
   }
 
+  public function getProcessUri() {
+    return $this->processUri;
+  }
+
+  public function setProcessUri($processUri) {
+    return $this->processUri = $processUri;
+  }
+
   /**
    * {@inheritdoc}
    */
@@ -62,15 +72,23 @@ class EditTaskForm extends FormBase {
   /**
    * {@inheritdoc}
    */
-  public function buildForm(array $form, FormStateInterface $form_state, $processuri=NULL, $state=NULL, $taskuri=NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, $workflowuri=NULL, $state=NULL, $taskuri=NULL) {
 
     $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
     $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
 
-    if (!isset($processuri) || !isset($state) || !isset($taskuri)) {
+    $workflowuri = $workflowuri ?? \Drupal::routeMatch()->getParameter('workflowuri');
+    $state = $state ?? \Drupal::routeMatch()->getParameter('state');
+    $taskuri = $taskuri ?? \Drupal::routeMatch()->getParameter('taskuri');
+
+    if (!is_string($workflowuri) || trim($workflowuri) === '' || !isset($state) || !isset($taskuri)) {
       \Drupal::messenger()->addMessage(t("Invalid parameters for Edit Task Form."), 'error');
-      self::backUrl();
-      return;
+      $form_state->setRedirect('std.select_study', [
+        'elementtype' => 'workflow',
+        'page' => 1,
+        'pagesize' => 9,
+      ]);
+      return $form;
     }
 
     // INITIALIZE NS TABLE
@@ -84,7 +102,10 @@ class EditTaskForm extends FormBase {
 
     // READ TASK
     $api = \Drupal::service('rep.api_connector');
-    $uri_decode=base64_decode($taskuri);
+    $uri_decode = base64_decode($taskuri, TRUE);
+    if ($uri_decode === FALSE || $uri_decode === '') {
+      $uri_decode = $taskuri;
+    }
     $task = $api->parseObjectResponse($api->getUri($uri_decode),'getUri');
     if ($task == NULL) {
       \Drupal::messenger()->addMessage(t("Failed to retrieve Task."));
@@ -92,17 +113,23 @@ class EditTaskForm extends FormBase {
       return;
     } else {
       $this->setTask($task);
-      $this->setProcessUri(base64_decode($processuri));
+      $decoded_workflow_uri = base64_decode($workflowuri, TRUE);
+      if ($decoded_workflow_uri === FALSE || $decoded_workflow_uri === '') {
+        $decoded_workflow_uri = $workflowuri;
+      }
+      $this->setWorkflowUri($decoded_workflow_uri);
+      $this->setProcessUri($decoded_workflow_uri);
       //dpm($this->getTask());
     }
 
     // 1) Find Task Type
     $taskTypeUri = $this->getTask()->typeUri;
     $isAbstract = ($taskTypeUri === VSTOI::ABSTRACT_TASK);
+    $hasSubtasks = !empty($this->getTask()->hasSubtaskUris);
 
     // 2) Define flags
-    $showSubTasks     = $isAbstract;
-    $showInstruments  = !$isAbstract;
+    $showSubTasks     = $isAbstract || $hasSubtasks;
+    $showInstruments  = !$showSubTasks;
 
     if ($state === 'init') {
 
@@ -1737,15 +1764,26 @@ class EditTaskForm extends FormBase {
     // $response->send();
     // return;
 
-    if ($this->getTask()->hasSupertaskUri !== null) {
+    $encoded_workflow_uri = '';
+    if ($this->getProcessUri()) {
+      $encoded_workflow_uri = base64_encode($this->getProcessUri());
+    }
+
+    if ($this->getTask()->hasSupertaskUri !== null && $encoded_workflow_uri !== '') {
       $default_url = Url::fromRoute('std.edit_task', [
-        'processuri' => base64_encode($this->getProcessUri()),
+        'workflowuri' => $encoded_workflow_uri,
         'state' => 'tasks',
         'taskuri' => base64_encode($this->getTask()->hasSupertaskUri),
       ])->toString();
-    } else {
+    } elseif ($encoded_workflow_uri !== '') {
       $default_url = Url::fromRoute('std.edit_workflow', [
-        'processuri' => base64_encode($this->getProcessUri()),
+        'workflowuri' => $encoded_workflow_uri,
+      ])->toString();
+    } else {
+      $default_url = Url::fromRoute('std.select_study', [
+        'elementtype' => 'workflow',
+        'page' => 1,
+        'pagesize' => 9,
       ])->toString();
     }
 
