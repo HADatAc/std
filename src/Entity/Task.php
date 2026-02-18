@@ -57,15 +57,51 @@ class Task {
     // 2) Normalize each item via the API so we have an array of plain arrays.
     $api    = \Drupal::service('rep.api_connector');
     $parsed = [];
+    $rows = [];
     foreach ($list as $item) {
-      $result = $api->parseObjectResponse($api->getUri($item), 'getUri');
-      if (is_array($result)) {
-        foreach ($result as $one) {
-          $parsed[] = is_object($one) ? (array) $one : $one;
+      $item_uri = is_object($item)
+        ? ($item->uri ?? NULL)
+        : (is_array($item) ? ($item['uri'] ?? NULL) : $item);
+
+      if (!is_string($item_uri) || trim($item_uri) === '') {
+        continue;
+      }
+
+      $raw_result = $api->getUri($item_uri);
+
+      $body = NULL;
+      if (is_string($raw_result)) {
+        $decoded = json_decode($raw_result);
+        if (is_object($decoded) && !empty($decoded->isSuccessful)) {
+          $body = $decoded->body ?? NULL;
         }
       }
-      else {
-        $parsed[] = is_object($result) ? (array) $result : $result;
+      elseif (is_object($raw_result)) {
+        if (property_exists($raw_result, 'isSuccessful')) {
+          if (!empty($raw_result->isSuccessful)) {
+            $body = $raw_result->body ?? NULL;
+          }
+        }
+        else {
+          $body = $raw_result;
+        }
+      }
+      elseif (is_array($raw_result)) {
+        $body = $raw_result;
+      }
+
+      if (is_array($body)) {
+        foreach ($body as $one) {
+          if (is_object($one)) {
+            $parsed[] = (array) $one;
+          }
+          elseif (is_array($one)) {
+            $parsed[] = $one;
+          }
+        }
+      }
+      elseif (is_object($body)) {
+        $parsed[] = (array) $body;
       }
     }
 
@@ -147,7 +183,7 @@ class Task {
 
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
-        'processuri' => $processuri,
+        'workflowuri' => $processuri,
         'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
         'taskuri'    => base64_encode($uri_raw),
       ])->toString();
@@ -158,7 +194,7 @@ class Task {
 
       $encoded = base64_encode($uri_raw);
       $delete_url = Url::fromRoute('std.delete_subtask', [
-          'processuri' => $processuri,
+          'workflowuri' => $processuri,
           'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
           'parenttaskuri' => base64_encode($element['hasSupertaskUri']),
           'taskuri'    => base64_encode($uri_raw)
@@ -219,7 +255,7 @@ class Task {
     return [
       'output'        => $rows,
       'disabled_rows' => array_fill_keys($disabled_rows, TRUE),
-      'total_count'   => count($parsed),
+      'total_count'   => count($rows),
     ];
   }
 

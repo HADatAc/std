@@ -12,7 +12,7 @@ use Drupal\std\Entity\Task;
 
 class SubTaskController extends ControllerBase {
 
-  public function delete($processuri, $state, $parenttaskuri, $taskuri) {
+  public function delete($workflowuri, $state, $parenttaskuri, $taskuri) {
     $subtask_uri = base64_decode($taskuri);
     \Drupal::service('rep.api_connector')->taskDeleteWithTasks($subtask_uri);
     $this->messenger()->addStatus($this->t('Sub-task deleted successfully.'));
@@ -20,7 +20,7 @@ class SubTaskController extends ControllerBase {
     // Rebuild the EditTaskForm in the proper state.
     $build = \Drupal::formBuilder()->getForm(
       \Drupal\std\Form\EditTaskForm::class,
-      $processuri,
+      $workflowuri,
       'tasks',
       $parenttaskuri
     );
