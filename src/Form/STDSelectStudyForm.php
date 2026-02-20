@@ -13,6 +13,7 @@ use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\Core\Ajax\AjaxResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Drupal\Component\Utility\Html;
+use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Drupal\std\Entity\WorkflowStem;
 use Drupal\std\Entity\Workflow;
 
@@ -78,6 +79,18 @@ class STDSelectStudyForm extends FormBase
     $this->manager_name = $user->getDisplayName();
 
     $this->element_type = $elementtype;
+
+    if ($this->element_type === 'workflow') {
+      $hasEmbeddedEditor = $this->hasTaskEditorRoute();
+      $externalCttUrl = $this->getExternalCttUrl();
+
+      if (!$hasEmbeddedEditor && $externalCttUrl !== '') {
+        \Drupal::messenger()->addWarning($this->t('Embedded Task Editor is unavailable. Using external CTT at @url.', ['@url' => $externalCttUrl]));
+      }
+      elseif (!$hasEmbeddedEditor) {
+        \Drupal::messenger()->addWarning($this->t('Task Editor is currently unavailable. Enable hasco_workflow or configure CTT Editor URL in REP settings.'));
+      }
+    }
 
     if ($pagesize === NULL) {
       $pagesize = 9;
@@ -506,6 +519,11 @@ class STDSelectStudyForm extends FormBase
           'currentroute' => 'std.edit_'.$this->element_type,
         ]);
 
+        $task_editor = NULL;
+        if ($this->element_type === 'workflow') {
+          $task_editor = $this->getTaskEditorUrl($element->uri);
+        }
+
         // Delete link
         $delete_element = Url::fromRoute('rep.delete_element', [
           'elementtype' => $this->element_type,
@@ -549,6 +567,29 @@ class STDSelectStudyForm extends FormBase
               'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
             ],
           ],
+          'link3_5' => ($this->element_type === 'workflow')
+            ? ($task_editor
+              ? [
+                '#type' => 'link',
+                '#title' => Markup::create('<i class="fa-solid fa-diagram-project"></i> Model Task Editor'),
+                '#url' => $task_editor,
+                '#attributes' => [
+                  'class' => ['btn', 'btn-sm', 'btn-info', 'mx-1'],
+                  'target' => '_blank',
+                  'rel' => 'noopener noreferrer',
+                ],
+              ]
+              : [
+                '#type' => 'link',
+                '#title' => Markup::create('<i class="fa-solid fa-triangle-exclamation"></i> Model Task Editor'),
+                '#url' => Url::fromUri('internal:#'),
+                '#attributes' => [
+                  'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+                  'onclick' => 'alert("Task Editor unavailable. Please contact an administrator."); return false;',
+                  'aria-disabled' => 'true',
+                ],
+              ])
+            : [],
           'link4' => [
             '#type' => 'link',
             '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
@@ -699,6 +740,11 @@ class STDSelectStudyForm extends FormBase
         'currentroute' => 'std.edit_'.$this->element_type,
       ]);
 
+      $task_editor = NULL;
+      if ($this->element_type === 'workflow') {
+        $task_editor = $this->getTaskEditorUrl($element->uri);
+      }
+
       // Link para Excluir
       $delete_element = Url::fromRoute('rep.delete_element', [
         'elementtype' => $this->element_type,
@@ -738,6 +784,34 @@ class STDSelectStudyForm extends FormBase
         ],
       ];
 
+      // Link direto para o editor de tarefas (CTT), apenas para Workflow.
+      if ($this->element_type === 'workflow') {
+        if ($task_editor) {
+          $actions['task_editor'] = [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-diagram-project"></i> Model Task Editor'),
+            '#url' => $task_editor,
+            '#attributes' => [
+              'class' => ['btn', 'btn-info', 'btn-sm', 'mx-1'],
+              'target' => '_blank',
+              'rel' => 'noopener noreferrer',
+            ],
+          ];
+        }
+        else {
+          $actions['task_editor'] = [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-triangle-exclamation"></i> Model Task Editor'),
+            '#url' => Url::fromUri('internal:#'),
+            '#attributes' => [
+              'class' => ['btn', 'btn-secondary', 'btn-sm', 'mx-1'],
+              'onclick' => 'alert("Task Editor unavailable. Please contact an administrator."); return false;',
+              'aria-disabled' => 'true',
+            ],
+          ];
+        }
+      }
+
       // Link para Excluir
       $actions['delete'] = [
         '#type' => 'link',
@@ -767,6 +841,66 @@ class STDSelectStudyForm extends FormBase
       '#rows' => $rows,
       '#empty' => $this->t('No ' . $this->plural_class_name . ' found'),
     ];
+  }
+
+  protected function hasTaskEditorRoute(): bool
+  {
+    return $this->getEmbeddedTaskEditorRouteName() !== NULL;
+  }
+
+  protected function getExternalCttUrl(): string
+  {
+    $cttUrl = trim((string) \Drupal::config('rep.settings')->get('ctt_url'));
+    return rtrim($cttUrl, '/');
+  }
+
+  protected function getTaskEditorUrl(string $processUri)
+  {
+    $embeddedRoute = $this->getEmbeddedTaskEditorRouteName();
+    if ($embeddedRoute === 'hasco_workflow.editor.page') {
+      return Url::fromRoute('hasco_workflow.editor.page', [], [
+        'query' => ['processUri' => $processUri],
+      ]);
+    }
+
+    if ($embeddedRoute === 'ctt.editor') {
+      return Url::fromRoute('ctt.editor', [], [
+        'query' => ['processUri' => $processUri],
+      ]);
+    }
+
+    $externalCttUrl = $this->getExternalCttUrl();
+    if ($externalCttUrl !== '') {
+      $separator = strpos($externalCttUrl, '?') === FALSE ? '?' : '&';
+      return Url::fromUri($externalCttUrl . $separator . 'processUri=' . rawurlencode($processUri));
+    }
+
+    return NULL;
+  }
+
+  protected function getEmbeddedTaskEditorRouteName(): ?string
+  {
+    static $embeddedRouteName = FALSE;
+
+    if ($embeddedRouteName !== FALSE) {
+      return $embeddedRouteName;
+    }
+
+    $routeProvider = \Drupal::service('router.route_provider');
+    foreach (['hasco_workflow.editor.page', 'ctt.editor'] as $routeName) {
+      try {
+        $routeProvider->getRouteByName($routeName);
+        $embeddedRouteName = $routeName;
+        return $embeddedRouteName;
+      }
+      catch (RouteNotFoundException $e) {
+      }
+      catch (\Exception $e) {
+      }
+    }
+
+    $embeddedRouteName = NULL;
+    return $embeddedRouteName;
   }
 
   /**

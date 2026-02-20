@@ -718,13 +718,43 @@ class EditWorkflowForm extends FormBase {
 
     $api = \Drupal::service('rep.api_connector');
     $this->normalizeAbstractTasks($this->getProcess()->hasTopTaskUri, []);
-    $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
+    $url = NULL;
 
-    $url = Url::fromRoute('std.edit_task', [
-      'workflowuri' => base64_encode($this->getWorkflowUri()),
+    // Prefer opening the React CTT editor inside Drupal when available.
+    try {
+      $routeProvider = \Drupal::service('router.route_provider');
+
+      try {
+        $routeProvider->getRouteByName('hasco_workflow.editor.page');
+        $url = Url::fromRoute('hasco_workflow.editor.page', [], [
+          'query' => [
+            'processUri' => $this->getWorkflowUri(),
+          ],
+        ]);
+      }
+      catch (\Exception $e) {
+        try {
+          $routeProvider->getRouteByName('ctt.editor');
+          $url = Url::fromRoute('ctt.editor', [], [
+            'query' => [
+              'processUri' => $this->getWorkflowUri(),
+            ],
+          ]);
+        }
+        catch (\Exception $e2) {
+          throw $e2;
+        }
+      }
+    }
+    catch (\Exception $e) {
+      // Fallback to legacy task-model editor route.
+      $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
+      $url = Url::fromRoute('std.edit_task', [
+        'workflowuri' => base64_encode($this->getWorkflowUri()),
         'state' => $topTask->typeUri === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
         'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
-    ]);
+      ]);
+    }
 
     // Definir redirecionamento explícito
     Utils::trackingStoreUrls($uid,$previousUrl,$url->toString());
