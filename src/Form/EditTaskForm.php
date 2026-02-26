@@ -99,6 +99,11 @@ class EditTaskForm extends FormBase {
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'std/std_process';
     $form['#attached']['library'][] = 'core/drupal.dialog';
+    $form['#attached']['library'][] = 'core/jquery.ui.dialog';
+    $form['#attached']['library'][] = 'rep/pdfjs';
+    $form['#attached']['library'][] = 'rep/webdoc_modal';
+
+    $form['#attached']['drupalSettings']['webdoc_modal']['baseUrl'] = \Drupal::request()->getSchemeAndHttpHost();
 
     // READ TASK
     $api = \Drupal::service('rep.api_connector');
@@ -415,6 +420,12 @@ class EditTaskForm extends FormBase {
         ],
       ];
 
+      $task_webdocument_fid = NULL;
+      if ($webdocument_type === 'upload' && $task_webdocument) {
+        $modUri = Utils::namespaceUri($this->getProcessUri());
+        $task_webdocument_fid = Utils::resolvePrivateResourceFid($modUri, 'webdoc', $task_webdocument, ['webdocument']);
+      }
+
       $form['task_webdocument_upload_wrapper']['task_webdocument_upload'] = [
         '#type'            => 'managed_file',
         '#title'           => $this->t('Upload Document'),
@@ -423,11 +434,47 @@ class EditTaskForm extends FormBase {
           'file_validate_extensions' => ['pdf doc docx txt xls xlsx'],
           'file_validate_size'       => [2097152],
         ],
+        '#default_value' => $task_webdocument_fid ? [$task_webdocument_fid] : [],
         '#description' => Markup::create(
           '<span style="color:red;">pdf, doc, docx, txt, xls, xlsx. '.
           $this->t('Selecting a new document will remove the previous one.').'</span>'
         ),
       ];
+
+      if ($task_webdocument) {
+        $view_url = '';
+        if ($webdocument_type === 'url') {
+          $view_url = $task_webdocument;
+        }
+        elseif ($webdocument_type === 'upload') {
+          $modUri = Utils::namespaceUri($this->getProcessUri());
+          $file_uri = 'private://resources/' . $modUri . '/webdoc/' . $task_webdocument;
+          $view_url = \Drupal::service('file_url_generator')->generateAbsoluteString($file_uri);
+        }
+
+        if ($view_url !== '') {
+          $ext = strtolower(pathinfo($task_webdocument, PATHINFO_EXTENSION));
+          $label = Html::escape($task_webdocument);
+          $escaped_url = Html::escape($view_url);
+
+          if ($ext === 'pdf') {
+            $thumb = '<div style="width:120px;height:90px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;background:#f8f8f8;">PDF</div>';
+          }
+          else {
+            $thumb = '<div style="width:120px;height:90px;border:1px solid #ccc;display:flex;align-items:center;justify-content:center;background:#f8f8f8;">DOC</div>';
+          }
+
+          $form['task_webdocument_preview'] = [
+            '#type' => 'item',
+            '#title' => $this->t('Current Web Document'),
+            '#markup' => Markup::create(
+              '<button type="button" class="view-media-button" data-view-url="' . $escaped_url . '">' .
+              $thumb .
+              '</button><div style="margin-top:4px;">' . $label . '</div>'
+            ),
+          ];
+        }
+      }
       $form['task_status'] = [
         '#type' => 'hidden',
         '#value' => $status,
@@ -1430,13 +1477,6 @@ class EditTaskForm extends FormBase {
               $file->save();
               \Drupal::service('file.usage')->add($file, 'sir', 'task', 1);
               $task_webdocument = $file->getFilename();
-
-              if ($task_webdocument !== $this->getTask()->hasWebDocument) {
-                $api->parseObjectResponse(
-                  $api->uploadFile($this->getTask()->uri, $file->id()),
-                  'uploadFile'
-                );
-              }
             }
           }
         }

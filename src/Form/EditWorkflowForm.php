@@ -14,6 +14,7 @@ use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\file\Entity\File;
 use Drupal\Core\Render\Markup;
+use Drupal\Component\Utility\Html;
 
 class EditWorkflowForm extends FormBase {
 
@@ -81,6 +82,14 @@ class EditWorkflowForm extends FormBase {
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
+    // Media preview modal (PDF/image viewer).
+    $form['#attached']['library'][] = 'rep/pdfjs';
+    $form['#attached']['library'][] = 'rep/webdoc_modal';
+    $base_url = (\Drupal::request()->headers->get('x-forwarded-proto') === 'https' ? 'https://' : 'http://')
+      . \Drupal::request()->getHost() . \Drupal::request()->getBaseUrl();
+    $form['#attached']['drupalSettings']['webdoc_modal'] = [
+      'baseUrl' => $base_url,
+    ];
 
     $encoded_workflow_uri = $workflowUri ?? \Drupal::routeMatch()->getParameter('workflowuri');
     if (!is_string($encoded_workflow_uri) || trim($encoded_workflow_uri) === '') {
@@ -359,9 +368,43 @@ class EditWorkflowForm extends FormBase {
         'file_validate_extensions' => ['png jpg jpeg'], // Allowed file extensions.
         'file_validate_size' => [2097152], // Maximum file size (in bytes).
       ],
+      '#default_value' => $existing_image_fid ? [$existing_image_fid] : NULL,
       // Description in red: allowed file types and a warning that choosing a new image will remove the previous one.
       '#description' => Markup::create('<span style="color: red;">Allowed file types: png, jpg, jpeg. Selecting a new image will remove the previous one.</span>'),
     ];
+
+    // Image preview (thumbnail -> modal).
+    $image_preview_url = '';
+    if ($image_type === 'url' && !empty($workflow_image)) {
+      $image_preview_url = $workflow_image;
+    }
+    elseif ($existing_image_fid) {
+      $existing_image_file = File::load($existing_image_fid);
+      if ($existing_image_file) {
+        $image_preview_url = \Drupal::service('file_url_generator')->generateAbsoluteString($existing_image_file->getFileUri());
+      }
+    }
+
+    if (!empty($image_preview_url)) {
+      $escaped_image_url = Html::escape($image_preview_url);
+      $form['process_information']['workflow_image_preview'] = [
+        '#type' => 'item',
+        '#title' => $this->t('Image Preview'),
+        '#markup' => Markup::create(
+          '<button type="button" class="btn btn-link p-0 view-media-button" data-view-url="' . $escaped_image_url . '" aria-label="' . Html::escape((string) $this->t('Preview image')) . '">' .
+          '<img src="' . $escaped_image_url . '" class="img-thumbnail" style="max-width: 120px; height: auto;" />' .
+          '</button>'
+        ),
+        '#states' => [
+          'visible' => [
+            ':input[name="workflow_image_type"]' => [
+              ['value' => 'url'],
+              ['value' => 'upload'],
+            ],
+          ],
+        ],
+      ];
+    }
 
     // **** WEBDOCUMENT ****
     // Retrieve the current web document value.
@@ -422,6 +465,17 @@ class EditWorkflowForm extends FormBase {
         ->getStorage('file')
         ->loadByProperties(['uri' => $desired_uri]);
       $file = reset($files);
+
+      // Legacy fallback: older versions of this form stored web documents
+      // under the image folder.
+      if (!$file) {
+        $legacy_uri = 'private://resources/' . $modUri . '/image/' . $workflow_webdocument;
+        $legacy_files = \Drupal::entityTypeManager()
+          ->getStorage('file')
+          ->loadByProperties(['uri' => $legacy_uri]);
+        $file = reset($legacy_files);
+      }
+
       if ($file) {
         $existing_fid = $file->id();
       }
@@ -430,15 +484,71 @@ class EditWorkflowForm extends FormBase {
     // 5. Managed file element for uploading a new document.
     $form['process_information']['workflow_webdocument_upload_wrapper']['workflow_webdocument_upload'] = [
       '#type' => 'managed_file',
-      '#title' => $this->t('Upload Image'),
-      '#upload_location' => 'private://resources/' . $modUri . '/image',
+      '#title' => $this->t('Upload Document'),
+      '#upload_location' => 'private://resources/' . $modUri . '/webdoc',
       '#upload_validators' => [
         'file_validate_extensions' => ['pdf doc docx txt xls xlsx'],
         'file_validate_size' => [2097152], // Maximum file size (in bytes).
       ],
+      '#default_value' => $existing_fid ? [$existing_fid] : NULL,
       // Description in red: allowed file types and a warning that choosing a new image will remove the previous one.
       '#description' => Markup::create('<span style="color: red;">Allowed file types: pdf, doc, docx, txt, xls, xlsx. Selecting a new document will remove the previous one.</span>'),
     ];
+
+    // Web document preview (thumbnail/button -> modal).
+    $webdoc_preview_url = '';
+    if ($webdocument_type === 'url' && !empty($workflow_webdocument)) {
+      $webdoc_preview_url = $workflow_webdocument;
+    }
+    elseif ($existing_fid) {
+      $existing_doc_file = File::load($existing_fid);
+      if ($existing_doc_file) {
+        $webdoc_preview_url = \Drupal::service('file_url_generator')->generateAbsoluteString($existing_doc_file->getFileUri());
+      }
+    }
+
+    if (!empty($webdoc_preview_url)) {
+      $escaped_doc_url = Html::escape($webdoc_preview_url);
+      $extension = '';
+      $parsed_path = parse_url($webdoc_preview_url, PHP_URL_PATH);
+      if (is_string($parsed_path)) {
+        $extension = strtolower(pathinfo($parsed_path, PATHINFO_EXTENSION));
+      }
+
+      $thumb_markup = '';
+      if (in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'], TRUE)) {
+        $thumb_markup = '<img src="' . $escaped_doc_url . '" class="img-thumbnail" style="max-width: 120px; height: auto;" />';
+      }
+      elseif ($extension === 'pdf') {
+        // PDF thumbnail (first page) – click opens the full viewer modal.
+        $thumb_markup =
+          '<div class="border rounded" style="width: 120px; height: 160px; overflow: hidden;">' .
+          '<embed src="' . $escaped_doc_url . '#page=1&zoom=70" type="application/pdf" style="width: 120px; height: 160px; pointer-events: none;" />' .
+          '</div>';
+      }
+      else {
+        $label = $parsed_path ? basename($parsed_path) : (string) $this->t('View document');
+        $thumb_markup = '<span class="small">' . Html::escape($label) . '</span>';
+      }
+
+      $form['process_information']['workflow_webdocument_preview'] = [
+        '#type' => 'item',
+        '#title' => $this->t('Web Document Preview'),
+        '#markup' => Markup::create(
+          '<button type="button" class="btn btn-link p-0 view-media-button" data-view-url="' . $escaped_doc_url . '" aria-label="' . Html::escape((string) $this->t('Preview document')) . '">' .
+          $thumb_markup .
+          '</button>'
+        ),
+        '#states' => [
+          'visible' => [
+            ':input[name="workflow_webdocument_type"]' => [
+              ['value' => 'url'],
+              ['value' => 'upload'],
+            ],
+          ],
+        ],
+      ];
+    }
 
     if ($this->getProcess()->hasReviewNote !== NULL && $this->getProcess()->hasSatus !== null) {
       $form['process_hasreviewnote'] = [
@@ -527,24 +637,34 @@ class EditWorkflowForm extends FormBase {
       $doc_type = $form_state->getValue('workflow_webdocument_type');
       $workflow_webdocument = $this->getProcess()->hasWebDocument;
 
+      // Compute module-ish URI segment used for private file storage.
+      $process_uri = Utils::namespaceUri($this->getWorkflowUri());
+      $modUri = '';
+      if (!empty($process_uri)) {
+        $parts = explode(':/', $process_uri);
+        if (count($parts) > 1) {
+          $modUri = $parts[1];
+        }
+      }
+
       // If user selected URL, use the textfield value.
       if ($doc_type === 'url') {
         $workflow_webdocument = $form_state->getValue('workflow_webdocument_url');
       }
       // If user selected Upload, load the file entity and get its filename.
       elseif ($doc_type === 'upload') {
-        // Get the file IDs from the managed_file element.
-        $fids = $form_state->getValue('workflow_webdocument_upload');
-        if (!empty($fids)) {
-          // Load the first file (file ID is returned, e.g. "374").
-          $file = File::load(reset($fids));
+        $fids = $form_state->getValue('workflow_webdocument_upload') ?: [];
+        $submitted_fid = !empty($fids) ? (int) reset($fids) : NULL;
+
+        $existing_fid = $this->resolvePrivateResourceFid($modUri, 'webdoc', (string) $this->getProcess()->hasWebDocument, TRUE);
+
+        // Only treat as "new upload" if user actually selected a different file.
+        if ($submitted_fid && (!$existing_fid || $submitted_fid !== (int) $existing_fid)) {
+          $file = File::load($submitted_fid);
           if ($file) {
-            // Mark the file as permanent and save it.
             $file->setPermanent();
             $file->save();
-            // Optionally register file usage to prevent cleanup.
             \Drupal::service('file.usage')->add($file, 'sir', 'workflow', 1);
-            // Now get the filename from the file entity.
             $workflow_webdocument = $file->getFilename();
           }
         }
@@ -560,18 +680,17 @@ class EditWorkflowForm extends FormBase {
       }
       // If user selected Upload, load the file entity and get its filename.
       elseif ($image_type === 'upload') {
-        // Get the file IDs from the managed_file element.
-        $fids = $form_state->getValue('workflow_image_upload');
-        if (!empty($fids)) {
-          // Load the first file (file ID is returned, e.g. "374").
-          $file = File::load(reset($fids));
+        $fids = $form_state->getValue('workflow_image_upload') ?: [];
+        $submitted_fid = !empty($fids) ? (int) reset($fids) : NULL;
+
+        $existing_fid = $this->resolvePrivateResourceFid($modUri, 'image', (string) $this->getProcess()->hasImageUri, FALSE);
+
+        if ($submitted_fid && (!$existing_fid || $submitted_fid !== (int) $existing_fid)) {
+          $file = File::load($submitted_fid);
           if ($file) {
-            // Mark the file as permanent and save it.
             $file->setPermanent();
             $file->save();
-            // Optionally register file usage to prevent cleanup.
             \Drupal::service('file.usage')->add($file, 'sir', 'workflow', 1);
-            // Now get the filename from the file entity.
             $workflow_image = $file->getFilename();
           }
         }
@@ -607,24 +726,6 @@ class EditWorkflowForm extends FormBase {
           \Drupal::messenger()->addMessage(t("New Version Workflow has been created successfully."));
 
       } else {
-
-        // UPLOAD IMAGE TO API
-        if ($image_type === 'upload' && $workflow_image !== $this->getProcess()->hasImageUri) {
-          $fids = $form_state->getValue('workflow_image_upload');
-          $msg = $api->parseObjectResponse($api->uploadFile($this->getWorkflowUri(), reset($fids)), 'uploadFile');
-          if ($msg == NULL) {
-            \Drupal::messenger()->addError(t("The Uploaded Image FAILED to be submited to API."));
-          }
-        }
-
-        // UPLOAD DOCUMENT TO API
-        if ($doc_type === 'upload' && $workflow_webdocument !== $this->getProcess()->hasWebDocument) {
-          $fids = $form_state->getValue('workflow_webdocument_upload');
-          $msg = $api->parseObjectResponse($api->uploadFile($this->getWorkflowUri(), reset($fids)), 'uploadFile');
-          if ($msg == NULL) {
-            \Drupal::messenger()->addError(t("The Uploaded WebDocument FAILED to be submited to API."));
-          }
-        }
 
         $processJSON = '{"uri":"'.$this->getWorkflowUri().'",'.
           '"typeUri":"'.Utils::uriFromAutocomplete($form_state->getValue('workflow_workflowstem')).'",'.
@@ -820,6 +921,32 @@ class EditWorkflowForm extends FormBase {
 
     $api->elementDel('task', $task->uri);
     $api->elementAdd('task', json_encode($taskData));
+  }
+
+  /**
+   * Resolve an existing file entity id (fid) for a private resource file.
+   */
+  protected function resolvePrivateResourceFid(string $modUri, string $subdir, string $filename, bool $legacyFallbackToImage = FALSE): ?int {
+    if ($modUri === '' || $filename === '') {
+      return NULL;
+    }
+
+    $storage = \Drupal::entityTypeManager()->getStorage('file');
+    $desired_uri = 'private://resources/' . $modUri . '/' . $subdir . '/' . $filename;
+    $files = $storage->loadByProperties(['uri' => $desired_uri]);
+    $file = reset($files);
+
+    if (!$file && $legacyFallbackToImage) {
+      $legacy_uri = 'private://resources/' . $modUri . '/image/' . $filename;
+      $legacy_files = $storage->loadByProperties(['uri' => $legacy_uri]);
+      $file = reset($legacy_files);
+    }
+
+    if ($file && method_exists($file, 'id')) {
+      return (int) $file->id();
+    }
+
+    return NULL;
   }
 
 }
