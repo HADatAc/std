@@ -166,7 +166,18 @@ class ManageStudyForm extends FormBase
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
-    $totalPRCs = 0; // TODO
+    // Total workflows/processes available to the current user.
+    $totalPRCs = 0;
+    try {
+      $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $useremail, 9999, 0), 'listByManagerEmail');
+      if (is_array($workflows)) {
+        $totalPRCs = count($workflows);
+      }
+    }
+    catch (\Throwable $e) {
+      // Keep zero if the backend is unavailable.
+      $totalPRCs = 0;
+    }
 
     // SET STREAM LIST
     $this->setStreamList($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ACTIVE,9999,0), 'streamByStudyState'));
@@ -214,7 +225,9 @@ class ManageStudyForm extends FormBase
       ),
       14 => array(
         'value' => '<h1>' . $totalPRCs . '</h1><h3>Workflow<br>&nbsp;</h3>',
-        'link' => self::urlSelectByStudy($this->getStudy()->uri, 'prc',),
+        'link' => Url::fromRoute('ctt.execution_simulate', [
+          'studyuri' => base64_encode($this->getStudy()->uri),
+        ])->toString(),
       ),
     );
 
@@ -802,6 +815,19 @@ class ManageStudyForm extends FormBase
           break;
       }
 
+      $card_url = NULL;
+      if ($key === 14) {
+        $card_url = Url::fromRoute('ctt.execution_create', [
+          'studyuri' => base64_encode($this->getStudy()->uri),
+        ]);
+      }
+
+      $link_attributes = ['class' => $btn_classes];
+      if ($key === 14) {
+        $link_attributes['target'] = '_blank';
+        $link_attributes['rel'] = 'noopener noreferrer';
+      }
+
       $form['row6']['item']['collapse']['body']['cards_row']["card{$key}"] = [
         '#type'       => 'container',
         '#attributes' => ['class' => ['col', 'p-2']],
@@ -823,8 +849,8 @@ class ManageStudyForm extends FormBase
             'link' => [
               '#type'       => 'link',
               '#title'      => $title,
-              '#url'        => Url::fromUserInput($cards[$key]['link']),
-              '#attributes' => ['class' => $btn_classes],
+              '#url'        => $card_url ?: Url::fromUserInput($cards[$key]['link']),
+              '#attributes' => $link_attributes,
             ],
           ],
         ],
