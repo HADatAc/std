@@ -32,7 +32,7 @@ class JsonApiWorkflowController extends ControllerBase{
     }
     foreach ($workflows as $workflow) {
       $results[] = [
-        'value' => $workflow->label . ' [' . $workflow->uri . ']',
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($workflow->uri, $workflow->label), 127),
         'label' => $workflow->label,
       ];
     }
@@ -139,7 +139,7 @@ class JsonApiWorkflowController extends ControllerBase{
     }
     foreach ($tasks as $task) {
       $results[] = [
-        'value' => $task->label . ' [' . $task->uri . ']',
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($task->uri, $task->label), 127),
         'label' => $task->label,
       ];
     }

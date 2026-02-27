@@ -32,7 +32,7 @@ class JsonApiTaskController extends ControllerBase{
     }
     foreach ($tasks as $task) {
       $results[] = [
-        'value' => $task->label . ' [' . $task->uri . ']',
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($task->uri, $task->label), 127),
         'label' => $task->label,
       ];
     }
