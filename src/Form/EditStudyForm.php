@@ -87,6 +87,32 @@ class EditStudyForm extends FormBase {
       '#title' => $this->t('PI'),
       '#default_value' => $this->getStudy()->pi,
     ];
+
+    $institutionDefault = '';
+    if (isset($this->getStudy()->institution) && is_object($this->getStudy()->institution)) {
+      $institutionLabel = $this->getStudy()->institution->name ?? ($this->getStudy()->institution->label ?? '');
+      $institutionUri = $this->getStudy()->institution->uri ?? ($this->getStudy()->institutionUri ?? '');
+      if ($institutionUri !== '' && $institutionLabel !== '') {
+        $institutionDefault = Utils::fieldToAutocomplete($institutionUri, $institutionLabel);
+      }
+    }
+    elseif (isset($this->getStudy()->institutionUri) && $this->getStudy()->institutionUri != '') {
+      $institutionDefault = Utils::fieldToAutocomplete($this->getStudy()->institutionUri, $this->getStudy()->institutionUri);
+    }
+
+    $form['study_institution'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Institution'),
+      '#default_value' => $institutionDefault,
+      '#autocomplete_route_name'       => 'rep.social_autocomplete',
+      '#autocomplete_route_parameters' => [
+        'entityType' => 'organization',
+      ],
+      '#attributes' => [
+        'autocomplete' => 'off',
+      ],
+    ];
+
     $form['study_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
@@ -456,6 +482,7 @@ class EditStudyForm extends FormBase {
         '"label":"'.$form_state->getValue('study_short_name').'",'.
         '"title":"'.$form_state->getValue('study_name').'",'.
         '"comment":"'.$form_state->getValue('study_description').'",'.
+        '"institutionUri":"' . Utils::uriFromAutocomplete((string) $form_state->getValue('study_institution')) . '",'.
         // '"pi":"'.$form_state->getValue('study_pi').'",'.
         '"hasWebDocument":"' . $study_webdocument . '",' .
         '"hasImageUri":"' . $study_image . '",' .

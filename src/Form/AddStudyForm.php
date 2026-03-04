@@ -75,6 +75,18 @@ class AddStudyForm extends FormBase {
       '#title' => $this->t('PI'),
     ];
 
+    $form['study_institution'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Institution'),
+      '#autocomplete_route_name'       => 'rep.social_autocomplete',
+      '#autocomplete_route_parameters' => [
+        'entityType' => 'organization',
+      ],
+      '#attributes' => [
+        'autocomplete' => 'off',
+      ],
+    ];
+
     $form['study_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
@@ -297,6 +309,10 @@ class AddStudyForm extends FormBase {
         $useremail = \Drupal::currentUser()->getEmail();
 
         $newStudyUri = $form_state->getValue('study_uri');
+        $institutionUri = '';
+        if ($form_state->getValue('study_institution') != NULL && $form_state->getValue('study_institution') != '') {
+          $institutionUri = Utils::uriFromAutocomplete($form_state->getValue('study_institution'));
+        }
 
         // Determine the chosen document type.
         $doc_type = $form_state->getValue('study_webdocument_type');
@@ -358,6 +374,7 @@ class AddStudyForm extends FormBase {
           '"label":"'.$form_state->getValue('study_short_name').'",'.
           '"title":"'.$form_state->getValue('study_name').'",'.
           '"comment":"'.$form_state->getValue('study_description').'",'.
+          '"institutionUri":"' . $institutionUri . '",'.
           // '"pi":"'.$form_state->getValue('study_pi').'",'.
           '"hasWebDocument":"' . $study_webdocument . '",' .
           '"hasImageUri":"' . $study_image . '",' .
