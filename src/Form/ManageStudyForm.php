@@ -260,12 +260,34 @@ class ManageStudyForm extends FormBase
     }
 
     $institutionName = ' ';
-    if (
-      isset($this->getStudy()->institution) &&
-      $this->getStudy()->institution != NULL &&
-      $this->getStudy()->institution->name != NULL
-    ) {
-      $institutionName = $this->getStudy()->institution->name;
+    $institutionUri = '';
+    if (isset($this->getStudy()->institution) && $this->getStudy()->institution != NULL) {
+      if (is_object($this->getStudy()->institution)) {
+        $institutionName = (string) ($this->getStudy()->institution->name ?? ($this->getStudy()->institution->label ?? ' '));
+        $institutionUri = (string) ($this->getStudy()->institution->uri ?? ($this->getStudy()->institutionUri ?? ''));
+      }
+      elseif (is_string($this->getStudy()->institution)) {
+        $institutionUri = trim((string) $this->getStudy()->institution);
+      }
+    }
+
+    if ($institutionUri === '' && isset($this->getStudy()->institutionUri) && $this->getStudy()->institutionUri != NULL) {
+      $institutionUri = trim((string) $this->getStudy()->institutionUri);
+    }
+
+    if ((trim($institutionName) === '' || $institutionName === ' ') && $institutionUri !== '') {
+      try {
+        $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
+        if (is_object($institutionObj)) {
+          $institutionName = (string) ($institutionObj->name ?? ($institutionObj->label ?? $institutionUri));
+        }
+        else {
+          $institutionName = $institutionUri;
+        }
+      }
+      catch (\Throwable $e) {
+        $institutionName = $institutionUri;
+      }
     }
 
     $title = ' ';

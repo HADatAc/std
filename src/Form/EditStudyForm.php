@@ -89,15 +89,37 @@ class EditStudyForm extends FormBase {
     ];
 
     $institutionDefault = '';
-    if (isset($this->getStudy()->institution) && is_object($this->getStudy()->institution)) {
-      $institutionLabel = $this->getStudy()->institution->name ?? ($this->getStudy()->institution->label ?? '');
-      $institutionUri = $this->getStudy()->institution->uri ?? ($this->getStudy()->institutionUri ?? '');
-      if ($institutionUri !== '' && $institutionLabel !== '') {
-        $institutionDefault = Utils::fieldToAutocomplete($institutionUri, $institutionLabel);
+    $institutionUri = '';
+    $institutionLabel = '';
+
+    if (isset($this->getStudy()->institution)) {
+      if (is_object($this->getStudy()->institution)) {
+        $institutionUri = (string) ($this->getStudy()->institution->uri ?? ($this->getStudy()->institutionUri ?? ''));
+        $institutionLabel = (string) ($this->getStudy()->institution->name ?? ($this->getStudy()->institution->label ?? ''));
+      }
+      elseif (is_string($this->getStudy()->institution)) {
+        $institutionUri = trim((string) $this->getStudy()->institution);
       }
     }
-    elseif (isset($this->getStudy()->institutionUri) && $this->getStudy()->institutionUri != '') {
-      $institutionDefault = Utils::fieldToAutocomplete($this->getStudy()->institutionUri, $this->getStudy()->institutionUri);
+
+    if ($institutionUri === '' && isset($this->getStudy()->institutionUri) && $this->getStudy()->institutionUri != '') {
+      $institutionUri = trim((string) $this->getStudy()->institutionUri);
+    }
+
+    if ($institutionUri !== '' && $institutionLabel === '') {
+      try {
+        $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
+        if (is_object($institutionObj)) {
+          $institutionLabel = (string) ($institutionObj->name ?? ($institutionObj->label ?? ''));
+        }
+      }
+      catch (\Throwable $e) {
+        $institutionLabel = '';
+      }
+    }
+
+    if ($institutionUri !== '') {
+      $institutionDefault = Utils::fieldToAutocomplete($institutionUri, $institutionLabel !== '' ? $institutionLabel : $institutionUri);
     }
 
     $form['study_institution'] = [
