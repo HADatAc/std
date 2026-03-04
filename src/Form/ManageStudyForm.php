@@ -166,12 +166,25 @@ class ManageStudyForm extends FormBase
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
-    // Total workflows/processes available to the current user.
+    // Workflow count shown in the execution card:
+    // prefer the workflow currently associated to this study (Drupal state).
     $totalPRCs = 0;
     try {
-      $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $useremail, 9999, 0), 'listByManagerEmail');
-      if (is_array($workflows)) {
-        $totalPRCs = count($workflows);
+      $storedProcessUri = \Drupal::state()->get('ctt.study_process.' . sha1($this->getStudy()->uri));
+      if (!empty($storedProcessUri)) {
+        $storedProcess = $api->parseObjectResponse($api->getUri($storedProcessUri), 'getUri');
+        if (!empty($storedProcess) && is_object($storedProcess) && !empty($storedProcess->uri)) {
+          $totalPRCs = 1;
+        }
+      }
+
+      // If no association is stored yet, fallback to all workflows/processes
+      // available to the current user.
+      if ($totalPRCs === 0) {
+        $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $useremail, 9999, 0), 'listByManagerEmail');
+        if (is_array($workflows)) {
+          $totalPRCs = count($workflows);
+        }
       }
     }
     catch (\Throwable $e) {
