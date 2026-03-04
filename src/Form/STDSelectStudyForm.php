@@ -349,7 +349,35 @@ class STDSelectStudyForm extends FormBase
 
       $pi = is_object($element->pi) ? $element->pi->name : $element->pi ?? '';
 
-      $ins = is_object($element->institution) ? $element->institution->name : $element->institution ?? '';
+      $ins = '';
+      $insUri = '';
+      if (isset($element->institution)) {
+        if (is_object($element->institution)) {
+          $ins = (string) ($element->institution->name ?? ($element->institution->label ?? ''));
+          $insUri = (string) ($element->institution->uri ?? ($element->institutionUri ?? ''));
+        }
+        elseif (is_string($element->institution)) {
+          $insUri = trim((string) $element->institution);
+        }
+      }
+      if ($insUri === '' && isset($element->institutionUri) && is_string($element->institutionUri)) {
+        $insUri = trim((string) $element->institutionUri);
+      }
+      if ($ins === '' && $insUri !== '') {
+        try {
+          $api = \Drupal::service('rep.api_connector');
+          $org = $api->parseObjectResponse($api->getUri($insUri), 'getUri');
+          if (is_object($org)) {
+            $ins = (string) ($org->name ?? ($org->label ?? $insUri));
+          }
+          else {
+            $ins = $insUri;
+          }
+        }
+        catch (\Throwable $e) {
+          $ins = $insUri;
+        }
+      }
       $desc = $element->comment ?? '';
 
       // Build Card Array
