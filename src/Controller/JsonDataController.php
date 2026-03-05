@@ -117,7 +117,7 @@ class JsonDataController extends ControllerBase
         // GET STUDY
         $api = \Drupal::service('rep.api_connector');
         $decoded_studyuri = base64_decode($studyuri);
-        $study = $api->parseObjectResponse($api->getUri($decoded_studyuri), 'getUri');
+        $study = $this->parseApiBodyQuiet($api->getUri($decoded_studyuri));
         if (!$study) {
             $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
             $this->backUrl();
@@ -137,7 +137,14 @@ class JsonDataController extends ControllerBase
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
           //OLD $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
-          $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
+          $totalObj = $this->parseApiBodyQuiet($api->getTotalStudyDAsByStudy($this->getStudy()->uri));
+          if (is_object($totalObj) && isset($totalObj->total) && is_numeric($totalObj->total)) {
+              $this->setListSize((int) $totalObj->total);
+          } elseif (is_numeric($totalObj)) {
+              $this->setListSize((int) $totalObj);
+          } else {
+              $this->setListSize(0);
+          }
         }
 
         if (gettype($this->list_size) == 'string') {
@@ -172,21 +179,55 @@ class JsonDataController extends ControllerBase
 
         // RETRIEVE ELEMENTS
         $allItems = [];
+        $usedLocalFallback = false;
         try {
-            $retrievedItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page), 'getStudyDAsByStudy');
+            $retrievedItems = $this->parseApiBodyQuiet($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page));
             if (is_array($retrievedItems)) {
                 $allItems = $retrievedItems;
             } else {
-                \Drupal::logger('std')->warning('Expected array from getStudyDAsByStudy for study @study, got @type. Returning empty list.', [
+                \Drupal::logger('std')->warning('Expected array from getStudyDAsByStudy for study @study, got @type. Using local DA files fallback.', [
                     '@study' => $this->getStudy()->uri,
                     '@type' => gettype($retrievedItems),
                 ]);
+                $allItems = $this->buildLocalDAFallbackRows($studyuri, $page, $pagesize);
+                $usedLocalFallback = true;
             }
         } catch (\Throwable $e) {
             \Drupal::logger('std')->error('Failed to fetch DAs for study @study: @message', [
                 '@study' => $this->getStudy()->uri,
                 '@message' => $e->getMessage(),
             ]);
+            $allItems = $this->buildLocalDAFallbackRows($studyuri, $page, $pagesize);
+            $usedLocalFallback = true;
+        }
+
+        if ($usedLocalFallback) {
+            $totalLocalFiles = $this->countLocalDAFiles($studyuri);
+            $total_pages = max(1, (int) ceil($totalLocalFiles / $pagesize));
+            $this->setListSize($totalLocalFiles);
+            $this->setList($allItems);
+
+            $header = [
+                'FileName' => 'FileName',
+                'Log' => 'Log',
+                'Operations' => 'Operations',
+            ];
+
+            $data = [
+                'headers' => array_values($header),
+                'output' => $allItems,
+                'pagination' => [
+                    'first' => $page > 1 ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, 1, $pagesize) : null,
+                    'last' => $page < $total_pages ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $total_pages, $pagesize) : null,
+                    'previous' => $page > 1 ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page - 1, $pagesize) : '',
+                    'next' => $page < $total_pages ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page + 1, $pagesize) : '',
+                    'last_page' => strval($total_pages),
+                    'page' => strval($page),
+                    'items' => strval($this->getListSize()),
+                ],
+            ];
+
+            return new JsonResponse($data);
         }
 
         $unassociated = array_filter($allItems, function ($item) {
@@ -249,6 +290,111 @@ class JsonDataController extends ControllerBase
 
         // RETURN JSON
         return new JsonResponse($data);
+    }
+
+    private function parseApiBodyQuiet($response)
+    {
+        if ($response === null || $response === '') {
+            return null;
+        }
+
+        $decoded = null;
+        if (is_string($response)) {
+            $decoded = json_decode($response);
+        } elseif (is_object($response) || is_array($response)) {
+            $decoded = $response;
+        }
+
+        if (!$decoded) {
+            return null;
+        }
+
+        $body = null;
+        if (is_object($decoded) && property_exists($decoded, 'body')) {
+            $body = $decoded->body;
+        } elseif (is_array($decoded) && array_key_exists('body', $decoded)) {
+            $body = $decoded['body'];
+        } else {
+            return $decoded;
+        }
+
+        if (is_string($body)) {
+            $trimmed = trim($body);
+            if ($trimmed === '') {
+                return null;
+            }
+            if (($trimmed[0] === '{' && substr($trimmed, -1) === '}') || ($trimmed[0] === '[' && substr($trimmed, -1) === ']')) {
+                $redecoded = json_decode($trimmed);
+                return $redecoded ?: $body;
+            }
+            return $body;
+        }
+
+        return $body;
+    }
+
+    private function countLocalDAFiles($studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/da/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return 0;
+        }
+
+        $realPath = $file_system->realpath($directory);
+        if (!$realPath || !is_dir($realPath)) {
+            return 0;
+        }
+
+        $all_files = scandir($realPath) ?: [];
+        $filtered = array_filter($all_files, function ($file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            return in_array($extension, ['csv', 'xlsx']);
+        });
+
+        return count($filtered);
+    }
+
+    private function buildLocalDAFallbackRows($studyuri, $page, $pagesize)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/da/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return [];
+        }
+
+        $realPath = $file_system->realpath($directory);
+        if (!$realPath || !is_dir($realPath)) {
+            return [];
+        }
+
+        $all_files = scandir($realPath) ?: [];
+        $filtered_files = array_values(array_filter($all_files, function ($file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            return in_array($extension, ['csv', 'xlsx']);
+        }));
+
+        sort($filtered_files);
+        $offset = ($page - 1) * $pagesize;
+        $paginated_files = array_slice($filtered_files, $offset, $pagesize);
+
+        $rows = [];
+        foreach ($paginated_files as $file) {
+            $downloadUrl = \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/da';
+            $operations = '<a href="#" class="btn btn-sm btn-secondary download-unassociated-url" data-download-url="' . Html::escape($downloadUrl) . '" title="Download file"><i class="fa-solid fa-download"></i></a>';
+
+            $rows[] = [
+                'FileName' => Html::escape($file),
+                'Log' => 'Fallback list (API unavailable)',
+                'Operations' => $operations,
+            ];
+        }
+
+        return $rows;
     }
 
     #UPDATE SESSION TABLE DA POSITION
@@ -493,12 +639,18 @@ class JsonDataController extends ControllerBase
             // \Drupal::logger('debug')->debug('MT JSON: @json', ['@json' => $mtJSON]);
 
             // 4) Call API and log responses
-            $msg1 = $api->parseObjectResponse($api->datafileAdd($datafileJSON), 'datafileAdd');
+            $msg1 = $this->parseApiBodyQuiet($api->datafileAdd($datafileJSON));
             // \Drupal::logger('debug')->debug('Response datafileAdd: @resp', [
             //     '@resp' => print_r($msg1, TRUE),
             // ]);
 
-            $msg2 = $api->parseObjectResponse($api->elementAdd('da', $mtJSON), 'elementAdd');
+            $msg2 = $this->parseApiBodyQuiet($api->elementAdd('da', $mtJSON));
+
+            if ($msg1 === null || $msg2 === null) {
+                \Drupal::logger('std')->warning('DA processing completed with API fallback/null response (datafileAdd or elementAdd). file=@file', [
+                    '@file' => $filename,
+                ]);
+            }
             // \Drupal::logger('debug')->debug('Response elementAdd: @resp', [
             //     '@resp' => print_r($msg2, TRUE),
             // ]);
