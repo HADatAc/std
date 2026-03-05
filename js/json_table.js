@@ -1,4 +1,6 @@
 (function ($, Drupal, once) {
+  const STD_UNASSOCIATED_REFRESH_KEY = 'std.unassociated.refresh';
+
   let totals = {
     daFiles: 0,
     publications: 0,
@@ -1245,6 +1247,63 @@
           loadMediaFiles(initialMediaPage);
         }
       );
+    },
+  };
+
+  Drupal.behaviors.unassociatedFilesRefreshListener = {
+    attach: function (context) {
+      once("unassociated-files-refresh-listener", "body", context).forEach(function () {
+        let lastSignalTs = 0;
+
+        const handleRefreshSignal = function (payloadRaw) {
+          if (!payloadRaw) {
+            return;
+          }
+
+          let payload;
+          try {
+            payload = JSON.parse(payloadRaw);
+          } catch {
+            return;
+          }
+
+          const signalStudyUri = String(payload?.studyUri || '').trim();
+          const currentStudyUri = getStdStudyUri();
+          const ts = Number(payload?.ts || 0);
+
+          if (!signalStudyUri || !currentStudyUri) {
+            return;
+          }
+
+          if (signalStudyUri !== currentStudyUri) {
+            return;
+          }
+
+          if (!Number.isFinite(ts) || ts <= 0 || ts <= lastSignalTs) {
+            return;
+          }
+
+          lastSignalTs = ts;
+          const currentPage = drupalSettings.std.page || 1;
+          loadTableData(currentPage);
+        };
+
+        window.addEventListener('storage', function (event) {
+          if (!event || event.key !== STD_UNASSOCIATED_REFRESH_KEY || !event.newValue) {
+            return;
+          }
+          handleRefreshSignal(event.newValue);
+        });
+
+        window.addEventListener('focus', function () {
+          try {
+            const payloadRaw = window.localStorage.getItem(STD_UNASSOCIATED_REFRESH_KEY);
+            handleRefreshSignal(payloadRaw);
+          } catch {
+            // Ignore localStorage access issues.
+          }
+        });
+      });
     },
   };
 
