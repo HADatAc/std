@@ -171,15 +171,31 @@ class JsonDataController extends ControllerBase
         }
 
         // RETRIEVE ELEMENTS
-        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page),'getStudyDAsByStudy');
+        $allItems = [];
+        try {
+            $retrievedItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page), 'getStudyDAsByStudy');
+            if (is_array($retrievedItems)) {
+                $allItems = $retrievedItems;
+            } else {
+                \Drupal::logger('std')->warning('Expected array from getStudyDAsByStudy for study @study, got @type. Returning empty list.', [
+                    '@study' => $this->getStudy()->uri,
+                    '@type' => gettype($retrievedItems),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Drupal::logger('std')->error('Failed to fetch DAs for study @study: @message', [
+                '@study' => $this->getStudy()->uri,
+                '@message' => $e->getMessage(),
+            ]);
+        }
 
         $unassociated = array_filter($allItems, function ($item) {
-          return empty($item->hasDataFile->streamUri);
+          return empty($item->hasDataFile) || empty($item->hasDataFile->streamUri);
         });
 
         $totalUnassociated = count($unassociated);
         $this->setListSize($totalUnassociated);
-        $total_pages = (int) ceil($totalUnassociated / $pagesize);
+        $total_pages = max(1, (int) ceil($totalUnassociated / $pagesize));
 
         if (($page - 1) * $pagesize >= $totalUnassociated) {
           $page = max(1, $page - 1);
