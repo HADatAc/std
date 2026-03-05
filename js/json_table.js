@@ -36,6 +36,53 @@
     return studyUri;
   };
 
+  const buildStudyUriCandidates = function (value) {
+    const out = new Set();
+    const raw = String(value || '').trim();
+    if (!raw) {
+      return out;
+    }
+
+    out.add(raw);
+
+    try {
+      const decoded = decodeURIComponent(raw).trim();
+      if (decoded) {
+        out.add(decoded);
+      }
+    } catch {
+      // Ignore malformed URI sequences.
+    }
+
+    const maybeBase64 = raw.replace(/\s+/g, '');
+    if (/^[A-Za-z0-9+/=]+$/.test(maybeBase64) && maybeBase64.length % 4 === 0) {
+      try {
+        const decoded64 = atob(maybeBase64).trim();
+        if (decoded64) {
+          out.add(decoded64);
+          try {
+            const decoded64Uri = decodeURIComponent(decoded64).trim();
+            if (decoded64Uri) {
+              out.add(decoded64Uri);
+            }
+          } catch {
+            // Ignore malformed URI sequences.
+          }
+        }
+      } catch {
+        // Not a valid base64 payload.
+      }
+    }
+
+    try {
+      out.add(btoa(raw));
+    } catch {
+      // Ignore non-latin1 values.
+    }
+
+    return out;
+  };
+
   // Função para carregar os dados da tabela dinamicamente
   const loadTableData = function (page) {
     if (typeof $ === "undefined") {
@@ -1270,17 +1317,34 @@
           const signalStudyUri = String(payload?.studyUri || '').trim();
           const currentStudyUri = getStdStudyUri();
           const ts = Number(payload?.ts || 0);
+          const source = String(payload?.source || '').trim();
 
-          if (!signalStudyUri || !currentStudyUri) {
-            return;
-          }
-
-          if (signalStudyUri !== currentStudyUri) {
+          if (source && source !== 'ctt-execution') {
             return;
           }
 
           if (!Number.isFinite(ts) || ts <= 0 || ts <= lastSignalTs) {
             return;
+          }
+
+          if (!currentStudyUri) {
+            return;
+          }
+
+          if (signalStudyUri) {
+            const signalCandidates = buildStudyUriCandidates(signalStudyUri);
+            const currentCandidates = buildStudyUriCandidates(currentStudyUri);
+
+            let matchesStudy = false;
+            signalCandidates.forEach(function (candidate) {
+              if (currentCandidates.has(candidate)) {
+                matchesStudy = true;
+              }
+            });
+
+            if (!matchesStudy) {
+              return;
+            }
           }
 
           lastSignalTs = ts;
@@ -1296,6 +1360,18 @@
         });
 
         window.addEventListener('focus', function () {
+          try {
+            const payloadRaw = window.localStorage.getItem(STD_UNASSOCIATED_REFRESH_KEY);
+            handleRefreshSignal(payloadRaw);
+          } catch {
+            // Ignore localStorage access issues.
+          }
+        });
+
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState !== 'visible') {
+            return;
+          }
           try {
             const payloadRaw = window.localStorage.getItem(STD_UNASSOCIATED_REFRESH_KEY);
             handleRefreshSignal(payloadRaw);
