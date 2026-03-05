@@ -16,6 +16,24 @@
     }
   };
 
+  const getStdStudyUri = function () {
+    const stdSettings = (typeof drupalSettings !== 'undefined' && drupalSettings.std)
+      ? drupalSettings.std
+      : null;
+
+    let studyUri = stdSettings ? (stdSettings.studyUri ?? stdSettings.studyuri ?? '') : '';
+    if (typeof studyUri !== 'string') {
+      studyUri = String(studyUri ?? '');
+    }
+
+    studyUri = studyUri.trim();
+    if (!studyUri || studyUri === 'undefined' || studyUri === 'null') {
+      return '';
+    }
+
+    return studyUri;
+  };
+
   // Função para carregar os dados da tabela dinamicamente
   const loadTableData = function (page) {
     if (typeof $ === "undefined") {
@@ -23,11 +41,26 @@
       return;
     }
 
-    const studyuri = drupalSettings.std.studyUri;
+    const studyuri = getStdStudyUri();
     const elementtype = drupalSettings.std.elementtype;
     const mode = drupalSettings.std.mode;
     const pagesize = drupalSettings.std.pagesize;
     const loggedUser = drupalSettings.user.logged;
+
+    if (!studyuri || !elementtype || !mode || !pagesize) {
+      console.warn('Skipping std/json-data load due to missing settings.', {
+        studyuri: studyuri || '(empty)',
+        elementtype: elementtype || '(empty)',
+        mode: mode || '(empty)',
+        pagesize: pagesize || '(empty)',
+      });
+      if ($("#json-table-container").length) {
+        $("#json-table-container").html("<p>No data available to display.</p>");
+      }
+      $("#json-table-pager").empty();
+      $("#json-table-stream-pager").empty();
+      return;
+    }
 
     console.log(`Loading table data: studyuri=${studyuri}, elementtype=${elementtype}, mode=${mode}, page=${page}, pagesize=${pagesize}`);
     const url =
@@ -484,7 +517,11 @@
       const file = files[0];
       const originalFileName = file.name;
       const fileExtension = originalFileName.split(".").pop().toLowerCase();
-      const studyuri = drupalSettings.std.studyuri;
+      const studyuri = getStdStudyUri();
+      if (!studyuri) {
+        showToast("Study URI is missing for upload context.", "warning");
+        return;
+      }
 
       try {
         // 1) Check filename
@@ -621,7 +658,13 @@
       return;
     }
 
-    const studyuri = drupalSettings.std.studyuri;
+    const studyuri = getStdStudyUri();
+    if (!studyuri) {
+      console.warn('Skipping publication load: missing study URI.');
+      $("#publication-table-container").html("<p>No data available to display.</p>");
+      $("#publication-table-pager").empty();
+      return;
+    }
     const pagesize = 5;
     const url =
       drupalSettings.path.baseUrl +
@@ -835,7 +878,13 @@
       return;
     }
 
-    const studyuri = drupalSettings.std.studyuri;
+    const studyuri = getStdStudyUri();
+    if (!studyuri) {
+      console.warn('Skipping media load: missing study URI.');
+      $("#media-table-container").html("<p>No data available to display.</p>");
+      $("#media-table-pager").empty();
+      return;
+    }
     const pagesize = 5;
     const url =
       drupalSettings.path.baseUrl +
