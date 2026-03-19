@@ -141,7 +141,7 @@ class ManageStudyForm extends FormBase
       'pagesize'   => 5,
     ];
     $form['#attached']['drupalSettings']['std'] = [
-      // —— stream/topic selection ——
+      // -- stream/topic selection --
       'studyuri'        => base64_encode($this->studyUri),
       'elementtype'=> 'da',
       'mode'       => 'compact',
