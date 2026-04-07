@@ -106,15 +106,20 @@ class STDListForm extends FormBase {
     if (empty($elementtype)) {
       $elementtype = 'dsg';
     }
-    // // Retrieve keyword, page and pagesize from query parameters.
-    $keyword = $keyword;
+    // Route params + keyword filter (defaults from route)
     $page = $page ?? 1;
     $pagesize = $pagesize ?? 9;
+
+    $text_filter = $form_state->getValue('text_filter');
+    if ($text_filter === NULL) {
+      $text_filter = ($keyword !== NULL && $keyword !== '_' ? $keyword : '');
+    }
+    $keyword_param = ($text_filter === NULL || $text_filter === '') ? '_' : $text_filter;
 
     // Get total number of elements.
     $this->setListSize(-1);
     if ($elementtype != NULL) {
-      $this->setListSize(ListKeywordPage::total($elementtype, $keyword));
+      $this->setListSize(ListKeywordPage::total($elementtype, $keyword_param));
     }
     if (gettype($this->list_size) == 'string') {
       $total_pages = 0;
@@ -127,14 +132,14 @@ class STDListForm extends FormBase {
     if ($view_type == 'table') {
       if ($page < $total_pages) {
         $next_page = $page + 1;
-        $next_page_link = ListKeywordPage::link($elementtype, $keyword, $next_page, $pagesize);
+        $next_page_link = ListKeywordPage::link($elementtype, $keyword_param, $next_page, $pagesize);
       }
       else {
         $next_page_link = '';
       }
       if ($page > 1) {
         $previous_page = $page - 1;
-        $previous_page_link = ListKeywordPage::link($elementtype, $keyword, $previous_page, $pagesize);
+        $previous_page_link = ListKeywordPage::link($elementtype, $keyword_param, $previous_page, $pagesize);
       }
       else {
         $previous_page_link = '';
@@ -157,7 +162,7 @@ class STDListForm extends FormBase {
     }
 
     // Retrieve elements using a custom method.
-    $this->setList(ListKeywordPage::exec($elementtype, $keyword, $page, $pagesize));
+    $this->setList(ListKeywordPage::exec($elementtype, $keyword_param, $page, $pagesize));
 
     // Initialize variables for class name, header, and output.
     $class_name = "";
@@ -294,7 +299,7 @@ class STDListForm extends FormBase {
       '#type' => 'container',
       '#attributes' => [
         'class' => ['header-container'],
-        'style' => 'display: flex; justify-content: space-between; align-items: center;',
+        'style' => 'display: flex; justify-content: space-between; align-items: flex-start;',
       ],
     ];
     $form['header']['title'] = [
@@ -302,13 +307,21 @@ class STDListForm extends FormBase {
       '#markup' => t('<h3>Available <font style="color:DarkGreen;">' . $class_name . '</font></h3>'),
     ];
 
-    $form['header']['view_toggle'] = [
+    // Right-side controls: view toggle on top, filters below.
+    $form['header']['right_controls'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['d-flex', 'flex-column', 'align-items-end', 'gap-2'],
+      ],
+    ];
+
+    $form['header']['right_controls']['view_toggle'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['view-toggle', 'd-flex', 'justify-content-end']],
     ];
 
     // Table view button.
-    $form['header']['view_toggle']['table_view'] = [
+    $form['header']['right_controls']['view_toggle']['table_view'] = [
       '#type' => 'submit',
       '#value' => '',
       '#name' => 'view_table',
@@ -324,7 +337,7 @@ class STDListForm extends FormBase {
     ];
 
     // Card view button.
-    $form['header']['view_toggle']['card_view'] = [
+    $form['header']['right_controls']['view_toggle']['card_view'] = [
       '#type' => 'submit',
       '#value' => '',
       '#name' => 'view_card',
@@ -339,26 +352,66 @@ class STDListForm extends FormBase {
 
     // Add active class based on the current view type.
     if ($view_type == 'table') {
-      $form['header']['view_toggle']['table_view']['#attributes']['class'][] = 'selected-button';
+      $form['header']['right_controls']['view_toggle']['table_view']['#attributes']['class'][] = 'selected-button';
     } elseif ($view_type == 'cards') {
-      $form['header']['view_toggle']['card_view']['#attributes']['class'][] = 'selected-button';
+      $form['header']['right_controls']['view_toggle']['card_view']['#attributes']['class'][] = 'selected-button';
+    }
+
+    // Keyword filter UI (table view only)
+    if ($view_type == 'table') {
+      $form['header']['right_controls']['filter_container'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['d-flex', 'ms-auto', 'mb-0'],
+          'style' => 'margin-bottom:0!important;'
+        ],
+      ];
+
+      $form['header']['right_controls']['filter_container']['filter_label'] = [
+        '#type' => 'label',
+        '#title' => $this->t('Filter(s): '),
+        '#attributes' => [
+          'class' => ['pt-3', 'me-2', 'fw-bold'],
+        ]
+      ];
+
+      $form['header']['right_controls']['filter_container']['text_filter'] = [
+        '#type' => 'textfield',
+        '#default_value' => $text_filter,
+        '#ajax' => [
+          'callback' => '::ajaxReloadTable',
+          'wrapper' => 'element-table-wrapper',
+          'event' => 'change',
+        ],
+        '#attributes' => [
+          'class' => ['form-select', 'w-auto', 'mt-2', 'me-1'],
+          'style' => 'max-width:230px;margin-bottom:0!important;float:right;',
+          'placeholder' => 'Type in your search criteria',
+          'onkeydown' => 'if (event.keyCode == 13) { event.preventDefault(); this.blur(); }',
+        ],
+      ];
     }
 
     // Build form content based on view type.
     if ($view_type == 'table') {
+      $form['element_table_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'element-table-wrapper'],
+      ];
+
       // Render table view.
-      $form['content'] = [
+      $form['element_table_wrapper']['content'] = [
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $output,
         '#empty' => $this->t('No response options found'),
       ];
-      $form['pager'] = [
+      $form['element_table_wrapper']['pager'] = [
         '#theme' => 'list-page',
         '#items' => [
           'page' => strval($page),
-          'first' => ListKeywordPage::link($elementtype, $keyword, 1, $pagesize),
-          'last' => ListKeywordPage::link($elementtype, $keyword, $total_pages, $pagesize),
+          'first' => ListKeywordPage::link($elementtype, $keyword_param, 1, $pagesize),
+          'last' => ListKeywordPage::link($elementtype, $keyword_param, $total_pages, $pagesize),
           'previous' => $previous_page_link,
           'next' => $next_page_link,
           'last_page' => strval($total_pages),
@@ -420,6 +473,14 @@ class STDListForm extends FormBase {
     }
 
     return $form;
+  }
+
+  /**
+   * AJAX callback to reload table when filters change.
+   */
+  public function ajaxReloadTable(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    return $form['element_table_wrapper'];
   }
 
   /**

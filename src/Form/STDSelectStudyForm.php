@@ -10,6 +10,7 @@ use Drupal\Core\Render\Markup;
 use Drupal\rep\ListManagerEmailPage;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\REPGUI;
+use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\Core\Ajax\AjaxResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Drupal\Component\Utility\Html;
@@ -102,6 +103,18 @@ class STDSelectStudyForm extends FormBase
     $session = \Drupal::request()->getSession();
     $view_type = $session->get('std_select_study_view_type', 'card');
     $form_state->set('view_type', $view_type);
+    $table_active_class = ($view_type === 'table') ? ['selected-button'] : [];
+    $card_active_class = ($view_type === 'card') ? ['selected-button'] : [];
+
+    // Persist filter state in session (applied on table view)
+    $status_filter_key = 'std_select_status_filter.' . (string) $this->element_type;
+    $status_filter = $form_state->getValue('status_filter');
+    if ($status_filter === NULL) {
+      $status_filter = $session->get($status_filter_key, '_');
+    }
+    else {
+      $session->set($status_filter_key, $status_filter);
+    }
 
     $form_state->set('page_size', $pagesize);
 
@@ -149,39 +162,23 @@ class STDSelectStudyForm extends FormBase
       ]),
     ];
 
-    // Adiciona botões de alternância de visualização
-    $form['view_toggle'] = [
+    // Controls row: action buttons (left) + view toggle and filters (right).
+    $form['header_controls'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['view-toggle', 'd-flex', 'justify-content-end']],
-    ];
-
-    $form['view_toggle']['table_view'] = [
-      '#type' => 'submit',
-      '#value' => '',
-      '#name' => 'view_table',
       '#attributes' => [
-        'style' => 'padding: 20px;',
-        'class' => ['table-view-button', 'fa-xl', 'mx-1'],
-        'title' => $this->t('Table View'),
+        'class' => ['d-flex', 'justify-content-between', 'align-items-start', 'flex-wrap', 'gap-2', 'mb-0'],
+        'style' => 'margin-bottom:0!important;',
       ],
-      '#submit' => ['::viewTableSubmit'],
-      '#limit_validation_errors' => [],
     ];
 
-    $form['view_toggle']['card_view'] = [
-      '#type' => 'submit',
-      '#value' => '',
-      '#name' => 'view_card',
+    $form['header_controls']['buttons_container'] = [
+      '#type' => 'container',
       '#attributes' => [
-        'style' => 'padding: 20px;',
-        'class' => ['card-view-button', 'fa-xl'],
-        'title' => $this->t('Card View'),
+        'class' => ['d-flex', 'flex-wrap', 'gap-2'],
       ],
-      '#submit' => ['::viewCardSubmit'],
-      '#limit_validation_errors' => [],
     ];
 
-    $form['add_element'] = [
+    $form['header_controls']['buttons_container']['add_element'] = [
       '#type' => 'submit',
       '#value' => $this->t('Add New ' . $this->single_class_name),
       '#name' => 'add_element',
@@ -191,7 +188,7 @@ class STDSelectStudyForm extends FormBase
     ];
 
     if ($this->element_type == 'workflowstem') {
-      $form['derive_workflowstem'] = [
+      $form['header_controls']['buttons_container']['derive_workflowstem'] = [
         '#type' => 'submit',
         '#value' => $this->t('Derive New ' . $this->single_class_name),
         '#name' => 'derive_workflowstem',
@@ -200,6 +197,44 @@ class STDSelectStudyForm extends FormBase
         ],
       ];
     }
+
+    $form['header_controls']['right_controls'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['d-flex', 'flex-column', 'align-items-end', 'gap-2'],
+      ],
+    ];
+
+    $form['header_controls']['right_controls']['view_toggle'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['view-toggle', 'd-flex', 'justify-content-end']],
+    ];
+
+    $form['header_controls']['right_controls']['view_toggle']['table_view'] = [
+      '#type' => 'submit',
+      '#value' => '',
+      '#name' => 'view_table',
+      '#attributes' => [
+        'style' => 'padding: 20px;',
+        'class' => array_merge(['table-view-button', 'fa-xl', 'mx-1'], $table_active_class),
+        'title' => $this->t('Table View'),
+      ],
+      '#submit' => ['::viewTableSubmit'],
+      '#limit_validation_errors' => [],
+    ];
+
+    $form['header_controls']['right_controls']['view_toggle']['card_view'] = [
+      '#type' => 'submit',
+      '#value' => '',
+      '#name' => 'view_card',
+      '#attributes' => [
+        'style' => 'padding: 20px;',
+        'class' => array_merge(['card-view-button', 'fa-xl'], $card_active_class),
+        'title' => $this->t('Card View'),
+      ],
+      '#submit' => ['::viewCardSubmit'],
+      '#limit_validation_errors' => [],
+    ];
 
     if ($view_type == 'card') {
 
@@ -265,22 +300,84 @@ class STDSelectStudyForm extends FormBase
         $page = 1;
       }
 
+      // Status filter UI (table view only)
+      $status_options = [
+        '_' => $this->t('All Status'),
+        VSTOI::DRAFT => $this->t('Draft'),
+        VSTOI::UNDER_REVIEW => $this->t('Under Review'),
+        VSTOI::CURRENT => $this->t('Current'),
+        VSTOI::DEPRECATED => $this->t('Deprecated'),
+      ];
+
+      $form['header_controls']['right_controls']['filter_container'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['d-flex', 'ms-auto', 'mb-0'],
+          'style' => 'margin-bottom:0!important;'
+        ],
+      ];
+
+      $form['header_controls']['right_controls']['filter_container']['filter_label'] = [
+        '#type' => 'label',
+        '#title' => $this->t('Filter(s): '),
+        '#attributes' => [
+          'class' => ['pt-3', 'me-2', 'fw-bold'],
+        ],
+      ];
+
+      $form['header_controls']['right_controls']['filter_container']['status_filter'] = [
+        '#type' => 'select',
+        '#options' => $status_options,
+        '#default_value' => $status_filter,
+        '#ajax' => [
+          'callback' => '::ajaxReloadTable',
+          'wrapper' => 'element-table-wrapper',
+          'event' => 'change',
+        ],
+        '#attributes' => [
+          'class' => ['form-select', 'w-auto', 'mt-2'],
+          'style' => 'margin-bottom:0!important;float:right;'
+        ],
+      ];
+
+      // Total items (optionally filtered by status)
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setListSize(ListManagerEmailPage::total($this->element_type, $this->manager_email));
+      }
+      else {
+        $this->setListSize(ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $this->manager_email, FALSE));
+      }
+      $total_items = $this->getListSize();
+
+      $total_pages = 1;
+      if (is_numeric($total_items) && $pagesize > 0) {
+        $size = (int) $total_items;
+        if ($size > 0) {
+          $total_pages = (int) ceil($size / $pagesize);
+        }
+      }
+
+      // Clamp current page
+      $page = max(1, min((int) $page, (int) $total_pages));
+
       // Store page number and form status
       $form_state->set('page', $page);
 
-      // Build table view
-      $this->setList(ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize));
-      $this->buildTableView($form, $form_state);
-
-      // Get total elements number and pages
-      $this->setListSize(ListManagerEmailPage::total($this->element_type, $this->manager_email));
-      $total_items = $this->getListSize();
-
-      if ($total_items % $pagesize == 0) {
-        $total_pages = $total_items / $pagesize;
-      } else {
-        $total_pages = floor($total_items / $pagesize) + 1;
+      // Retrieve list
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setList(ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize));
       }
+      else {
+        $this->setList(ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $this->manager_email, FALSE, $page, $pagesize));
+      }
+
+      $form['element_table_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'element-table-wrapper'],
+      ];
+
+      // Build table view
+      $this->buildTableView($form['element_table_wrapper'], $form_state);
 
       // Next and Previous page links
       if ($page < $total_pages) {
@@ -297,7 +394,7 @@ class STDSelectStudyForm extends FormBase
       }
 
       // Add pagination on bottom
-      $form['pager'] = [
+      $form['element_table_wrapper']['pager'] = [
         '#theme' => 'list-page',
         '#items' => [
           'page' => strval($page),
@@ -326,6 +423,14 @@ class STDSelectStudyForm extends FormBase
     ];
 
     return $form;
+  }
+
+  /**
+   * AJAX callback to reload list when filters change.
+   */
+  public function ajaxReloadTable(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    return $form['element_table_wrapper'];
   }
 
   /**
