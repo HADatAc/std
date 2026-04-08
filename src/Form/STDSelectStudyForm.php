@@ -174,7 +174,8 @@ class STDSelectStudyForm extends FormBase
     $form['header_controls']['buttons_container'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class' => ['d-flex', 'flex-wrap', 'gap-2'],
+        'class' => ['d-flex', 'flex-nowrap', 'gap-2'],
+        'style' => 'flex-wrap:nowrap;overflow-x:auto;'
       ],
     ];
 
