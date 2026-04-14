@@ -147,63 +147,75 @@ class JsonDataController extends ControllerBase
           }
         }
 
-        if (gettype($this->list_size) == 'string') {
-            $total_pages = "0";
-        } else {
-            if ($this->list_size % $pagesize == 0) {
-                $total_pages = $this->list_size / $pagesize;
-            } else {
-                $total_pages = floor($this->list_size / $pagesize) + 1;
-            }
-        }
-
-        //AVOID NON EXISTING PAGES
-        if ($this->list_size <= (($page - 1) * 5)) {
-            $page--;
-            $total_pages--;
-        }
-
-        // CREATE LINK FOR NEXT PAGE AND PREVIOUS PAGE
-        if ($page < $total_pages) {
-            $next_page = $page + 1;
-            $next_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $next_page, $pagesize);
-        } else {
-            $next_page_link = '';
-        }
-        if ($page > 1) {
-            $previous_page = $page - 1;
-            $previous_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $previous_page, $pagesize);
-        } else {
-            $previous_page_link = '';
-        }
-
         // RETRIEVE ELEMENTS
         $allItems = [];
         $usedLocalFallback = false;
         try {
-            $retrievedItems = $this->parseApiBodyQuiet($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page));
-            if (is_array($retrievedItems)) {
-                $allItems = $retrievedItems;
-            } else {
-                \Drupal::logger('std')->warning('Expected array from getStudyDAsByStudy for study @study, got @type. Using local DA files fallback.', [
-                    '@study' => $this->getStudy()->uri,
-                    '@type' => gettype($retrievedItems),
-                ]);
-                $allItems = $this->buildLocalDAFallbackRows($studyuri, $page, $pagesize);
-                $usedLocalFallback = true;
+            $totalDAs = (int) $this->getListSize();
+            $chunkSize = 500;
+            $offset = 0;
+            $iterations = 0;
+            $maxIterations = 200;
+
+            while (true) {
+                $iterations++;
+                if ($iterations > $maxIterations) {
+                    \Drupal::logger('std')->warning('Reached max iterations while fetching DAs for study @study. Using partial results.', [
+                        '@study' => $this->getStudy()->uri,
+                    ]);
+                    break;
+                }
+
+                $limit = $chunkSize;
+                if ($totalDAs > 0) {
+                    $remaining = $totalDAs - $offset;
+                    if ($remaining <= 0) {
+                        break;
+                    }
+                    $limit = min($chunkSize, $remaining);
+                }
+
+                $retrievedItems = $this->parseApiBodyQuiet($api->getStudyDAsByStudy($this->getStudy()->uri, $limit, $offset));
+
+                if (!is_array($retrievedItems)) {
+                    \Drupal::logger('std')->warning('Expected array from getStudyDAsByStudy for study @study, got @type. Using local DA files fallback.', [
+                        '@study' => $this->getStudy()->uri,
+                        '@type' => gettype($retrievedItems),
+                    ]);
+                    $usedLocalFallback = true;
+                    break;
+                }
+
+                $retrievedCount = count($retrievedItems);
+                if ($retrievedCount === 0) {
+                    break;
+                }
+
+                $allItems = array_merge($allItems, $retrievedItems);
+                $offset += $retrievedCount;
+
+                if ($retrievedCount < $limit) {
+                    break;
+                }
+
+                if ($totalDAs > 0 && $offset >= $totalDAs) {
+                    break;
+                }
             }
         } catch (\Throwable $e) {
             \Drupal::logger('std')->error('Failed to fetch DAs for study @study: @message', [
                 '@study' => $this->getStudy()->uri,
                 '@message' => $e->getMessage(),
             ]);
-            $allItems = $this->buildLocalDAFallbackRows($studyuri, $page, $pagesize);
             $usedLocalFallback = true;
         }
 
         if ($usedLocalFallback) {
             $totalLocalFiles = $this->countLocalDAFiles($studyuri);
             $total_pages = max(1, (int) ceil($totalLocalFiles / $pagesize));
+            $page = max(1, min((int) $page, $total_pages));
+
+            $allItems = $this->buildLocalDAFallbackRows($studyuri, $page, $pagesize);
             $this->setListSize($totalLocalFiles);
             $this->setList($allItems);
 
@@ -230,20 +242,25 @@ class JsonDataController extends ControllerBase
             return new JsonResponse($data);
         }
 
-        $unassociated = array_filter($allItems, function ($item) {
-          return empty($item->hasDataFile) || empty($item->hasDataFile->streamUri);
-        });
+                $unassociated = array_values(array_filter($allItems, function ($item) {
+                    return empty($item->hasDataFile) || empty($item->hasDataFile->streamUri);
+                }));
 
-        $totalUnassociated = count($unassociated);
-        $this->setListSize($totalUnassociated);
-        $total_pages = max(1, (int) ceil($totalUnassociated / $pagesize));
+                $totalUnassociated = count($unassociated);
+                $this->setListSize($totalUnassociated);
+                $total_pages = max(1, (int) ceil($totalUnassociated / $pagesize));
 
-        if (($page - 1) * $pagesize >= $totalUnassociated) {
-          $page = max(1, $page - 1);
-        }
+                $page = max(1, min((int) $page, $total_pages));
 
-        $offset = ($page - 1) * $pagesize;
-        $paged = array_slice($unassociated, $offset, $pagesize);
+                $previous_page_link = $page > 1
+                    ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page - 1, $pagesize)
+                    : '';
+                $next_page_link = $page < $total_pages
+                    ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page + 1, $pagesize)
+                    : '';
+
+                $offset = ($page - 1) * $pagesize;
+                $paged = array_slice($unassociated, $offset, $pagesize);
 
         $this->setList($paged);
 
