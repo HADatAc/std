@@ -402,7 +402,20 @@ class JsonDataController extends ControllerBase
         $rows = [];
         foreach ($paginated_files as $file) {
             $downloadUrl = \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/da';
-            $operations = '<a href="#" class="btn btn-sm btn-secondary download-unassociated-url" data-download-url="' . Html::escape($downloadUrl) . '" title="Download file"><i class="fa-solid fa-download"></i></a>';
+            $deleteUrl = Url::fromRoute('std.delete_da_file', [
+                'filename' => $file,
+                'studyuri' => $studyuri,
+            ])->toString();
+
+            $ingestDisabledTitle = 'Ingest (unavailable while API is offline)';
+            $uningestDisabledTitle = 'Uningest (unavailable while API is offline)';
+
+            $ingestButton = '<button type="button" disabled class="btn btn-sm btn-secondary ingest-button" title="' . Html::escape($ingestDisabledTitle) . '"><i class="fa-solid fa-down-long"></i></button>';
+            $uningestButton = '<button type="button" disabled class="btn btn-sm btn-secondary uningest-button" title="' . Html::escape($uningestDisabledTitle) . '"><i class="fa-solid fa-up-long"></i></button>';
+            $downloadButton = '<a href="#" class="btn btn-sm btn-secondary download-unassociated-url" data-download-url="' . Html::escape($downloadUrl) . '" title="Download file"><i class="fa-solid fa-download"></i></a>';
+            $deleteButton = '<a href="#" title="Delete file" class="btn btn-sm btn-secondary btn-danger delete-button" data-url="' . Html::escape($deleteUrl) . '" onclick="return false;"><i class="fa-solid fa-trash-can"></i></a>';
+
+            $operations = $ingestButton . ' ' . $uningestButton . ' ' . $downloadButton . ' ' . $deleteButton;
 
             $rows[] = [
                 'FileName' => Html::escape($file),
@@ -412,6 +425,88 @@ class JsonDataController extends ControllerBase
         }
 
         return $rows;
+    }
+
+    public function deleteDAFile($filename, $studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $safeFilename = basename((string) $filename);
+
+        if ($safeFilename === '' || $safeFilename === '.' || $safeFilename === '..') {
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid file name.',
+            ], 400);
+        }
+
+        $extension = strtolower(pathinfo($safeFilename, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['csv', 'xlsx'], true)) {
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid file type.',
+            ], 400);
+        }
+
+        $directory = 'private://std/' . $decoded_studyuri . '/da/';
+        $file_path = $directory . $safeFilename;
+
+        try {
+            $file_system = \Drupal::service('file_system');
+            if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Could not access or prepare directory.',
+                ], 500);
+            }
+
+            $real_path = $file_system->realpath($file_path);
+            if (!$real_path || !file_exists($real_path)) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'File not found.',
+                    'file' => $safeFilename,
+                ], 404);
+            }
+
+            unlink($real_path);
+
+            // Best-effort cleanup of Drupal file entities that point to this URI.
+            try {
+                $storage = \Drupal::entityTypeManager()->getStorage('file');
+                $entities = $storage->loadByProperties(['uri' => $file_path]);
+                foreach ($entities as $entity) {
+                    $entity->delete();
+                }
+            }
+            catch (\Throwable $e) {
+                // Ignore cleanup errors.
+            }
+
+            $all_files = scandir($file_system->realpath($directory)) ?: [];
+            $filtered = array_filter($all_files, function ($file) {
+                $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                return in_array($ext, ['csv', 'xlsx'], true);
+            });
+
+            $totalFiles = count($filtered);
+            $pageSize = 5;
+            $lastPage = max(1, (int) ceil($totalFiles / $pageSize));
+
+            return new JsonResponse([
+                'status' => 'success',
+                'message' => 'File deleted successfully.',
+                'file' => $safeFilename,
+                'total_files' => $totalFiles,
+                'last_page' => $lastPage,
+            ]);
+        } catch (\Exception $e) {
+            \Drupal::logger('std')->error('Error deleting DA file: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error deleting file.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     #UPDATE SESSION TABLE DA POSITION

@@ -452,6 +452,19 @@ std.download_file:
     studyUri: '.+'
     type: '.+'
 
+std.delete_da_file:
+  path: '/std/delete-da-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deleteDAFile'
+    _title: 'Delete DA file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  methods: [POST]
+  options:
+    _format: 'json'
+
 # Workflow CRUD options
 
 std.manage_workflow:

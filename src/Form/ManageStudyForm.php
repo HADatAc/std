@@ -912,8 +912,8 @@ class ManageStudyForm extends FormBase
       '#url' => Url::fromUri('internal:/'),
       '#name' => 'back',
       '#attributes' => [
-        'class' => ['col-md-1', 'btn', 'btn-primary', 'back-button'],
-        'style' => 'min-width: 220px;max-height:38px!important;',
+        'class' => ['btn', 'btn-primary', 'back-button'],
+        'style' => 'min-width: 260px; white-space: nowrap;',
         'onclick' => 'window.history.back(); return false;',
       ],
     ];
