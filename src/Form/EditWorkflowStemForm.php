@@ -104,7 +104,7 @@ class EditWorkflowStemForm extends FormBase {
     $form['workflowstem_uri'] = [
       '#type' => 'item',
       '#title' => $this->t('URI: '),
-      '#markup' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($this->getWorkflowStemUri()).'">'.$this->getWorkflowStemUri().'</a>'),
+      '#markup' => Markup::create(Utils::describeAnchor((string) $this->getWorkflowStemUri(), (string) $this->getWorkflowStemUri())),
     ];
     // dpm($this->getWorkflowStem());
     if ($this->getWorkflowStem()->superUri) {
@@ -192,13 +192,11 @@ class EditWorkflowStemForm extends FormBase {
         ];
       }
 
-      $elementUri = Utils::namespaceUri($this->getWorkflowStem()->wasDerivedFrom);
-      $elementUriEncoded = base64_encode($elementUri);
-      $url = Url::fromRoute('rep.describe_element', ['elementuri' => $elementUriEncoded], ['absolute' => TRUE])->toString();
+      $url = Utils::describeHref((string) $this->getWorkflowStem()->wasDerivedFrom);
 
       $form['workflowstem_df_wrapper']['workflowstem_wasderivedfrom_button'] = [
         '#type' => 'markup',
-        '#markup' => '<a href="' . $url . '" target="_blank" class="btn btn-primary text-nowrap mt-2" style="min-width: 160px; height: 38px; display: flex; align-items: center; justify-content: center;">' . $this->t('Check Element') . '</a>',
+        '#markup' => '<a href="' . $url . '" class="btn btn-primary text-nowrap mt-2 rep-nav-guard" style="min-width: 160px; height: 38px; display: flex; align-items: center; justify-content: center;">' . $this->t('Check Element') . '</a>',
       ];
     }
     $form['workflowstem_was_generated_by'] = [

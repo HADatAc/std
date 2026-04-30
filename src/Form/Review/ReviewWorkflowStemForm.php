@@ -184,13 +184,11 @@ class ReviewWorkflowStemForm extends FormBase {
           ],
         ];
 
-        $elementUri = Utils::namespaceUri($this->getWorkflowStem()->wasDerivedFrom);
-        $elementUriEncoded = base64_encode($elementUri);
-        $url = Url::fromRoute('rep.describe_element', ['elementuri' => $elementUriEncoded], ['absolute' => TRUE])->toString();
+        $url = Utils::describeHref((string) $this->getWorkflowStem()->wasDerivedFrom);
 
         $form['workflowstem__df_wrapper']['workflowstem__wasderivedfrom_button'] = [
           '#type' => 'markup',
-          '#markup' => '<a href="' . $url . '" target="_blank" class="btn btn-primary text-nowrap mt-2" style="min-width: 160px; height: 38px; display: flex; align-items: center; justify-content: center;">' . $this->t('Check Element') . '</a>',
+          '#markup' => '<a href="' . $url . '" class="btn btn-primary text-nowrap mt-2 rep-nav-guard" style="min-width: 160px; height: 38px; display: flex; align-items: center; justify-content: center;">' . $this->t('Check Element') . '</a>',
         ];
       }
     }

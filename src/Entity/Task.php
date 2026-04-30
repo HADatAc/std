@@ -221,12 +221,7 @@ class Task {
       // --- e) Assemble the full row render array ---
       $rows[] = [
         'data' => [
-          'element_uri'             => t(
-            '<a target="_new" href=":link">'.UTILS::namespaceUri($element['uri']) ?? ''.'</a>',
-            [
-              ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri)
-            ]
-          ),
+          'element_uri'             => Markup::create(Utils::describeAnchor((string) ($element['uri'] ?? ''), (string) UTILS::namespaceUri($element['uri'] ?? ''))),
           'element_name'            => $label,
           'element_number'          => $delta + 1, // 1-based index
           'element_tasktype'        => $taskType,

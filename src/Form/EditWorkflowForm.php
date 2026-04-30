@@ -134,7 +134,7 @@ class EditWorkflowForm extends FormBase {
     $form['process_header']['workflow_uri'] = [
       '#type' => 'item',
       '#title' => $this->t('URI: '),
-      '#markup' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($this->getWorkflowUri()).'">'.$this->getWorkflowUri().'</a>'),
+      '#markup' => Markup::create(Utils::describeAnchor((string) $this->getWorkflowUri(), (string) $this->getWorkflowUri())),
     ];
 
     $form['process_header']['process_actions'] = [

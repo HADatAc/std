@@ -1676,15 +1676,9 @@ class EditTaskForm extends FormBase {
         'data' => [
           $checkbox_rendered,
           // Link to describe page.
-          t('<a target="_new" href="@url">@name</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
-            '@name' => Html::escape($component['name']),
-          ]),
+          Markup::create(Utils::describeAnchor((string) $component['uri'], (string) $component['name'])),
           // Link to URI.
-          t('<a target="_new" href="@url">@uri</a>', [
-            '@url' => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($component['uri']),
-            '@uri' => Html::escape(Utils::namespaceUri($component['uri'])),
-          ]),
+          Markup::create(Utils::describeAnchor((string) $component['uri'], (string) Utils::namespaceUri($component['uri']))),
           // Render type and status safely.
           // Html::escape($component['type']),
           Html::escape($component['status']),

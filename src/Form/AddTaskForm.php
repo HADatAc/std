@@ -1612,8 +1612,8 @@ class AddTaskForm extends FormBase {
       $rows[] = [
         'data' => [
           $checkbox_rendered,
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($component['uri']).'">' . $component['name'] . '</a>'),
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($component['uri']).'">' . UTILS::namespaceUri($component['uri']) . '</a>'),
+          Markup::create(Utils::describeAnchor((string) $component['uri'], (string) $component['name'])),
+          Markup::create(Utils::describeAnchor((string) $component['uri'], (string) UTILS::namespaceUri($component['uri']))),
           $component['status'],
         ],
       ];

@@ -73,9 +73,9 @@ class Workflow {
         }
       }
 
-      $output[$element->uri] = [
-        'element_uri' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($uri).'">'.$uri.'</a>'),
-        'element_type' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($element->typeUri).'">'.$typeLabel.'</a>'),
+        $output[$element->uri] = [
+          'element_uri' => Markup::create(Utils::describeAnchor((string) ($element->uri ?? ''), (string) $uri)),
+          'element_type' => Markup::create(Utils::describeAnchor((string) ($element->typeUri ?? ''), (string) $typeLabel)),
         'element_name' => $label,
         'element_language' => $lang,
         'element_version' => $version,
@@ -155,8 +155,8 @@ class Workflow {
       if ($element->hasSIRManagerEmail != NULL) {
         $owner = $element->hasSIRManagerEmail;
       }
-      $output[$element->uri] = [
-        'element_uri' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($uri).'">'.$uri.'</a>'),
+        $output[$element->uri] = [
+          'element_uri' => Markup::create(Utils::describeAnchor((string) ($element->uri ?? ''), (string) $uri)),
         'element_name' => $label,
         'element_language' => $lang,
         'element_version' => $version,
