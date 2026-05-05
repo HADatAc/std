@@ -97,7 +97,7 @@ class EditTaskForm extends FormBase {
 
     // MODAL
     $form['#attached']['library'][] = 'rep/rep_modal';
-    $form['#attached']['library'][] = 'std/std_process';
+    $form['#attached']['library'][] = 'std/std_js_css';
     $form['#attached']['library'][] = 'core/drupal.dialog';
     $form['#attached']['library'][] = 'core/jquery.ui.dialog';
     $form['#attached']['library'][] = 'rep/pdfjs';

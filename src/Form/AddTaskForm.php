@@ -20,6 +20,7 @@ use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Component\Serialization\Json;
 use Drupal\std\Entity\Task;
+use Drupal\Core\Render\Markup;
 
 class AddTaskForm extends FormBase {
 
@@ -129,7 +130,7 @@ class AddTaskForm extends FormBase {
     $form['#attached']['library'][] = 'core/drupal.dialog'; // Biblioteca do modal do Drupal
     $form['#attached']['library'][] = 'core/drupal.ajax';
     $form['#attached']['library'][] = 'core/jquery';
-    $form['#attached']['library'][] = 'std/std_task';
+    $form['#attached']['library'][] = 'std/std_js_css';
 
 
     // SET SEPARATOR
