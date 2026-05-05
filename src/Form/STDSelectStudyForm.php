@@ -632,9 +632,7 @@ class STDSelectStudyForm extends FormBase
         ]);
 
         // View Link
-        $view_element_str = base64_encode(Url::fromRoute('rep.describe_element', [
-          'elementuri' => $elementUriEncoded,
-        ])->toString());
+        $view_element_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
         $view_element = Url::fromRoute('rep.back_url', [
           'previousurl' => $previousUrl,
@@ -853,9 +851,7 @@ class STDSelectStudyForm extends FormBase
       ]);
 
       // Link para Visualizar
-      $view_element_str = base64_encode(Url::fromRoute('rep.describe_element', [
-        'elementuri' => $elementUriEncoded,
-      ])->toString());
+      $view_element_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
       $view_element = Url::fromRoute('rep.back_url', [
         'previousurl' => $previousUrl,

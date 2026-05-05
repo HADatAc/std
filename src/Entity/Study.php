@@ -70,9 +70,7 @@ class Study {
       ]);
 
       // Link para Visualizar
-      $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
-        'elementuri' => $studyUriEncoded,
-      ])->toString());
+      $view_study_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
       $view_study = Url::fromRoute('rep.back_url', [
         'previousurl' => 'std.manage_study_elements',
@@ -372,7 +370,7 @@ class Study {
         // }
 
         // View link.
-        $view_study_str = rtrim(strtr(base64_encode(Url::fromRoute('rep.describe_element', ['elementuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
+        $view_study_str = rtrim(strtr(base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE)), '+/', '-_'), '=');
         $view_study = Url::fromRoute('rep.back_url', [
           'previousurl' => $safe_previousUrl_str,
           'currenturl' => $view_study_str,

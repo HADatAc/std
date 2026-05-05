@@ -220,9 +220,7 @@ class STDPropertyForm extends FormBase {
    * {@inheritdoc}
    */
   public function backProperty($uri) {
-    $url = Url::fromRoute('rep.describe_element');
-    $url->setRouteParameter('elementuri', base64_encode($uri));
-    return $url;
+    return Utils::describeUrl((string) $uri, [], FALSE);
   }
 
 

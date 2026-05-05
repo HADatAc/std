@@ -135,7 +135,10 @@ class ViewStudyObjectForm extends FormBase {
 
     // BACK TO MAIN PAGE
     if ($button_name === 'back') {
-      $url = Url::fromRoute('rep.describe_element', ['elementuri' => base64_encode($this->getStudyObjectCollection()->isMemberOf->uri)]);
+      $studyUri = isset($this->getStudyObjectCollection()->isMemberOf->uri)
+        ? (string) $this->getStudyObjectCollection()->isMemberOf->uri
+        : '';
+      $url = Utils::describeUrl($studyUri, [], FALSE);
       $form_state->setRedirectUrl($url);
       return;
     }

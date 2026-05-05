@@ -91,9 +91,7 @@ class VirtualColumn {
       $path = \Drupal::request()->getPathInfo();
       $safe_previousUrl = rtrim(strtr(base64_encode($path), '+/', '-_'), '=');
       $safe_previousUrl_str = base64_encode($safe_previousUrl);
-      $view_virtual_str = base64_encode(Url::fromRoute('rep.describe_element', [
-        'elementuri' => base64_encode($element->uri)
-      ])->toString());
+      $view_virtual_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
       $view_virtual = Url::fromRoute('rep.back_url', [
         'previousurl' => $safe_previousUrl_str,
         'currenturl' => $view_virtual_str,
