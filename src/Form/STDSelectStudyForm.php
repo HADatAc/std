@@ -8,6 +8,7 @@ use Drupal\Core\Url;
 use Drupal\Core\Link;
 use Drupal\Core\Render\Markup;
 use Drupal\rep\ListManagerEmailPage;
+use Drupal\rep\ManageOwnerFilter;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\REPGUI;
 use Drupal\rep\Vocabulary\VSTOI;
@@ -116,6 +117,20 @@ class STDSelectStudyForm extends FormBase
       $session->set($status_filter_key, $status_filter);
     }
 
+    $is_admin = ManageOwnerFilter::isAdmin();
+    $manager_filter_key = 'std_select_manager_filter.' . (string) $this->element_type;
+    $manager_filter = $form_state->getValue('manager_filter');
+    if ($manager_filter === NULL) {
+      $manager_filter = $session->get($manager_filter_key, '');
+    }
+    else {
+      $manager_filter = ManageOwnerFilter::normalizeSelectedEmail($manager_filter);
+      $session->set($manager_filter_key, $manager_filter);
+    }
+
+    $effective_manager_email = ManageOwnerFilter::resolveEffectiveOwner($this->manager_email, $manager_filter, $status_filter);
+    $form_state->set('effective_manager_email', $effective_manager_email);
+
     $form_state->set('page_size', $pagesize);
 
     $this->single_class_name = "";
@@ -161,6 +176,16 @@ class STDSelectStudyForm extends FormBase
         '@manager_email' => $this->manager_email,
       ]),
     ];
+
+    $show_owner_indicator = $is_admin && $manager_filter !== '' && strcasecmp($effective_manager_email, $manager_filter) === 0;
+    if ($show_owner_indicator) {
+      $form['owner_indicator'] = [
+        '#type' => 'item',
+        '#markup' => $this->t('<div class="alert alert-info py-2 mb-3"><strong>A visualizar owner:</strong> @owner</div>', [
+          '@owner' => $effective_manager_email,
+        ]),
+      ];
+    }
 
     // Controls row: action buttons (left) + view toggle and filters (right).
     $form['header_controls'] = [
@@ -262,7 +287,7 @@ class STDSelectStudyForm extends FormBase
 
       // Carrega todas as páginas necessárias para restaurar o estado original
       for ($i = 1; $i <= $total_pages_to_load; $i++) {
-        $additional_items = ListManagerEmailPage::exec($this->element_type, $this->manager_email, $i, $pagesize);
+        $additional_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $i, $pagesize);
         if ($i == 1) {
           $this->setList($additional_items);
         } else {
@@ -271,10 +296,10 @@ class STDSelectStudyForm extends FormBase
       }
 
       // Recupera os elementos para a página atual
-      $this->setList(ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize));
+      $this->setList(ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize));
 
       // Obtém o número total de itens
-      $this->setListSize(ListManagerEmailPage::total($this->element_type, $this->manager_email));
+      $this->setListSize(ListManagerEmailPage::total($this->element_type, $effective_manager_email));
       $total_items = $this->getListSize();
 
       // Envolve os cartões em um container para AJAX
@@ -326,6 +351,25 @@ class STDSelectStudyForm extends FormBase
         ],
       ];
 
+      if ($is_admin) {
+        $form['header_controls']['right_controls']['filter_container']['manager_filter'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('User'),
+          '#title_display' => 'invisible',
+          '#default_value' => $manager_filter,
+          '#ajax' => [
+            'callback' => '::ajaxReloadTable',
+            'wrapper' => 'element-table-wrapper',
+            'event' => 'change',
+          ],
+          '#attributes' => [
+            'class' => ['form-control', 'w-auto', 'mt-2', 'me-1'],
+            'style' => 'min-width:240px;margin-bottom:0!important;float:right;',
+            'placeholder' => $this->t('User email (Draft/Under Review)'),
+          ],
+        ];
+      }
+
       $form['header_controls']['right_controls']['filter_container']['status_filter'] = [
         '#type' => 'select',
         '#options' => $status_options,
@@ -343,10 +387,10 @@ class STDSelectStudyForm extends FormBase
 
       // Total items (optionally filtered by status)
       if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
-        $this->setListSize(ListManagerEmailPage::total($this->element_type, $this->manager_email));
+        $this->setListSize(ListManagerEmailPage::total($this->element_type, $effective_manager_email));
       }
       else {
-        $this->setListSize(ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $this->manager_email, FALSE));
+        $this->setListSize(ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE));
       }
       $total_items = $this->getListSize();
 
@@ -366,10 +410,10 @@ class STDSelectStudyForm extends FormBase
 
       // Retrieve list
       if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
-        $this->setList(ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize));
+        $this->setList(ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize));
       }
       else {
-        $this->setList(ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $this->manager_email, FALSE, $page, $pagesize));
+        $this->setList(ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $page, $pagesize));
       }
 
       $form['element_table_wrapper'] = [
@@ -1054,8 +1098,13 @@ class STDSelectStudyForm extends FormBase
     $this->element_type = \Drupal::request()->query->get('element_type');
     $this->manager_email = \Drupal::currentUser()->getEmail();
 
+    $session = \Drupal::request()->getSession();
+    $status_filter = $session->get('std_select_status_filter.' . (string) $this->element_type, '_');
+    $manager_filter = ManageOwnerFilter::normalizeSelectedEmail($session->get('std_select_manager_filter.' . (string) $this->element_type, ''));
+    $effective_manager_email = ManageOwnerFilter::resolveEffectiveOwner($this->manager_email, $manager_filter, $status_filter);
+
     $pagesize = $form_state->get('page_size') ?? 9;
-    $new_items = ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize);
+    $new_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize);
 
     // Update status on already loaded items
     $items_loaded = $form_state->get('items_loaded') ?? 0;
