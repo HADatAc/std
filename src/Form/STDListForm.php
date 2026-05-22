@@ -13,9 +13,10 @@ use Drupal\std\Entity\StudyRole;
 use Drupal\std\Entity\StudyObjectCollection;
 use Drupal\std\Entity\VirtualColumn;
 use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\AppendCommand;
+use Drupal\Core\Ajax\HtmlCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Ajax\InvokeCommand;
-use Drupal\Core\Ajax\ScrollCommand;
 use Drupal\std\Entity\WorkflowStem;
 use Drupal\std\Entity\Workflow;
 
@@ -106,6 +107,7 @@ class STDListForm extends FormBase {
     if (empty($elementtype)) {
       $elementtype = 'dsg';
     }
+    $form_state->set('std_current_elementtype', (string) $elementtype);
     // Route params + keyword filter (defaults from route)
     $page = $page ?? 1;
     $pagesize = $pagesize ?? 9;
@@ -146,17 +148,22 @@ class STDListForm extends FormBase {
       }
     }
 
-    // For card view with infinite scroll, double the pagesize on each AJAX update.
+    // Card-view Load More handling.
     if ($view_type == 'cards') {
-      $current_pagesize = $form_state->get('pagesize');
-      if (empty($current_pagesize)) {
-        $current_pagesize = $pagesize;
+      $triggering_element = $form_state->getTriggeringElement();
+
+      if ($triggering_element && (($triggering_element['#name'] ?? '') === 'load_more')) {
+        $current_pagesize = (int) ($form_state->get('pagesize') ?? $pagesize);
+        $form_state->set('previous_pagesize', $current_pagesize);
+        $current_pagesize += 9;
+        $form_state->set('pagesize', $current_pagesize);
+        $pagesize = $current_pagesize;
       }
       else {
-        $current_pagesize += 9;
+        $form_state->set('previous_pagesize', NULL);
+        $form_state->set('pagesize', (int) $pagesize);
       }
-      $pagesize = $current_pagesize;
-      $form_state->set('pagesize', $current_pagesize);
+
       // For infinite scroll, keep the page number fixed (e.g., 1).
       $page = 1;
     }
@@ -289,6 +296,8 @@ class STDListForm extends FormBase {
         $class_name = "Objects of Unknown Types";
     }
 
+    $form_state->set('std_current_class_name', (string) $class_name);
+
     // Build header container with title and view toggle buttons.
     $current_route = \Drupal::routeMatch()->getRouteName();
     $current_parameters = \Drupal::routeMatch()->getParameters()->all();
@@ -357,40 +366,41 @@ class STDListForm extends FormBase {
       $form['header']['right_controls']['view_toggle']['card_view']['#attributes']['class'][] = 'selected-button';
     }
 
-    // Keyword filter UI (table view only)
-    if ($view_type == 'table') {
-      $form['header']['right_controls']['filter_container'] = [
-        '#type' => 'container',
-        '#attributes' => [
-          'class' => ['d-flex', 'ms-auto', 'mb-0'],
-          'style' => 'margin-bottom:0!important;'
-        ],
-      ];
+    // Keyword filter UI for table and card views.
+    $ajax_callback = ($view_type == 'cards') ? '::ajaxReloadCards' : '::ajaxReloadTable';
+    $ajax_wrapper = ($view_type == 'cards') ? 'cards-lazy-wrapper' : 'element-table-wrapper';
 
-      $form['header']['right_controls']['filter_container']['filter_label'] = [
-        '#type' => 'label',
-        '#title' => $this->t('Filter(s): '),
-        '#attributes' => [
-          'class' => ['pt-3', 'me-2', 'fw-bold'],
-        ]
-      ];
+    $form['header']['right_controls']['filter_container'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['d-flex', 'ms-auto', 'mb-0'],
+        'style' => 'margin-bottom:0!important;'
+      ],
+    ];
 
-      $form['header']['right_controls']['filter_container']['text_filter'] = [
-        '#type' => 'textfield',
-        '#default_value' => $text_filter,
-        '#ajax' => [
-          'callback' => '::ajaxReloadTable',
-          'wrapper' => 'element-table-wrapper',
-          'event' => 'change',
-        ],
-        '#attributes' => [
-          'class' => ['form-select', 'w-auto', 'mt-2', 'me-1'],
-          'style' => 'max-width:230px;margin-bottom:0!important;float:right;',
-          'placeholder' => 'Type in your search criteria',
-          'onkeydown' => 'if (event.keyCode == 13) { event.preventDefault(); this.blur(); }',
-        ],
-      ];
-    }
+    $form['header']['right_controls']['filter_container']['filter_label'] = [
+      '#type' => 'label',
+      '#title' => $this->t('Filter(s): '),
+      '#attributes' => [
+        'class' => ['pt-3', 'me-2', 'fw-bold'],
+      ]
+    ];
+
+    $form['header']['right_controls']['filter_container']['text_filter'] = [
+      '#type' => 'textfield',
+      '#default_value' => $text_filter,
+      '#ajax' => [
+        'callback' => $ajax_callback,
+        'wrapper' => $ajax_wrapper,
+        'event' => 'change',
+      ],
+      '#attributes' => [
+        'class' => ['form-select', 'w-auto', 'mt-2', 'me-1'],
+        'style' => 'max-width:230px;margin-bottom:0!important;float:right;',
+        'placeholder' => 'Type in your search criteria',
+        'onkeydown' => 'if (event.keyCode == 13) { event.preventDefault(); this.blur(); }',
+      ],
+    ];
 
     // Build form content based on view type.
     if ($view_type == 'table') {
@@ -421,54 +431,84 @@ class STDListForm extends FormBase {
       ];
     }
     else if ($view_type == 'cards') {
-      // Render card view container with AJAX wrapper.
-      // $form['content'] = [
-      //   '#type' => 'container',
-      //   '#attributes' => [
-      //     'id' => 'card-container-wrapper',
-      //     'class' => ['card-container'],
-      //   ],
-      // ];
+      $form['cards_lazy_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'cards-lazy-wrapper'],
+      ];
 
-      // // Add each card render array as a child of the container.
-      // foreach ($output as $card) {
-      //   $form['content'][] = $card;
-      // }
-      $form['content'] = [
+      $form['cards_lazy_wrapper']['content'] = [
         '#type' => 'container',
         '#attributes' => [
           'id' => 'card-container-wrapper',
-          'class' => ['card-container', 'row',],
+          'class' => ['card-container', 'row'],
           'style' => 'margin-bottom: 2rem!important;',
         ],
       ];
-      foreach ($output as $card_render) {
-        $form['content'][] = $card_render;
-      }
 
-      // Only add the "Load More" button if the total number of elements is greater than the pagesize.
-      // dpm($current_pagesize);
-      if ($this->list_size > $current_pagesize) {
-        $form['content']['load_more_wrapper'] = [
+      if (!empty($output)) {
+        foreach ($output as $card_render) {
+          $form['cards_lazy_wrapper']['content'][] = $card_render;
+        }
+      }
+      else {
+        $form['cards_lazy_wrapper']['content']['no_results'] = [
           '#type' => 'container',
-          '#attributes' => [
-            'class' => ['d-flex', 'justify-content-center', 'mt-4', 'w-100'],
+          '#attributes' => ['class' => ['col-12']],
+          'message' => [
+            '#markup' => '<div class="alert alert-info mb-0">'
+              . $this->t('No @items found for the current filters.', ['@items' => $class_name])
+              . '</div>',
           ],
         ];
+      }
 
-        $form['content']['load_more_wrapper']['load_more'] = [
+      $form['cards_lazy_wrapper']['records_count'] = [
+        '#type' => 'item',
+        '#markup' => $this->t('<div id="count-cards" style="font-weight:bold; margin-top:10px; padding-right:2rem;">Currently viewing @count of @total @class</div>', [
+          '@count' => count($this->getList()),
+          '@total' => (int) $this->getListSize(),
+          '@class' => $class_name,
+        ]),
+      ];
+
+      $form['cards_lazy_wrapper']['load_more_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'id' => 'std-list-load-more-wrapper',
+          'class' => ['d-flex', 'justify-content-center', 'mt-4', 'w-100'],
+        ],
+      ];
+
+      $form['cards_lazy_wrapper']['load_more_status'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'id' => 'std-list-load-more-status',
+          'class' => ['text-center', 'text-muted', 'mt-2'],
+          'role' => 'status',
+          'aria-live' => 'polite',
+          'aria-atomic' => 'true',
+        ],
+      ];
+
+      // Only add the "Load More" button if there are more elements to load.
+      if ((int) $this->list_size > (int) $pagesize) {
+        $form['cards_lazy_wrapper']['load_more_wrapper']['load_more'] = [
           '#type' => 'button',
           '#value' => $this->t('Load More'),
+          '#name' => 'load_more',
           '#ajax' => [
             'callback' => '::loadMoreCallback',
             'wrapper' => 'card-container-wrapper',
             'effect' => 'fade',
+            'progress' => [
+              'type' => 'throbber',
+              'message' => $this->t('Loading more items...'),
+            ],
           ],
           '#attributes' => [
             'class' => ['btn', 'btn-primary', 'w-25'],
           ],
         ];
-
       }
     }
 
@@ -481,6 +521,14 @@ class STDListForm extends FormBase {
   public function ajaxReloadTable(array &$form, FormStateInterface $form_state) {
     $form_state->setRebuild(TRUE);
     return $form['element_table_wrapper'];
+  }
+
+  /**
+   * AJAX callback to reload cards when filters change.
+   */
+  public function ajaxReloadCards(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    return $form['cards_lazy_wrapper'];
   }
 
   /**
@@ -519,10 +567,42 @@ class STDListForm extends FormBase {
   public function loadMoreCallback(array &$form, FormStateInterface $form_state) {
     $response = new AjaxResponse();
 
-    // Substitui o container com os novos cards.
-    $response->addCommand(new ReplaceCommand('#card-container-wrapper', $form['content']));
+    $previous = (int) ($form_state->get('previous_pagesize') ?? 0);
+    $currentList = is_array($this->getList()) ? $this->getList() : [];
+    $currentCount = count($currentList);
+    $previous = max(0, min($previous, $currentCount));
 
-    // Executa um trecho de JavaScript para rolar a página até o container.
+    $newItems = array_slice($currentList, $previous);
+    $elementtype = (string) ($form_state->get('std_current_elementtype') ?? '');
+    $newCardsBuild = $this->buildCardsForElementType($elementtype, $newItems);
+    $has_more = ((int) $currentCount < (int) $this->getListSize());
+
+    if (!empty($newCardsBuild)) {
+      $rendered = (string) \Drupal::service('renderer')->renderPlain($newCardsBuild);
+      if (trim($rendered) !== '') {
+        $response->addCommand(new AppendCommand('#card-container-wrapper', $rendered));
+      }
+    }
+
+    if (isset($form['cards_lazy_wrapper']['load_more_wrapper'])) {
+      $response->addCommand(new ReplaceCommand('#std-list-load-more-wrapper', $form['cards_lazy_wrapper']['load_more_wrapper']));
+    }
+
+    $current_class_name = (string) ($form_state->get('std_current_class_name') ?? 'items');
+    $count_markup = '<div id="count-cards" style="font-weight:bold; margin-top:10px; padding-right:2rem;">'
+      . $this->t('Currently viewing @count of @total @class', [
+        '@count' => $currentCount,
+        '@total' => (int) $this->getListSize(),
+        '@class' => $current_class_name,
+      ])
+      . '</div>';
+    $response->addCommand(new ReplaceCommand('#count-cards', $count_markup));
+
+    $status_markup = $has_more
+      ? ''
+      : '<span class="text-muted">' . $this->t('No more items to load.') . '</span>';
+    $response->addCommand(new HtmlCommand('#std-list-load-more-status', $status_markup));
+
     $response->addCommand(new InvokeCommand('html, body', 'animate', [
       ['scrollTop' => 99999],
       'slow'
@@ -530,6 +610,31 @@ class STDListForm extends FormBase {
 
 
     return $response;
+  }
+
+  protected function buildCardsForElementType(string $elementtype, array $items): array {
+    switch ($elementtype) {
+      case 'dsg':
+        return MetadataTemplate::generateOutputAsCards('dsg', $items);
+      case 'dd':
+        return MetadataTemplate::generateOutputAsCards('dd', $items);
+      case 'sdd':
+        return MetadataTemplate::generateOutputAsCards('sdd', $items);
+      case 'da':
+        return MetadataTemplate::generateOutputAsCards('da', $items);
+      case 'study':
+        return Study::generateOutputAsCard($items, \Drupal::currentUser()->getEmail());
+      case 'studyrole':
+        return StudyRole::generateOutputCards($items);
+      case 'studyobjectcollection':
+        return StudyObjectCollection::generateOutputCards($items);
+      case 'studyobject':
+        return StudyObject::generateOutputCards($items);
+      case 'virtualcolumn':
+        return VirtualColumn::generateOutputCards($items);
+      default:
+        return [];
+    }
   }
 
   /**

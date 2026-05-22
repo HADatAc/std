@@ -70,6 +70,12 @@ class STDSelectStudyForm extends FormBase
     $form['#attached']['library'][] = 'std/std_js_css';
 
     $form['#attached']['drupalSettings']['std_select_study_form']['ajaxUrl'] = Url::fromRoute('std.load_more_data')->toString();
+    $form['#attached']['drupalSettings']['std_select_study_form']['hasMoreInitial'] = FALSE;
+    $form['#attached']['drupalSettings']['std_select_study_form']['messages'] = [
+      'loadingMore' => (string) $this->t('Loading more items...'),
+      'noMore' => (string) $this->t('No more items to load.'),
+      'loadFailed' => (string) $this->t('Could not load more items. Scroll again to retry.'),
+    ];
 
     $this->element_type = $elementtype ?? 'study';
     $form['#attached']['drupalSettings']['std_select_study_form']['elementType'] = $this->element_type;
@@ -131,6 +137,13 @@ class STDSelectStudyForm extends FormBase
     $effective_manager_email = ManageOwnerFilter::resolveEffectiveOwner($this->manager_email, $manager_filter, $status_filter);
     $form_state->set('effective_manager_email', $effective_manager_email);
 
+    $triggering_element = $form_state->getTriggeringElement();
+    $trigger_name = (string) ($triggering_element['#name'] ?? '');
+    if (in_array($trigger_name, ['status_filter', 'manager_filter'], TRUE)) {
+      $form_state->set('page', 1);
+      $form_state->set('items_loaded', 0);
+    }
+
     $form_state->set('page_size', $pagesize);
 
     $this->single_class_name = "";
@@ -162,6 +175,8 @@ class STDSelectStudyForm extends FormBase
         $this->single_class_name = "Object of Unknown Type";
         $this->plural_class_name = "Objects of Unknown Types";
     }
+
+    $form['#attached']['drupalSettings']['std_select_study_form']['pluralClassName'] = $this->plural_class_name;
 
     // MONTAR O FORMULÁRIO
     $form['page_title'] = [
@@ -263,6 +278,63 @@ class STDSelectStudyForm extends FormBase
     ];
 
     if ($view_type == 'card') {
+      $status_options = [
+        '_' => $this->t('All Status'),
+        VSTOI::DRAFT => $this->t('Draft'),
+        VSTOI::UNDER_REVIEW => $this->t('Under Review'),
+        VSTOI::CURRENT => $this->t('Current'),
+        VSTOI::DEPRECATED => $this->t('Deprecated'),
+      ];
+
+      $form['header_controls']['right_controls']['filter_container'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['d-flex', 'ms-auto', 'mb-0'],
+          'style' => 'margin-bottom:0!important;'
+        ],
+      ];
+
+      $form['header_controls']['right_controls']['filter_container']['filter_label'] = [
+        '#type' => 'label',
+        '#title' => $this->t('Filter(s): '),
+        '#attributes' => [
+          'class' => ['pt-3', 'me-2', 'fw-bold'],
+        ],
+      ];
+
+      if ($is_admin) {
+        $form['header_controls']['right_controls']['filter_container']['manager_filter'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('User'),
+          '#title_display' => 'invisible',
+          '#default_value' => $manager_filter,
+          '#ajax' => [
+            'callback' => '::ajaxReloadCards',
+            'wrapper' => 'cards-lazy-wrapper',
+            'event' => 'change',
+          ],
+          '#attributes' => [
+            'class' => ['form-control', 'w-auto', 'mt-2', 'me-1'],
+            'style' => 'min-width:240px;margin-bottom:0!important;float:right;',
+            'placeholder' => $this->t('User email (Draft/Under Review)'),
+          ],
+        ];
+      }
+
+      $form['header_controls']['right_controls']['filter_container']['status_filter'] = [
+        '#type' => 'select',
+        '#options' => $status_options,
+        '#default_value' => $status_filter,
+        '#ajax' => [
+          'callback' => '::ajaxReloadCards',
+          'wrapper' => 'cards-lazy-wrapper',
+          'event' => 'change',
+        ],
+        '#attributes' => [
+          'class' => ['form-select', 'w-auto', 'mt-2'],
+          'style' => 'margin-bottom:0!important;float:right;'
+        ],
+      ];
 
       $form['space1'] = [
         '#type' => 'item',
@@ -287,7 +359,12 @@ class STDSelectStudyForm extends FormBase
 
       // Carrega todas as páginas necessárias para restaurar o estado original
       for ($i = 1; $i <= $total_pages_to_load; $i++) {
-        $additional_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $i, $pagesize);
+        if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+          $additional_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $i, $pagesize);
+        }
+        else {
+          $additional_items = ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $i, $pagesize);
+        }
         if ($i == 1) {
           $this->setList($additional_items);
         } else {
@@ -296,28 +373,61 @@ class STDSelectStudyForm extends FormBase
       }
 
       // Recupera os elementos para a página atual
-      $this->setList(ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize));
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setList(ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize));
+      }
+      else {
+        $this->setList(ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $page, $pagesize));
+      }
 
       // Obtém o número total de itens
-      $this->setListSize(ListManagerEmailPage::total($this->element_type, $effective_manager_email));
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setListSize(ListManagerEmailPage::total($this->element_type, $effective_manager_email));
+      }
+      else {
+        $this->setListSize(ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE));
+      }
       $total_items = $this->getListSize();
+      $has_more_initial = ((int) $total_items > ((int) $page * (int) $pagesize));
+      $form['#attached']['drupalSettings']['std_select_study_form']['hasMoreInitial'] = $has_more_initial;
+
+      $form['cards_lazy_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'cards-lazy-wrapper'],
+      ];
 
       // Envolve os cartões em um container para AJAX
-      $form['cards_wrapper'] = [
+      $form['cards_lazy_wrapper']['cards_wrapper'] = [
         '#type' => 'container',
         '#attributes' => ['id' => 'cards-wrapper'],
       ];
 
       // Constrói a visualização em cartões dentro do 'cards_wrapper'
-      $this->buildCardView($form['cards_wrapper'], $form_state);
+      $this->buildCardView($form['cards_lazy_wrapper']['cards_wrapper'], $form_state);
 
-      // Verifica se há mais itens para carregar
-      if ($total_items > $page * $pagesize) {
-        $form['load_more_wrapper'] = [
-          '#type' => 'container',
-          '#attributes' => [
-            'class' => ['text-center', 'my-3'],
-          ],
+      $form['cards_lazy_wrapper']['records_count'] = [
+        '#type' => 'item',
+        '#markup' => $this->t('<div id="count-cards" style="font-weight:bold; margin-top:10px; padding-right:2rem;">Currently viewing @count of @total @class</div>', [
+          '@count' => count($this->getList()),
+          '@total' => (int) $this->getListSize(),
+          '@class' => $this->plural_class_name,
+        ]),
+      ];
+
+      $form['cards_lazy_wrapper']['load_more_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'id' => 'std-select-study-load-status',
+          'class' => ['text-center', 'my-3'],
+          'role' => 'status',
+          'aria-live' => 'polite',
+          'aria-atomic' => 'true',
+        ],
+      ];
+
+      if (!$has_more_initial) {
+        $form['cards_lazy_wrapper']['load_more_wrapper']['message'] = [
+          '#markup' => '<span class="text-muted">' . $this->t('No more items to load.') . '</span>',
         ];
       }
     } else {
@@ -479,6 +589,14 @@ class STDSelectStudyForm extends FormBase
   }
 
   /**
+   * AJAX callback to reload cards when filters change.
+   */
+  public function ajaxReloadCards(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    return $form['cards_lazy_wrapper'];
+  }
+
+  /**
    * Constroi visualização de Cards
    */
   protected function buildCardView(array &$form, FormStateInterface $form_state)
@@ -487,6 +605,19 @@ class STDSelectStudyForm extends FormBase
     $items = $this->getList();
 
     $cards = [];
+
+    if (empty($items)) {
+      $form['no_results'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['col-12']],
+        'message' => [
+          '#markup' => '<div class="alert alert-info mb-0">'
+            . $this->t('No @items found for the current filters.', ['@items' => $this->plural_class_name])
+            . '</div>',
+        ],
+      ];
+      return;
+    }
 
     // dpm($items);
 
@@ -1094,17 +1225,32 @@ class STDSelectStudyForm extends FormBase
     $form_state->set('loading', true);
 
     // Carregar a próxima página
-    $page = \Drupal::request()->query->get('page') ?? 1;
+    $page = max(1, (int) (\Drupal::request()->query->get('page') ?? 1));
     $this->element_type = \Drupal::request()->query->get('element_type');
-    $this->manager_email = \Drupal::currentUser()->getEmail();
+    if ($this->element_type === NULL || trim((string) $this->element_type) === '') {
+      $form_state->set('loading', false);
+      return new JsonResponse(['cards' => '', 'message' => 'Missing required query parameter: element_type'], 400);
+    }
+
+    $this->manager_email = (string) (\Drupal::currentUser()->getEmail() ?? '');
 
     $session = \Drupal::request()->getSession();
     $status_filter = $session->get('std_select_status_filter.' . (string) $this->element_type, '_');
     $manager_filter = ManageOwnerFilter::normalizeSelectedEmail($session->get('std_select_manager_filter.' . (string) $this->element_type, ''));
     $effective_manager_email = ManageOwnerFilter::resolveEffectiveOwner($this->manager_email, $manager_filter, $status_filter);
 
-    $pagesize = $form_state->get('page_size') ?? 9;
-    $new_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize);
+    $pagesize = max(1, (int) ($form_state->get('page_size') ?? 9));
+    if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+      $new_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize);
+      $total_items = (int) ListManagerEmailPage::total($this->element_type, $effective_manager_email);
+    }
+    else {
+      $new_items = ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $page, $pagesize);
+      $total_items = (int) ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE);
+    }
+    if (!is_array($new_items)) {
+      $new_items = [];
+    }
 
     // Update status on already loaded items
     $items_loaded = $form_state->get('items_loaded') ?? 0;
@@ -1113,17 +1259,31 @@ class STDSelectStudyForm extends FormBase
 
     // Build new cards
     $new_cards = [];
-    $this->setList($new_items);
-    $this->buildCardView($new_cards, $form_state);
+    $rendered_cards = '';
+    if (!empty($new_items)) {
+      $this->setList($new_items);
+      $this->buildCardView($new_cards, $form_state);
 
-    // Render new cards
-    $renderer = \Drupal::service('renderer');
-    $rendered_cards = $renderer->renderRoot($new_cards);
+      // Render new cards
+      $renderer = \Drupal::service('renderer');
+      $rendered_cards = $renderer->renderRoot($new_cards);
+    }
 
     // Cancel loading status
     $form_state->set('loading', false);
 
-    return new JsonResponse(['cards' => $rendered_cards, 'page' => $page]);
+    $has_more = ((int) $page * (int) $pagesize) < $total_items;
+    if (empty($new_items)) {
+      $has_more = FALSE;
+    }
+
+    return new JsonResponse([
+      'cards' => $rendered_cards,
+      'page' => $page,
+      'has_more' => $has_more,
+      'total' => $total_items,
+      'loaded' => min($total_items, (int) $page * (int) $pagesize),
+    ]);
   }
 
 
