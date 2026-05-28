@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
 use Drupal\rep\Entity\Stream;
+use Drupal\std\Support\StudyFileTypeResolver;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Url;
 
@@ -522,6 +523,7 @@ class JsonDataController extends ControllerBase
             $session->set('da_current_page', 1);
             $session->set('pub_current_page', 1);
             $session->set('media_current_page', 1);
+            $session->set('medical_current_page', 1);
 
             switch ($elementtype) {
                 case 'publications':
@@ -530,6 +532,10 @@ class JsonDataController extends ControllerBase
 
                 case 'media':
                     $session->set('media_current_page', $page);
+                    break;
+
+                case 'medical':
+                    $session->set('medical_current_page', $page);
                     break;
 
                 case 'da':
@@ -590,20 +596,12 @@ class JsonDataController extends ControllerBase
                 return new JsonResponse(['error' => 'No file uploaded or upload error.'], 400);
             }
 
-            // Obtem a extensão do arquivo.
-            $extension = strtolower($uploaded_file->getClientOriginalExtension());
-
-            // Determina a pasta de destino com base na extensão.
-            $folder = match ($extension) {
-                'csv', 'xlsx' => 'da',
-                'pdf', 'docx' => 'publications',
-                'jpg', 'jpeg', 'png', 'mp4', 'avi' => 'media',
-                default => null,
-            };
+            $originalName = (string) $uploaded_file->getClientOriginalName();
+            $folder = StudyFileTypeResolver::resolveStorageFolderFromFilename($originalName);
 
             if (!$folder) {
                 \Drupal::logger('std')->error('Unsupported file type: @type', [
-                    '@type' => $extension,
+                    '@type' => StudyFileTypeResolver::normalizeExtension($originalName),
                 ]);
                 return new JsonResponse(['error' => 'Unsupported file type.'], 400);
             }
@@ -614,10 +612,10 @@ class JsonDataController extends ControllerBase
             $file_system->prepareDirectory($directory, \Drupal\Core\File\FileSystemInterface::CREATE_DIRECTORY);
 
             // Define o caminho final do arquivo.
-            $destination = $directory . $uploaded_file->getClientOriginalName();
+            $destination = $directory . $originalName;
 
             // Move o arquivo da pasta temporária para o destino final.
-            $uploaded_file->move($file_system->realpath($directory), $uploaded_file->getClientOriginalName());
+            $uploaded_file->move($file_system->realpath($directory), $originalName);
 
             // Cria a entidade de arquivo no Drupal.
             $file = File::create([
@@ -628,7 +626,7 @@ class JsonDataController extends ControllerBase
 
             // Se o tipo for "da", adiciona a lógica adicional.
             if ($folder === 'da') {
-                $streamUri = $this->processDAFile($file, $uploaded_file->getClientOriginalName(), $studyuri);
+                $streamUri = $this->processDAFile($file, $originalName, $studyuri);
             }
 
             // Log de sucesso.
@@ -792,37 +790,38 @@ class JsonDataController extends ControllerBase
             // Decodifica a URI do estudo
             $decodedStudyUri = basename(base64_decode($studyuri));
 
-            // Define os diretórios com base no tipo do arquivo
+            // Define o caminho base do estudo
             $basePath = 'private://std/' . $decodedStudyUri . '/';
-            $directories = [
-                'csv' => 'da/',
-                'xlsx' => 'da/',
-                'pdf' => 'publications/',
-                'doc' => 'publications/',
-                'docx' => 'publications/',
-                'jpg' => 'media/',
-                'jpeg' => 'media/',
-                'png' => 'media/',
-                'mov' => 'media/',
-                'avi' => 'media/',
-                'mpeg' => 'media/',
-                'mp4' => 'media/',
-                'mp3' => 'media/',
-            ];
 
             // Divida o nome do arquivo base e a extensão
-            $parts = pathinfo($fileNameWithoutExtension);
-            $fileBaseName = $parts['filename']; // Parte sem a extensão
-            $extension = strtolower($parts['extension'] ?? '');
+            $originalName = trim((string) $fileNameWithoutExtension);
+            $extension = StudyFileTypeResolver::normalizeExtension($originalName);
+            if ($extension === '') {
+                return new JsonResponse([
+                    'error' => 'Invalid file name.',
+                ], 400);
+            }
 
-            if (!isset($directories[$extension])) {
+            $folder = StudyFileTypeResolver::resolveStorageFolderFromFilename($originalName);
+            if ($folder === NULL) {
                 return new JsonResponse([
                     'error' => 'Invalid file type: ' . $extension,
                 ], 400);
             }
 
+            if ($extension === 'nii.gz') {
+                $fileBaseName = preg_replace('/\.nii\.gz$/i', '', $originalName);
+            }
+            else {
+                $fileBaseName = pathinfo($originalName, PATHINFO_FILENAME);
+            }
+            $fileBaseName = trim((string) $fileBaseName);
+            if ($fileBaseName === '') {
+                $fileBaseName = 'file';
+            }
+
             // Define o diretório baseado na extensão
-            $directoryPath = $basePath . $directories[$extension];
+            $directoryPath = $basePath . $folder . '/';
 
             // Verifica ou cria o diretório
             $fileSystem = \Drupal::service('file_system');
@@ -1106,6 +1105,72 @@ class JsonDataController extends ControllerBase
     }
 
     /*
+    ** MEDICAL IMAGES (OHIF FOLDER) TABLE RELATED FUNCTIONS
+    */
+    public function getMedicalImageFiles($studyuri = null, $page = 1, $pagesize = 5)
+    {
+        $session = \Drupal::service('session');
+        $page_from_session = $session->get('medical_current_page', 1);
+        $page = $page ?: $page_from_session;
+        $session->set('medical_current_page', $page);
+
+        if (!is_numeric($page) || $page < 1) {
+            $page = 1;
+        }
+
+        if (empty($studyuri) || !is_numeric($page) || !is_numeric($pagesize)) {
+            return new JsonResponse(['error' => 'Invalid parameters'], 400);
+        }
+
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/OHIF/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return new JsonResponse(['error' => 'Could not access or prepare directory.'], 500);
+        }
+
+        $all_files = scandir($file_system->realpath($directory));
+        $filtered_files = array_values(array_filter($all_files, function ($file) {
+            return StudyFileTypeResolver::isOhifFile((string) $file);
+        }));
+
+        $total_files = count($filtered_files);
+        $offset = ($page - 1) * $pagesize;
+        $paginated_files = array_slice($filtered_files, $offset, $pagesize);
+
+        $files = [];
+        foreach ($paginated_files as $file) {
+            $token = hash_hmac('sha256', $file, '1357924680');
+            $view_url = Url::fromRoute('std.view_media_file', [
+                'filename' => $file,
+                'studyuri' => rawurlencode($studyuri),
+                'type' => 'OHIF',
+                'token' => $token,
+            ], [
+                'absolute' => TRUE,
+            ])->toString();
+
+            $files[] = [
+                'filename' => $file,
+                'view_url' => $view_url,
+                'delete_url' => '/delete-medical-image-file/' . $file . '/' . $studyuri,
+                'download_url' => \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/OHIF',
+            ];
+        }
+
+        return new JsonResponse([
+            'files' => $files,
+            'pagination' => [
+                'current_page' => $page,
+                'page_size' => $pagesize,
+                'total_files' => $total_files,
+                'total_pages' => ceil($total_files / $pagesize),
+            ],
+        ]);
+    }
+
+    /*
     ** DELETE MEDIA
     */
     public function deleteMediaFile($filename, $studyuri)
@@ -1166,6 +1231,58 @@ class JsonDataController extends ControllerBase
     }
 
     /*
+    ** DELETE MEDICAL IMAGE
+    */
+    public function deleteMedicalImageFile($filename, $studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/OHIF/';
+        $file_path = $directory . $filename;
+
+        try {
+            $file_system = \Drupal::service('file_system');
+            $real_path = $file_system->realpath($file_path);
+            $directory_realpath = $file_system->realpath($directory);
+
+            if (file_exists($real_path)) {
+                unlink($real_path);
+
+                $remaining_files = [];
+                if ($directory_realpath && is_dir($directory_realpath)) {
+                    $remaining_files = array_filter(scandir($directory_realpath), function ($file) {
+                        return StudyFileTypeResolver::isOhifFile((string) $file);
+                    });
+                }
+
+                $totalFiles = count($remaining_files);
+                $pageSize = 5;
+                $lastPage = max(1, (int) ceil($totalFiles / $pageSize));
+
+                return new JsonResponse([
+                    'status' => 'success',
+                    'message' => 'File deleted successfully.',
+                    'file' => $filename,
+                    'total_files' => $totalFiles,
+                    'last_page' => $lastPage,
+                ]);
+            } else {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'File not found.',
+                    'file' => $filename,
+                ], 404);
+            }
+        } catch (\Exception $e) {
+            \Drupal::logger('std')->error('Error deleting file: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error deleting file.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /*
     ** VIEW FILES
     */
     public function viewFile($filename, $studyuri, $type, $token = null)
@@ -1186,18 +1303,18 @@ class JsonDataController extends ControllerBase
             return new JsonResponse(['error' => 'File not found.'], 404);
         }
 
+        // Validate signed token for all inline file views.
+        $expected_token = hash_hmac('sha256', $filename, '1357924680');
+        if ($token === null || $token !== $expected_token) {
+            \Drupal::logger('custom_module')->warning('Access denied for file: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
+            return new JsonResponse(['error' => 'Access denied.'], 403);
+        }
+
         // Identificar o tipo MIME do arquivo
         $mime_type = mime_content_type($real_path);
 
         // Tratamento especial para ficheiros Word
         if (in_array($mime_type, ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])) {
-            // Validar o token
-            $expected_token = hash_hmac('sha256', $filename, '1357924680'); // Substituir pela chave segura
-            if ($token === null || $token !== $expected_token) {
-                \Drupal::logger('custom_module')->warning('Access denied for file: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
-                return new JsonResponse(['error' => 'Access denied.'], 403);
-            }
-
             // Gerar um link público temporário para o Microsoft Viewer
             $url = \Drupal::service('file_url_generator')->generateAbsoluteString("private://std/$decoded_studyuri/$type/$filename");
             $viewer_url = 'https://view.officeapps.live.com/op/embed.aspx?src=' . urlencode($url);
@@ -1214,6 +1331,13 @@ class JsonDataController extends ControllerBase
             \Symfony\Component\HttpFoundation\ResponseHeaderBag::DISPOSITION_INLINE,
             $filename
         );
+
+        if (strcasecmp((string) $type, 'OHIF') === 0) {
+            $response->headers->set('Access-Control-Allow-Origin', '*');
+            $response->headers->set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            $response->headers->set('Access-Control-Allow-Headers', 'Origin, Range, Content-Type, Accept');
+            $response->headers->set('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+        }
 
         // Registrar o log de acesso ao arquivo
         \Drupal::logger('custom_module')->info('File served: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));

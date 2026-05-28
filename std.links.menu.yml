@@ -18,6 +18,17 @@ std.search_option:
   #requirements:
    #_permission: 'access content'
 
+std.search_studies_variables:
+  title: Study Search
+  description: Search studies by variables and components
+  route_name: std.search_studies_variables
+  parent: std.top_level
+  menu_name: main
+  enabled: 1
+  weight: 2
+  requirements:
+    _permission: 'access content'
+
 std.manage_top_level:
   title: Manage Elements
   description: Manage STD Elements

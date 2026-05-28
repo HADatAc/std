@@ -15,6 +15,16 @@ std.search:
   options:
     no_cache: 'TRUE'
 
+std.search_studies_variables:
+  path: 'std/search/studies'
+  defaults:
+    _form: '\Drupal\std\Form\StudyVariableSearchForm'
+    _title: 'Study Search'
+  requirements:
+    _permission: 'access content'
+  options:
+    no_cache: 'TRUE'
+
 # Main menu options
 
 std.list_element:
@@ -416,11 +426,36 @@ std.get_media_files:
   options:
     _format: 'json'
 
+std.get_medical_image_files:
+  path: '/std/get-medical-image-files/{studyuri}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getMedicalImageFiles'
+    _title: 'Get medical image files'
+  requirements:
+    _permission: 'access content'
+    studyuri: '.+'
+    page: '\d+'
+    pagesize: '\d+'
+  options:
+    _format: 'json'
+
 std.delete_media_file:
   path: '/std/delete-media-file/{filename}/{studyuri}'
   defaults:
     _controller: '\Drupal\std\Controller\JsonDataController::deleteMediaFile'
     _title: 'Delete media file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  options:
+    _format: 'json'
+
+std.delete_medical_image_file:
+  path: '/std/delete-medical-image-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deleteMedicalImageFile'
+    _title: 'Delete medical image file'
   requirements:
     _permission: 'access content'
     filename: '.+'

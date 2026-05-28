@@ -10,7 +10,10 @@ std_js_css:
     - core/jquery.once
     - core/drupalSettings
 json_table:
-  version: 1.x
+  version: 1.4
+  css:
+    theme:
+      css/json_table.css: {}
   js:
     js/json_table.js: {}
   dependencies:
@@ -46,3 +49,15 @@ std_icons:
   css:
     theme:
       css/std_icons.css: {}
+
+study_variable_search:
+  version: 1.x
+  css:
+    theme:
+      css/study_variable_search.css: {}
+  js:
+    js/study_variable_search.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/once

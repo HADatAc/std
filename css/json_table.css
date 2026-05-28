@@ -1,0 +1,83 @@
+/* Layout for fixed files cards and responsive tables/pagination on Manage Study. */
+.std-fixed-files-row {
+  align-items: stretch;
+}
+
+.std-fixed-files-col .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+}
+
+.std-fixed-files-col .card-body {
+  flex: 1 1 auto;
+  min-height: 220px;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.std-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.std-table-wrap table {
+  margin-bottom: 0;
+  min-width: 420px;
+}
+
+.std-table-wrap th,
+.std-table-wrap td {
+  vertical-align: middle;
+}
+
+.std-table-wrap th:last-child,
+.std-table-wrap td:last-child {
+  white-space: nowrap;
+}
+
+.std-table-wrap .btn {
+  margin-bottom: 2px;
+}
+
+#json-table-container,
+#publication-table-container,
+#media-table-container,
+#medical-images-table-container {
+  min-height: 160px;
+}
+
+.std-pager {
+  min-height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+  padding-top: 0.25rem;
+}
+
+.std-pager .pagination {
+  margin-bottom: 0;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+.std-pager .page-link {
+  min-width: 2.1rem;
+  text-align: center;
+}
+
+@media (max-width: 575.98px) {
+  .std-fixed-files-col .card-body {
+    min-height: 180px;
+  }
+
+  .std-table-wrap table {
+    min-width: 360px;
+  }
+
+  .std-pager {
+    justify-content: flex-start;
+  }
+}

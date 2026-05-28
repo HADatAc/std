@@ -1,0 +1,92 @@
+.std-study-search {
+  padding: 16px 0;
+}
+
+.std-filter-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.std-logic-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.std-logic-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.std-search-sidebar {
+  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+  padding: 16px;
+  background: #ffffff;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.std-search-section-title {
+  font-size: 1rem;
+  margin-bottom: 10px;
+}
+
+.std-search-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+
+.std-study-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.std-study-card {
+  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.std-study-card h4 {
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+
+.std-study-uri {
+  color: #6b7280;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.std-study-description {
+  font-size: 0.92rem;
+  color: #333;
+}
+
+.std-study-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 991px) {
+  .std-search-sidebar {
+    max-height: none;
+  }
+}

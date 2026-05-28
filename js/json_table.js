@@ -4,17 +4,91 @@
   let totals = {
     daFiles: 0,
     publications: 0,
-    media: 0, // Inicialmente zero, pode ser adicionado futuramente
+    media: 0,
+    medicalImages: 0,
   };
 
-  // Função para recalcular e atualizar o total no DOM
+  const wrapTable = function (tableHtml) {
+    return `<div class="std-table-wrap table-responsive">${tableHtml}</div>`;
+  };
+
+  const canDeleteFiles = function () {
+    const stdSettings = (typeof drupalSettings !== "undefined" && drupalSettings.std)
+      ? drupalSettings.std
+      : {};
+
+    if (Object.prototype.hasOwnProperty.call(stdSettings, "canDeleteFiles")) {
+      return Boolean(stdSettings.canDeleteFiles);
+    }
+
+    const uid = Number((drupalSettings.user && drupalSettings.user.uid) || 0);
+    return Number.isFinite(uid) && uid > 0;
+  };
+
+  const renderPager = function ($container, linkClass, currentPage, totalPages) {
+    const safeTotalPages = Math.max(1, parseInt(totalPages, 10) || 1);
+    const safeCurrentPage = Math.min(
+      Math.max(1, parseInt(currentPage, 10) || 1),
+      safeTotalPages
+    );
+
+    $container.empty();
+
+    if (safeTotalPages <= 1) {
+      return;
+    }
+
+    const pageItems = [];
+
+    const pushLink = function (label, targetPage, disabled = false, active = false) {
+      if (active) {
+        pageItems.push(
+          `<li class="page-item active" aria-current="page"><span class="page-link">${label}</span></li>`
+        );
+        return;
+      }
+
+      if (disabled) {
+        pageItems.push(`<li class="page-item disabled"><span class="page-link">${label}</span></li>`);
+        return;
+      }
+
+      pageItems.push(
+        `<li class="page-item"><a href="#" class="page-link ${linkClass}" data-page="${targetPage}">${label}</a></li>`
+      );
+    };
+
+    pushLink("First", 1, safeCurrentPage <= 1);
+    pushLink("Previous", safeCurrentPage - 1, safeCurrentPage <= 1);
+
+    const startPage = Math.max(1, safeCurrentPage - 1);
+    const endPage = Math.min(safeTotalPages, safeCurrentPage + 1);
+    for (let i = startPage; i <= endPage; i++) {
+      pushLink(String(i), i, false, i === safeCurrentPage);
+    }
+
+    pushLink("Next", safeCurrentPage + 1, safeCurrentPage >= safeTotalPages);
+    pushLink("Last", safeTotalPages, safeCurrentPage >= safeTotalPages);
+
+    const html = `
+      <nav aria-label="Pagination">
+        <ul class="pagination pagination-sm justify-content-center mb-0">
+          ${pageItems.join("")}
+        </ul>
+      </nav>
+    `;
+
+    $container.html(html);
+  };
+
+  // FunÃƒÂ§ÃƒÂ£o para recalcular e atualizar o total no DOM
   const updateTotal = function () {
-    const total = totals.daFiles + totals.publications + totals.media;
+    const total = totals.daFiles + totals.publications + totals.media + totals.medicalImages;
     if ($("#total_elements_count").length) {
       // $("#total_elements_count").text("Study Content (" + total + ")");
       $("#total_elements_count").text("Contents");
     } else {
-      showToast("#total_elements_count not found on DOM.", "danger");
+      showToast("Unable to update the total content count.", "danger");
     }
   };
 
@@ -34,6 +108,23 @@
     }
 
     return studyUri;
+  };
+
+  const resolveViewUrl = function (viewUrl) {
+    const raw = String(viewUrl || "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+
+    if (raw.startsWith("/")) {
+      return `${window.location.origin}${raw}`;
+    }
+
+    return `${drupalSettings.path.baseUrl}std/${raw.replace(/^\/+/, "")}`;
   };
 
   const buildStudyUriCandidates = function (value) {
@@ -83,10 +174,10 @@
     return out;
   };
 
-  // Função para carregar os dados da tabela dinamicamente
+  // FunÃƒÂ§ÃƒÂ£o para carregar os dados da tabela dinamicamente
   const loadTableData = function (page) {
     if (typeof $ === "undefined") {
-      showToast("jQuery not available", "danger");
+      showToast("jQuery is not available.", "danger");
       return;
     }
 
@@ -94,7 +185,6 @@
     const elementtype = drupalSettings.std.elementtype;
     const mode = drupalSettings.std.mode;
     const pagesize = drupalSettings.std.pagesize;
-    const loggedUser = drupalSettings.user.logged;
 
     if (!studyuri || !elementtype || !mode || !pagesize) {
       console.warn('Skipping std/json-data load due to missing settings.', {
@@ -122,7 +212,7 @@
       success: function (response) {
 
         if (Array.isArray(response.headers) && Array.isArray(response.output) && response.output.length === 0) {
-          // build an “empty” table with header + one row
+          // build an Ã¢â‚¬Å“emptyÃ¢â‚¬Â table with header + one row
           let colCount = response.headers.length;
           let table  = '<table class="table table-striped table-bordered">';
           // header
@@ -131,15 +221,15 @@
             table += `<th>${h}</th>`;
           });
           table += '</tr></thead>';
-          // body with one “no results” row
+          // body with one Ã¢â‚¬Å“no resultsÃ¢â‚¬Â row
           table += '<tbody>';
           table += `<tr><td colspan="${colCount}" class="text-center text-muted">No results found.</td></tr>`;
           table += '</tbody></table>';
           // inject
-          $("#json-table-container").html(table);
+          $("#json-table-container").html(wrapTable(table));
 
           // reset count + pagination
-          $("#data_files_count").text("Study Data Files (0)");
+          $("#data_files_count").text("Data Files (0)");
           totals.daFiles = 0;
           updateTotal();
           $("#json-table-pager").empty();
@@ -165,12 +255,12 @@
           });
 
           table += "</tbody></table>";
-          $("#json-table-container").html(table);
+          $("#json-table-container").html(wrapTable(table));
 
-          // Atualiza o número total de elementos
+          // Atualiza o nÃƒÂºmero total de elementos
           if (response.pagination && response.pagination.items) {
             $("#data_files_count").text(
-              "Study Data Files (" + response.pagination.items + ")"
+              "Data Files (" + response.pagination.items + ")"
             );
 
             totals.daFiles = parseInt(response.pagination.items, 10) || 0;
@@ -180,7 +270,7 @@
           // Reanexa os eventos aos novos elementos carregados
           attachDAEvents();
 
-          // Renderiza a paginação
+          // Renderiza a paginaÃƒÂ§ÃƒÂ£o
           if (response.pagination) {
             renderPagination(response.pagination, page);
           }
@@ -201,74 +291,27 @@
   // Render Pagination Function
   const renderPagination = function (pagination, currentPage) {
     const $pager = $("#json-table-pager");
-    $pager.empty(); // Limpar o pager existente
+    const totalPages = pagination.last_page;
+    renderPager($pager, "da-page-link", currentPage, totalPages);
 
-    const totalPages = pagination.last_page; // Número total de páginas
-    const startPage = Math.max(1, currentPage - 1); // Página inicial
-    const endPage = Math.min(totalPages, currentPage + 1); // Página final
-
-    // Botão 'Primeiro'
-    if (currentPage > 1) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="1">&laquo; First</a>`
-      );
-    }
-
-    // Botão 'Anterior'
-    if (currentPage > 1) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="${
-          currentPage - 1
-        }">Previous</a>`
-      );
-    }
-
-    // Números das páginas
-    for (let i = startPage; i <= endPage; i++) {
-      if (i == currentPage) {
-        // Renderizar a página atual como um span (não clicável)
-        $pager.append(`<span class="current-page">${i}</span>`);
-      } else {
-        // Renderizar outras páginas como links clicáveis
-        $pager.append(
-          `<a href="#" class="page-link" data-page="${i}">${i}</a>`
-        );
-      }
-    }
-
-    // Botão 'Próximo'
-    if (currentPage < totalPages) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="${currentPage + 1}">Next</a>`
-      );
-    }
-
-    // Botão 'Último'
-    if (currentPage < totalPages) {
-      $pager.append(
-        `<a href="#" class="page-link" data-page="${totalPages}">Last &raquo;</a>`
-      );
-    }
-
-    // Adicionar eventos aos links
-    $(".page-link").on("click", function (e) {
+    $pager.off("click", ".da-page-link").on("click", ".da-page-link", function (e) {
       e.preventDefault();
       const newPage = $(this).data("page");
 
-      // Atualizar a tabela com a nova página
+      // Atualizar a tabela com a nova pÃƒÂ¡gina
       loadTableData(newPage);
 
-      // Atualizar a sessão no backend
+      // Atualizar a sessÃƒÂ£o no backend
       $.ajax({
         url: drupalSettings.path.baseUrl + "std/update-session-page",
-        type: "POST", // Certifique-se de que está como POST
+        type: "POST", // Certifique-se de que estÃƒÂ¡ como POST
         data: {
           page: newPage,
           element_type: "da",
         },
         success: function () {},
         error: function (xhr, status, error) {
-          showToast("Error updating session page.", "danger");
+          showToast("Error updating the current page.", "danger");
         },
       });
     });
@@ -289,29 +332,29 @@
           type: "POST",
           success: function (response) {
             if (response.status === "success") {
-              showToast("File deleted successfully!", "success");
+              showToast("File deleted successfully.", "success");
               const currentPage = drupalSettings.std.page || 1;
               loadTableData(currentPage);
             } else if (response.errors) {
-              showToast("Error: " + response.errors.join(", "), "dander");
+              showToast("Unable to delete the file.", "danger");
             } else {
-              showToast("Unknown error occurred.", "danger");
+              showToast("An unexpected error occurred.", "danger");
               console.log(JSON.stringify(response));
             }
           },
           error: function (xhr, status, error) {
-            showToast("Failed to delete the file. Please try again.", "danger");
+            showToast("Unable to delete the file. Please try again.", "danger");
             console.error("Error details:", error);
           },
         });
       }
     });
 
-    $(document).on("click", ".download-media-url", function (e) {
+    $(document).on("click", ".download-media-url, .download-medical-url", function (e) {
       e.preventDefault();
       const $link = $(this);
 
-      // Se já estiver baixando, ignora cliques repetidos.
+      // Se jÃƒÂ¡ estiver baixando, ignora cliques repetidos.
       if ($link.data('downloading')) {
         return false;
       }
@@ -327,10 +370,10 @@
       fetch(viewUrl, { method: "GET" })
         .then(response => {
           if (!response.ok) {
-            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+            throw new Error(`Error downloading file: ${response.statusText}`);
           }
           const contentDisposition = response.headers.get("Content-Disposition");
-          let filename = "arquivo";
+          let filename = "file";
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
@@ -355,7 +398,7 @@
           showToast(error.message || error, "danger");
         })
         .finally(() => {
-          // Libera o link para futuros cliques somente após o término/falha do fetch
+          // Libera o link para futuros cliques somente apÃƒÂ³s o tÃƒÂ©rmino/falha do fetch
           $link.removeData('downloading');
         });
 
@@ -366,7 +409,7 @@
       e.preventDefault();
       const $link = $(this);
 
-      // Se já estiver baixando, ignora cliques repetidos.
+      // Se jÃƒÂ¡ estiver baixando, ignora cliques repetidos.
       if ($link.data('downloading')) {
         return false;
       }
@@ -382,10 +425,10 @@
       fetch(viewUrl, { method: "GET" })
         .then(response => {
           if (!response.ok) {
-            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+            throw new Error(`Error downloading file: ${response.statusText}`);
           }
           const contentDisposition = response.headers.get("Content-Disposition");
-          let filename = "arquivo";
+          let filename = "file";
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
@@ -410,7 +453,7 @@
           showToast(error.message || error, "danger");
         })
         .finally(() => {
-          // Libera o link para futuros cliques somente após o término/falha do fetch
+          // Libera o link para futuros cliques somente apÃƒÂ³s o tÃƒÂ©rmino/falha do fetch
           $link.removeData('downloading');
         });
 
@@ -421,7 +464,7 @@
       e.preventDefault();
       const $link = $(this);
 
-      // Se já estiver baixando, ignora cliques repetidos.
+      // Se jÃƒÂ¡ estiver baixando, ignora cliques repetidos.
       if ($link.data('downloading')) {
         return false;
       }
@@ -437,10 +480,10 @@
       fetch(viewUrl, { method: "GET" })
         .then(response => {
           if (!response.ok) {
-            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+            throw new Error(`Error downloading file: ${response.statusText}`);
           }
           const contentDisposition = response.headers.get("Content-Disposition");
-          let filename = "arquivo";
+          let filename = "file";
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
@@ -465,7 +508,7 @@
           showToast(error.message || error, "danger");
         })
         .finally(() => {
-          // Libera o link para futuros cliques somente após o término/falha do fetch
+          // Libera o link para futuros cliques somente apÃƒÂ³s o tÃƒÂ©rmino/falha do fetch
           $link.removeData('downloading');
         });
 
@@ -476,7 +519,7 @@
       e.preventDefault();
       const $link = $(this);
 
-      // Se já estiver baixando, ignora cliques repetidos.
+      // Se jÃƒÂ¡ estiver baixando, ignora cliques repetidos.
       if ($link.data('downloading')) {
         return false;
       }
@@ -492,10 +535,10 @@
       fetch(viewUrl, { method: "GET" })
         .then(response => {
           if (!response.ok) {
-            throw new Error(`Erro ao baixar o arquivo: ${response.statusText}`);
+            throw new Error(`Error downloading file: ${response.statusText}`);
           }
           const contentDisposition = response.headers.get("Content-Disposition");
-          let filename = "arquivo";
+          let filename = "file";
           if (contentDisposition) {
             const matches = contentDisposition.match(/filename="?(.+?)"?$/);
             if (matches && matches[1]) {
@@ -520,7 +563,7 @@
           showToast(error.message || error, "danger");
         })
         .finally(() => {
-          // Libera o link para futuros cliques somente após o término/falha do fetch
+          // Libera o link para futuros cliques somente apÃƒÂ³s o tÃƒÂ©rmino/falha do fetch
           $link.removeData('downloading');
         });
 
@@ -535,7 +578,7 @@
     const dropCard = document.querySelector("#drop-card");
 
     if (!dropCard) {
-      showToast("Drop area not found.", "danger");
+      showToast("Upload area not found.", "danger");
       return;
     }
 
@@ -554,45 +597,110 @@
       dropCard.classList.remove("drag-over");
     });
 
-    dropCard.addEventListener("drop", async (e) => {
-      preventDefault(e);
-      dropCard.classList.remove("drag-over");
+    const getNormalizedExtension = function (fileName) {
+      const lowerName = String(fileName || "").toLowerCase();
+      if (lowerName.endsWith(".nii.gz")) {
+        return "nii.gz";
+      }
 
-      const files = e.dataTransfer.files;
-      if (!files.length) {
+      const lastDot = lowerName.lastIndexOf(".");
+      if (lastDot === -1 || lastDot === lowerName.length - 1) {
+        return "";
+      }
+
+      return lowerName.substring(lastDot + 1);
+    };
+
+    const buildUploadFileName = function (suggestedFileName, extension) {
+      return extension === "nii.gz"
+        ? `${suggestedFileName}.nii.gz`
+        : `${suggestedFileName}.${extension}`;
+    };
+
+    const refreshStreamsTable = function (streamKey) {
+      if (!streamKey) {
         return;
       }
 
-      const file = files[0];
+      $.ajax({
+        url: window.location.href,
+        type: "GET",
+        dataType: "html",
+        cache: false,
+        success: function (pageHtml) {
+          const tmp = $("<div>").append($.parseHTML(pageHtml));
+
+          const newTable = tmp
+            .find("#dpl-streams-table")
+            .filter(function () {
+              return $(this).find("input[type=radio]").length > 0;
+            })
+            .first();
+
+          if (!newTable.length) {
+            showToast("Streams table not found during refresh.", "danger");
+            return;
+          }
+
+          $("#dpl-streams-table").replaceWith(newTable);
+          newTable.removeData("dpl-bound");
+
+          Drupal.behaviors.streamSelection.attach(
+            newTable.closest(".card").get(0),
+            drupalSettings
+          );
+
+          const radio = $(`#dpl-streams-table input[type=radio][value="${streamKey}"]`);
+          if (radio.length) {
+            radio
+              .closest("table")
+              .find("input[type=radio]")
+              .prop("checked", false)
+              .data("waschecked", false)
+              .closest("tr")
+              .removeClass("selected");
+
+            radio.prop("checked", true).data("waschecked", true);
+            radio.trigger("click");
+            radio.trigger("change");
+          }
+        },
+        error: function () {
+          showToast("Unable to refresh streams table.", "danger");
+        },
+      });
+    };
+
+    const uploadSingleFile = async function (file, studyuri) {
       const originalFileName = file.name;
-      const fileExtension = originalFileName.split(".").pop().toLowerCase();
-      const studyuri = getStdStudyUri();
-      if (!studyuri) {
-        showToast("Study URI is missing for upload context.", "warning");
-        return;
+      const extension = getNormalizedExtension(originalFileName);
+
+      if (!extension) {
+        throw new Error(`Unsupported file type: ${originalFileName}`);
       }
 
-      try {
-        // 1) Check filename
-        const checkUrl = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
-        const checkResponse = await fetch(checkUrl, { method: "GET" });
-        if (!checkResponse.ok) throw new Error(`HTTP ${checkResponse.status}`);
-        const json = await checkResponse.json();
+      if (extension === "zip") {
+        throw new Error("ZIP files are not supported. Upload individual files instead.");
+      }
 
-        if (!(json && json.suggestedFileName)) {
-          showToast("Error generating file name.", "danger");
-          return;
-        }
+      const checkUrl = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
+      const checkResponse = await fetch(checkUrl, { method: "GET" });
+      if (!checkResponse.ok) {
+        throw new Error(`Could not validate file name (${checkResponse.status}).`);
+      }
 
-        // 2) Rename and prepare upload
-        const newFileName = `${json.suggestedFileName}.${fileExtension}`;
-        const newFile = new File([file], newFileName, { type: file.type });
+      const json = await checkResponse.json();
+      if (!(json && json.suggestedFileName)) {
+        throw new Error("Error generating file name.");
+      }
 
-        const formData = new FormData();
-        formData.append("files[mt_filename]", newFile);
+      const newFileName = buildUploadFileName(json.suggestedFileName, extension);
+      const renamedFile = new File([file], newFileName, { type: file.type });
+      const formData = new FormData();
+      formData.append("files[mt_filename]", renamedFile);
 
-        // 3) Upload
-        const uploadUrl = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${studyuri}`;
+      const uploadUrl = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${encodeURIComponent(studyuri)}`;
+      const uploadResponse = await new Promise((resolve, reject) => {
         $.ajax({
           url: uploadUrl,
           type: "POST",
@@ -600,81 +708,64 @@
           processData: false,
           contentType: false,
           success: function (response) {
-            if (!response.fid) {
-              showToast("Failed to upload file. Please try again.", "danger");
-              return;
-            }
-
-            // Refresh other tables
-            showToast("File uploaded successfully!", "success");
-            loadTableData(drupalSettings.std.page || 1);
-            loadPublicationFiles(drupalSettings.pub.page || 1);
-            loadMediaFiles(drupalSettings.media.page || 1);
-
-            // 4) If streamKey present, refresh streams table
-            if (response.streamKey) {
-              $.ajax({
-                url: window.location.href,
-                type: "GET",
-                dataType: "html",
-                cache: false,
-                success: function (pageHtml) {
-                  const tmp = $('<div>').append($.parseHTML(pageHtml));
-
-                  // Find only the real streams table (with radios)
-                  const newTable = tmp
-                    .find('#dpl-streams-table')
-                    .filter(function () {
-                      const hasRadios = $(this).find('input[type=radio]').length > 0;
-                      return hasRadios;
-                    })
-                    .first();
-
-                  if (!newTable.length) {
-                    showToast("Streams table not found in refresh.", "danger");
-                    return;
-                  }
-
-                  // Replace old table
-                  $('#dpl-streams-table').replaceWith(newTable);
-
-                  // *** Crucial: reset the binding flag so we can rebind events ***
-                  newTable.removeData('dpl-bound');
-
-                  // Re-attach only our streamSelection behavior
-                  Drupal.behaviors.streamSelection.attach(
-                    newTable.closest('.card').get(0),
-                    drupalSettings
-                  );
-
-                  // Select the new radio and trigger change
-                  const radio = $(`#dpl-streams-table input[type=radio][value="${response.streamKey}"]`);
-                  if (radio.length) {
-                    radio
-                      .closest('table').find('input[type=radio]')
-                      .prop('checked', false).data('waschecked', false)
-                      .closest('tr').removeClass('selected');
-
-                    // 4a) Mark checked + data
-                    radio.prop('checked', true).data('waschecked', true);
-
-                    // 4b) Fire both click AND change, to hit both handlers
-                    radio.trigger('click');
-                    radio.trigger('change');
-                  }
-                },
-                error: function () {
-                  showToast("Failed to refresh streams table.", "danger");
-                }
-              });
-            }
+            resolve(response);
           },
           error: function (xhr, status, error) {
-            showToast("Error uploading file.", "danger");
-          }
+            reject(new Error(error || status || "Upload failed"));
+          },
         });
-      } catch (err) {
-        showToast("Error communicating with the server.", "danger");
+      });
+
+      if (!uploadResponse.fid) {
+        throw new Error("Upload failed in server response.");
+      }
+
+      return uploadResponse;
+    };
+
+    dropCard.addEventListener("drop", async (e) => {
+      preventDefault(e);
+      dropCard.classList.remove("drag-over");
+
+      const files = Array.from(e.dataTransfer.files || []);
+      if (!files.length) {
+        return;
+      }
+
+      const studyuri = getStdStudyUri();
+      if (!studyuri) {
+        showToast("Study URI is missing for upload.", "warning");
+        return;
+      }
+
+      let uploadedCount = 0;
+      let failedCount = 0;
+      let latestStreamKey = "";
+
+      for (const file of files) {
+        try {
+          const response = await uploadSingleFile(file, studyuri);
+          uploadedCount += 1;
+          if (response.streamKey) {
+            latestStreamKey = response.streamKey;
+          }
+        } catch (err) {
+          failedCount += 1;
+          showToast(`${file.name}: ${err.message || "Error uploading file."}`, "danger");
+        }
+      }
+
+      if (uploadedCount > 0) {
+        showToast(`${uploadedCount} file(s) uploaded successfully.`, "success");
+        loadTableData(drupalSettings.std.page || 1);
+        loadPublicationFiles(drupalSettings.pub.page || 1);
+        loadMediaFiles(drupalSettings.media.page || 1);
+        loadMedicalImageFiles(drupalSettings.medical?.page || 1);
+        refreshStreamsTable(latestStreamKey);
+      }
+
+      if (failedCount > 0 && uploadedCount === 0) {
+        showToast("No files were uploaded.", "warning");
       }
     });
   };
@@ -703,7 +794,7 @@
   //PUBLICATIONS
   const loadPublicationFiles = function (page) {
     if (typeof $ === "undefined") {
-      showToast("jQuery not available", "danger");
+      showToast("jQuery is not available.", "danger");
       return;
     }
 
@@ -720,15 +811,15 @@
       `std/get-publication-files/${encodeURIComponent(
         studyuri
       )}/${page}/${pagesize}`;
-    const loggedUser = drupalSettings.user.logged;
+    const loggedUser = canDeleteFiles();
 
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
-        // se não houver arquivos
+        // se nÃƒÂ£o houver files
         if (Array.isArray(response.files) && response.files.length === 0) {
-          // define os headers fixos da tabela de publicações
+          // define os headers fixos da tabela de publicaÃƒÂ§ÃƒÂµes
           const headers = ['Filename','Operations'];
           let table = '<table class="table table-striped table-bordered">';
           table += '<thead><tr>';
@@ -737,10 +828,10 @@
           table += '<tbody>';
           table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
           table += '</tbody></table>';
-          $("#publication-table-container").html(table);
+          $("#publication-table-container").html(wrapTable(table));
           totals.publications = 0;
           updateTotal();
-          // limpa paginação
+          // limpa paginaÃƒÂ§ÃƒÂ£o
           $("#publication-table-pager").empty();
           return;
         }
@@ -751,7 +842,7 @@
             '<thead><tr><th>Filename</th><th style="width: 1%; white-space: nowrap; text-align: center;">Operations</th></tr></thead><tbody>';
 
           response.files.forEach(function (file) {
-            // Verificar se o arquivo tem a extensão `.docx`
+            // Verificar se o file tem a extensÃƒÂ£o `.docx`
             const isDocx = file.filename.endsWith(".docx");
 
             let fView = `<a href="#"
@@ -767,7 +858,7 @@
                       class="btn btn-sm btn-secondary download-publications-url"
                       data-download-url="${file.download_url}"
                       style="margin-right:5px"
-                      title="Download file">
+                        title="Download file">
                       <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#" class="btn btn-sm btn-secondary btn-danger delete-publication-button" data-url="${
@@ -787,7 +878,7 @@
           });
 
           table += "</tbody></table>";
-          $("#publication-table-container").html(table);
+          $("#publication-table-container").html(wrapTable(table));
 
           if (response.files && response.pagination) {
             if (response.pagination) {
@@ -803,7 +894,7 @@
             renderPublicationPagination(response.pagination);
             attachPublicationDeleteEvents();
           } else {
-            showToast("Files or pagination missing in response.", "danger");
+            showToast("Incomplete response: files or pagination are missing.", "danger");
           }
         }
       },
@@ -821,7 +912,7 @@
       const deleteUrl =
         drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
-      if (confirm("Do you really want to delete this file?")) {
+      if (confirm("Are you sure you want to delete this file?")) {
         $.ajax({
           url: deleteUrl,
           type: "POST",
@@ -829,23 +920,23 @@
             if (response.status === "success") {
               const currentPage = drupalSettings.pub.page || 1;
 
-              // Ajustar a página atual com base na última página válida
+              // Ajustar a pÃƒÂ¡gina atual com base na ÃƒÂºltima pÃƒÂ¡gina vÃƒÂ¡lida
               const lastPage = response.last_page || 1;
               const adjustedPage = Math.min(currentPage, lastPage);
 
-              // Atualizar a página no Drupal Settings
+              // Atualizar a pÃƒÂ¡gina no Drupal Settings
               drupalSettings.pub.page = adjustedPage;
 
               // Recarregar a tabela
               loadPublicationFiles(adjustedPage);
 
-              showToast(response.message, "success");
+              showToast("File deleted successfully.", "success");
             } else {
-              showToast(response.message, "warning");
+              showToast("Unable to delete the file.", "warning");
             }
           },
           error: function () {
-            showToast("Error: " + response.error, "danger");
+            showToast("Error deleting the file.", "danger");
           },
         });
       }
@@ -854,52 +945,9 @@
 
   const renderPublicationPagination = function (pagination) {
     const pub_pager = jQuery("#publication-table-pager");
-    pub_pager.empty();
+    renderPager(pub_pager, "pub-page-link", pagination.current_page, pagination.total_pages);
 
-    const totalPages = pagination.total_pages;
-    const startPage = Math.max(1, pagination.current_page - 1);
-    const endPage = Math.min(totalPages, pagination.current_page + 1);
-    const currentPage = pagination.current_page;
-
-    if (currentPage > 1) {
-      pub_pager.append(
-        `<a href="#" class="pub-page-link" data-page="1">&laquo; First</a>`
-      );
-    }
-
-    if (currentPage > 1) {
-      pub_pager.append(
-        `<a href="#" class="pub-page-link" data-page="${
-          currentPage - 1
-        }">Previous</a>`
-      );
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      if (i == currentPage) {
-        pub_pager.append(`<span class="current-page">${i}</span>`);
-      } else {
-        pub_pager.append(
-          `<a href="#" class="pub-page-link" data-page="${i}">${i}</a>`
-        );
-      }
-    }
-
-    if (currentPage < totalPages) {
-      pub_pager.append(
-        `<a href="#" class="pub-page-link" data-page="${
-          currentPage + 1
-        }">Next</a>`
-      );
-    }
-
-    if (currentPage < totalPages) {
-      pub_pager.append(
-        `<a href="#" class="pub-page-link" data-page="${totalPages}">Last &raquo;</a>`
-      );
-    }
-
-    $(".pub-page-link").on("click", function (e) {
+    pub_pager.off("click", ".pub-page-link").on("click", ".pub-page-link", function (e) {
       e.preventDefault();
       const newPage = $(this).data("page");
 
@@ -914,7 +962,7 @@
         },
         success: function () {},
         error: function (xhr, status, error) {
-          showToast(error, "danger");
+          showToast("Error updating publication pagination.", "danger");
         },
       });
     });
@@ -923,7 +971,7 @@
   //MEDIA
   const loadMediaFiles = function (page) {
     if (typeof $ === "undefined") {
-      showToast("jQuery not available", "danger");
+      showToast("jQuery is not available.", "danger");
       return;
     }
 
@@ -938,14 +986,14 @@
     const url =
       drupalSettings.path.baseUrl +
       `std/get-media-files/${encodeURIComponent(studyuri)}/${page}/${pagesize}`;
-    const loggedUser = drupalSettings.user.logged;
+    const loggedUser = canDeleteFiles();
 
     $.ajax({
       url: url,
       type: "GET",
       success: function (response) {
 
-      // se não houver arquivos de mídia
+      // se nÃƒÂ£o houver files de mÃƒÂ­dia
       if (Array.isArray(response.files) && response.files.length === 0) {
         const headers = ['Filename','Operations'];
         let table = '<table class="table table-striped table-bordered">';
@@ -955,7 +1003,7 @@
         table += '<tbody>';
         table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
         table += '</tbody></table>';
-        $("#media-table-container").html(table);
+        $("#media-table-container").html(wrapTable(table));
         totals.media = 0;
         updateTotal();
         $("#media-table-pager").empty();
@@ -979,7 +1027,7 @@
                       class="btn btn-sm btn-secondary download-media-url"
                       data-download-url="${file.download_url}"
                       style="margin-right:5px"
-                      title="Download file">
+                        title="Download file">
                       <i class="fa-solid fa-download"></i>
                   </a>`;
             let fDelete = `<a href="#"
@@ -999,7 +1047,7 @@
           });
 
           table += "</tbody></table>";
-          $("#media-table-container").html(table);
+          $("#media-table-container").html(wrapTable(table));
 
           if (response.files && response.pagination) {
             if (response.pagination) {
@@ -1014,12 +1062,12 @@
             renderMediaPagination(response.pagination);
             attachMediaEvents();
           } else {
-            showToast("Files or pagination missing in response.", "danger");
+            showToast("Incomplete response: files or pagination are missing.", "danger");
           }
         }
       },
       error: function () {
-        showToast("Error loading publication files.", "danger");
+        showToast("Error loading media files.", "danger");
       },
     });
   };
@@ -1034,7 +1082,7 @@
       const deleteUrl =
         drupalSettings.path.baseUrl + `std/` + $(this).data("url");
 
-      if (confirm("Do you really want to delete this file?")) {
+      if (confirm("Are you sure you want to delete this file?")) {
         $.ajax({
           url: deleteUrl,
           type: "POST",
@@ -1049,13 +1097,13 @@
 
               loadMediaFiles(adjustedPage);
 
-              showToast(response.message, "success");
+              showToast("File deleted successfully.", "success");
             } else {
-              showToast(response.message, "warning");
+              showToast("Unable to delete the file.", "warning");
             }
           },
           error: function () {
-            showToast("Error: " + response.error, "danger");
+            showToast("Error deleting the file.", "danger");
           },
         });
       }
@@ -1064,8 +1112,11 @@
     $(document).on("click", ".view-media-button", function (e) {
       e.preventDefault();
 
-      const modalUrl =
-        drupalSettings.path.baseUrl + `std/` + $(this).data("view-url");
+      const modalUrl = resolveViewUrl($(this).data("view-url"));
+      if (!modalUrl) {
+        showToast("Invalid file URL.", "danger");
+        return;
+      }
 
       const modalContent = document.getElementById("modal-content");
       if (modalContent) {
@@ -1076,7 +1127,7 @@
         drupalSettings.path.baseUrl + "modules/custom/rep/js/pdf.worker.min.js";
 
       const renderImage = (modalUrl) => {
-        const newContent = `<img src="${modalUrl}" alt="Imagem" style="max-width:100%; height:auto;">`;
+        const newContent = `<img src="${modalUrl}" alt="Image" style="max-width:100%; height:auto;">`;
         modalContent.innerHTML = newContent;
       };
 
@@ -1116,8 +1167,8 @@
             modalContent.appendChild(container);
           })
           .catch(function (error) {
-            showToast("Error loading PDF", "danger");
-            modalContent.innerHTML = "<p>Error Loading PDF.</p>";
+            showToast("Error loading PDF.", "danger");
+            modalContent.innerHTML = "<p>Error loading PDF.</p>";
           });
       };
 
@@ -1138,12 +1189,12 @@
               modalContent.innerHTML = newContent;
             } else {
               modalContent.innerHTML =
-                "<p>Erro ao gerar a URL de visualização. O arquivo pode não ser acessível.</p>";
+                "<p>Error generating preview URL. The file may not be accessible.</p>";
             }
           })
           .catch((error) => {
-            showToast("Erro get URL for Viewer:", "danger");
-            modalContent.innerHTML = `<p>Error loading file. <a href="${modalUrl}" download>Press here to Download</a>.</p>`;
+            showToast("Error retrieving preview URL.", "danger");
+            modalContent.innerHTML = `<p>Error loading file. <a href="${modalUrl}" download>Click here to download.</a>.</p>`;
           });
       };
 
@@ -1168,7 +1219,7 @@
           ) {
             renderWord(modalUrl);
           } else {
-            modalContent.innerHTML = `<p>Tipo de arquivo não suportado: ${contentType}</p>`;
+            modalContent.innerHTML = `<p>Unsupported file type: ${contentType}</p>`;
           }
 
           $("#modal-container").removeClass("hidden");
@@ -1176,7 +1227,7 @@
         },
         error: function (xhr, status, error) {
           showToast(error, "danger");
-          modalContent.innerHTML = `<p>Erro ao carregar o arquivo. <a href="${modalUrl}" download>Clique aqui para baixá-lo</a>.</p>`;
+          modalContent.innerHTML = `<p>Error loading file. <a href="${modalUrl}" download>Click here to download.</a>.</p>`;
         },
       });
     });
@@ -1198,52 +1249,9 @@
   // Render Media Pagination
   const renderMediaPagination = function (pagination) {
     const media_pager = jQuery("#media-table-pager");
-    media_pager.empty();
+    renderPager(media_pager, "media-page-link", pagination.current_page, pagination.total_pages);
 
-    const totalPages = pagination.total_pages;
-    const startPage = Math.max(1, pagination.current_page - 1);
-    const endPage = Math.min(totalPages, pagination.current_page + 1);
-    const currentPage = pagination.current_page;
-
-    if (currentPage > 1) {
-      media_pager.append(
-        `<a href="#" class="media-page-link" data-page="1">&laquo; First</a>`
-      );
-    }
-
-    if (currentPage > 1) {
-      media_pager.append(
-        `<a href="#" class="media-page-link" data-page="${
-          currentPage - 1
-        }">Previous</a>`
-      );
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      if (i == currentPage) {
-        media_pager.append(`<span class="current-page">${i}</span>`);
-      } else {
-        media_pager.append(
-          `<a href="#" class="media-page-link" data-page="${i}">${i}</a>`
-        );
-      }
-    }
-
-    if (currentPage < totalPages) {
-      media_pager.append(
-        `<a href="#" class="media-page-link" data-page="${
-          currentPage + 1
-        }">Next</a>`
-      );
-    }
-
-    if (currentPage < totalPages) {
-      media_pager.append(
-        `<a href="#" class="media-page-link" data-page="${totalPages}">Last &raquo;</a>`
-      );
-    }
-
-    $(".media-page-link").on("click", function (e) {
+    media_pager.off("click", ".media-page-link").on("click", ".media-page-link", function (e) {
       e.preventDefault();
       const newPage = $(this).data("page");
 
@@ -1258,7 +1266,194 @@
         },
         success: function () {},
         error: function (xhr, status, error) {
-          showToast(error, "danger");
+          showToast("Error updating media pagination.", "danger");
+        },
+      });
+    });
+  };
+
+  // MEDICAL IMAGES
+  const loadMedicalImageFiles = function (page) {
+    if (typeof $ === "undefined") {
+      showToast("jQuery is not available.", "danger");
+      return;
+    }
+
+    const studyuri = getStdStudyUri();
+    if (!studyuri) {
+      console.warn("Skipping medical images load: missing study URI.");
+      $("#medical-images-table-container").html("<p>No data available to display.</p>");
+      $("#medical-images-table-pager").empty();
+      totals.medicalImages = 0;
+      updateTotal();
+      return;
+    }
+
+    const pagesize = 5;
+    const url =
+      drupalSettings.path.baseUrl +
+      `std/get-medical-image-files/${encodeURIComponent(studyuri)}/${page}/${pagesize}`;
+    const loggedUser = canDeleteFiles();
+
+    $.ajax({
+      url: url,
+      type: "GET",
+      success: function (response) {
+        if (Array.isArray(response.files) && response.files.length === 0) {
+          const headers = ["Filename", "Operations"];
+          let table = '<table class="table table-striped table-bordered">';
+          table += "<thead><tr>";
+          headers.forEach((h) => (table += `<th>${h}</th>`));
+          table += "</tr></thead>";
+          table += "<tbody>";
+          table += `<tr><td colspan="${headers.length}" class="text-center text-muted">No results found.</td></tr>`;
+          table += "</tbody></table>";
+          $("#medical-images-table-container").html(wrapTable(table));
+          totals.medicalImages = 0;
+          updateTotal();
+          $("#medical-images-table-pager").empty();
+          return;
+        }
+
+        if (response.files && response.pagination) {
+          let table = '<table class="table table-striped table-bordered">';
+          table +=
+            '<thead><tr><th>Filename</th><th style="width: 1%; white-space: nowrap; text-align: center;">Operations</th></tr></thead><tbody>';
+
+          response.files.forEach(function (file) {
+            const fView = `<a href="#"
+                     class="btn btn-sm btn-secondary view-medical-image-button"
+                     data-view-url="${file.view_url}"
+                     style="margin-right:5px"
+                       title="View medical image">
+                     <i class="fa-solid fa-eye"></i>
+                  </a>`;
+            const fDownload = `<a href="#"
+                      class="btn btn-sm btn-secondary download-medical-url"
+                      data-download-url="${file.download_url}"
+                      style="margin-right:5px"
+                        title="Download file">
+                      <i class="fa-solid fa-download"></i>
+                  </a>`;
+            const fDelete = `<a href="#"
+                     class="btn btn-sm btn-danger delete-medical-image-button"
+                     data-url="${file.delete_url}"
+                       title="Delete file">
+                     <i class="fa-solid fa-trash-can"></i>
+                  </a>`;
+
+            table += `<tr>
+                <td class="text-break">${file.filename}</td>
+                <td style="text-align: center; white-space: nowrap;">` +
+              fView +
+              fDownload +
+              (loggedUser ? fDelete : "") +
+              `</td>
+              </tr>`;
+          });
+
+          table += "</tbody></table>";
+          $("#medical-images-table-container").html(wrapTable(table));
+
+          totals.medicalImages = parseInt(response.pagination.total_files, 10) || 0;
+          updateTotal();
+          renderMedicalImagePagination(response.pagination);
+          attachMedicalImageEvents();
+        } else {
+          showToast("Incomplete response: files or pagination are missing.", "danger");
+        }
+      },
+      error: function () {
+        showToast("Error loading medical image files.", "danger");
+      },
+    });
+  };
+
+  const attachMedicalImageEvents = function () {
+    $(document).off("click", ".delete-medical-image-button");
+    $(document).off("click", ".view-medical-image-button");
+
+    $(document).on("click", ".delete-medical-image-button", function (e) {
+      e.preventDefault();
+
+      const deleteUrl = drupalSettings.path.baseUrl + `std/` + $(this).data("url");
+
+      if (confirm("Are you sure you want to delete this file?")) {
+        $.ajax({
+          url: deleteUrl,
+          type: "POST",
+          success: function (response) {
+            if (response.status === "success") {
+              const currentPage = drupalSettings.medical.page || 1;
+              const lastPage = response.last_page || 1;
+              const adjustedPage = Math.min(currentPage, lastPage);
+
+              drupalSettings.medical.page = adjustedPage;
+              loadMedicalImageFiles(adjustedPage);
+
+              showToast("File deleted successfully.", "success");
+            } else {
+              showToast("Unable to delete the medical image file.", "warning");
+            }
+          },
+          error: function () {
+            showToast("Error deleting medical image file.", "danger");
+          },
+        });
+      }
+    });
+
+    $(document).on("click", ".view-medical-image-button", function (e) {
+      e.preventDefault();
+
+      const modalUrl = resolveViewUrl($(this).data("view-url"));
+      if (!modalUrl) {
+        showToast("Invalid file URL.", "danger");
+        return;
+      }
+      const ohifViewerUrl = `https://viewer.ohif.org/viewer?url=${encodeURIComponent(modalUrl)}`;
+      const modalContent = document.getElementById("modal-content");
+      if (!modalContent) {
+        return;
+      }
+
+      modalContent.innerHTML = `
+        <div class="alert alert-info mb-3" role="alert">
+          Embedded OHIF is blocked in this browser. Use the actions below to view the medical file.
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-primary" href="${ohifViewerUrl}" target="_blank" rel="noopener noreferrer">Open DICOM Viewer</a>
+          <a class="btn btn-sm btn-secondary" href="${modalUrl}" target="_blank" rel="noopener noreferrer">Open Original File</a>
+          <a class="btn btn-sm btn-outline-secondary" href="${modalUrl}" download>Download</a>
+        </div>
+        <p style="margin-top:12px; margin-bottom:0;">If the viewer cannot render this file, use Open Original File or Download.</p>
+      `;
+
+      $("#modal-container").removeClass("hidden");
+      $(".modal-backdrop").removeClass("hidden");
+    });
+  };
+
+  const renderMedicalImagePagination = function (pagination) {
+    const medicalPager = jQuery("#medical-images-table-pager");
+    renderPager(medicalPager, "medical-page-link", pagination.current_page, pagination.total_pages);
+
+    medicalPager.off("click", ".medical-page-link").on("click", ".medical-page-link", function (e) {
+      e.preventDefault();
+      const newPage = $(this).data("page");
+
+      loadMedicalImageFiles(newPage);
+
+      $.ajax({
+        url: drupalSettings.path.baseUrl + `std/update-session-page`,
+        type: "POST",
+        data: {
+          page: newPage,
+          element_type: "medical",
+        },
+        success: function () {},
+        error: function (xhr, status, error) {
+          showToast("Error updating medical image pagination.", "danger");
         },
       });
     });
@@ -1292,6 +1487,17 @@
         function () {
           const initialMediaPage = drupalSettings.media.page || 1;
           loadMediaFiles(initialMediaPage);
+        }
+      );
+    },
+  };
+
+  Drupal.behaviors.medicalImagesPagination = {
+    attach: function (context, settings) {
+      once("medical-images-table", "#medical-images-table-container", context).forEach(
+        function () {
+          const initialMedicalPage = drupalSettings.medical.page || 1;
+          loadMedicalImageFiles(initialMedicalPage);
         }
       );
     },

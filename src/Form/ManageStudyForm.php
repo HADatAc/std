@@ -12,6 +12,7 @@ use Drupal\rep\Vocabulary\HASCO;
 use Drupal\std\Controller\JsonDataController;
 use Drupal\dpl\Controller\StreamController;
 use Drupal\Core\Render\Markup;
+use Drupal\Component\Utility\Html;
 
 use function Termwind\style;
 
@@ -121,11 +122,15 @@ class ManageStudyForm extends FormBase
       $this->setStudy($study);
     }
 
+    $isOwner = isset($this->getStudy()->hasSIRManagerEmail)
+      && strcasecmp(trim((string) $this->getStudy()->hasSIRManagerEmail), trim((string) $useremail)) === 0;
+
 	// ROW CONTENT
     $session = \Drupal::service('session');
     $da_page_from_session = $session->get('da_current_page', 1);
     $pub_page_from_session = $session->get('pub_current_page', 1);
     $media_page_from_session = $session->get('media_current_page', 1);
+    $medical_page_from_session = $session->get('medical_current_page', 1);
 
     // Settings para AJAX das tabelas
     $form['#attached']['drupalSettings']['pub'] = [
@@ -138,6 +143,12 @@ class ManageStudyForm extends FormBase
       'studyuri'   => rawurlencode($this->studyUri),
       'elementtype'=> 'media',
       'page'       => $media_page_from_session,
+      'pagesize'   => 5,
+    ];
+    $form['#attached']['drupalSettings']['medical'] = [
+      'studyuri'   => rawurlencode($this->studyUri),
+      'elementtype'=> 'medical',
+      'page'       => $medical_page_from_session,
       'pagesize'   => 5,
     ];
     $form['#attached']['drupalSettings']['std'] = [
@@ -153,6 +164,8 @@ class ManageStudyForm extends FormBase
                 . '/dpl/streamtopic/latest_message/',
       'fileIngestUrl'   => Url::fromRoute('dpl.file_ingest_ajax')->toString(),
       'fileUningestUrl' => Url::fromRoute('dpl.file_uningest_ajax')->toString(),
+      'isOwner'         => $isOwner,
+      'canDeleteFiles'  => $isOwner,
 
     ];
 
@@ -166,30 +179,17 @@ class ManageStudyForm extends FormBase
     $totalVCs = self::extractValue($api->parseObjectResponse($api->getTotalStudyVCs($this->getStudy()->uri), 'getTotalStudyVCs'));
     $totalSOCs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOCs($this->getStudy()->uri), 'getTotalStudySOCs'));
     $totalSOs = self::extractValue($api->parseObjectResponse($api->getTotalStudySOs($this->getStudy()->uri), 'getTotalStudySOs'));
-    // Workflow count shown in the execution card:
-    // prefer the workflow currently associated to this study (Drupal state).
+    // Workflows associated with this study (used in Simulation Process Executions).
     $totalPRCs = 0;
+    $associatedWorkflows = [];
     try {
-      $storedProcessUri = \Drupal::state()->get('ctt.study_process.' . sha1($this->getStudy()->uri));
-      if (!empty($storedProcessUri)) {
-        $storedProcess = $api->parseObjectResponse($api->getUri($storedProcessUri), 'getUri');
-        if (!empty($storedProcess) && is_object($storedProcess) && !empty($storedProcess->uri)) {
-          $totalPRCs = 1;
-        }
-      }
-
-      // If no association is stored yet, fallback to all workflows/processes
-      // available to the current user.
-      if ($totalPRCs === 0) {
-        $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $useremail, 9999, 0), 'listByManagerEmail');
-        if (is_array($workflows)) {
-          $totalPRCs = count($workflows);
-        }
-      }
+      $associatedWorkflows = $this->getAssociatedWorkflowsForStudy($api, $this->getStudy()->uri, $useremail);
+      $totalPRCs = count($associatedWorkflows);
     }
     catch (\Throwable $e) {
       // Keep zero if the backend is unavailable.
       $totalPRCs = 0;
+      $associatedWorkflows = [];
     }
 
     // SET STREAM LIST
@@ -204,9 +204,10 @@ class ManageStudyForm extends FormBase
         'value' => 'Contents',
         'link' => self::urlSelectByStudy($this->getStudy()->uri, 'da')
       ),
-      2 => array('value' => 'Stream Data Files (' . ($totalDAs ?? 0) . ')'),
+      2 => array('value' => 'Stream Files (' . ($totalDAs ?? 0) . ')'),
       3 => array('value' => 'Publications'),
       4 => array('value' => 'Media'),
+      15 => array('value' => 'Medical Images'),
       5 => array('value' => '<h3>Other Content (0)</h3>'),
       6 => array(
         'head' => 'Original Streams (' . $totalSTREAMs . ')',
@@ -454,9 +455,6 @@ class ManageStudyForm extends FormBase
     ])->toString();
     Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
 
-    // Check if the current user is the owner (hasSIRManagerEmail is assumed to be defined previously).
-    $isOwner = $this->getStudy()->hasSIRManagerEmail === $useremail;
-
     // ROW 2 as a Bootstrap 5 Accordion, preserving your AJAX logic
     $form['row2'] = [
       '#type' => 'container',
@@ -495,7 +493,7 @@ class ManageStudyForm extends FormBase
         '#tag'        => 'button',
         '#value'      => '<h3 id="total_elements_count" class="mb-0">' . $cards[1]['value'] . '</h3>' .
           ($isOwner ?
-            '&nbsp;<div class="info-card text-center w-80">(You can drag&amp;drop files directly into this card)</div>' :
+            '&nbsp;<div class="info-card text-center w-80">(You can drag and drop files directly onto this card)</div>' :
             '') .
             '<div id="toast-container" style="position:absolute; top:0.5rem; right:1rem; z-index:1050;"></div>',
         '#attributes' => [
@@ -564,7 +562,7 @@ class ManageStudyForm extends FormBase
       '#type'     => 'tableselect',
       '#header'   => $header,
       '#options'  => $output,
-      '#empty'    => t('No stream has been found'),
+      '#empty'    => t('No streams were found'),
       '#attributes' => ['id' => 'dpl-streams-table'],
       '#multiple' => FALSE,
     ];
@@ -598,10 +596,10 @@ class ManageStudyForm extends FormBase
           <div class="card">
             <div class="card-header text-center">
               <h3 id="topic-list-count">Stream Topic List</h3>
-              <div class="info-card">Cards data are refreshed every 15 seconds</div>
+              <div class="info-card">Card data refreshes every 15 seconds</div>
             </div>
             <div class="card-body">
-              <div id="topic-list-table">Loading…</div>
+              <div id="topic-list-table">Loading...</div>
             </div>
             <div class="card-footer text-center">
               <div id="topic-list-pager" class="pagination"></div>
@@ -627,7 +625,7 @@ class ManageStudyForm extends FormBase
               <h3 id="data-files-count">Stream Data Files</h3>
             </div>
             <div class="card-body">
-              <div id="data-files-table">Loading…</div>
+              <div id="data-files-table">Loading...</div>
             </div>
             <div class="card-footer text-center">
               <div id="data-files-pager" class="pagination stream-only-pager"></div>
@@ -693,7 +691,7 @@ class ManageStudyForm extends FormBase
       '#type'     => 'tableselect',
       '#header'   => $headerOut,
       '#options'  => $outputOut,
-      '#empty'    => t('No stream has been found'),
+      '#empty'    => t('No streams were found'),
       '#attributes' => ['id' => 'dpl-streamsout-table'],
       '#multiple' => FALSE,
     ];
@@ -714,13 +712,13 @@ class ManageStudyForm extends FormBase
     ];
     $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['row', 'align-items-start']],
+      '#attributes' => ['class' => ['row', 'align-items-start', 'g-3', 'std-fixed-files-row']],
     ];
 
     // Study Data Files (one-third width)
     $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['study_data_files'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['col-md-4']],
+      '#attributes' => ['class' => ['col-xl-3', 'col-lg-6', 'col-md-6', 'col-12', 'std-fixed-files-col']],
       'card' => [
         '#type'   => 'markup',
         '#markup' => '
@@ -729,20 +727,42 @@ class ManageStudyForm extends FormBase
               <h3>' . $cards[12]['value'] . '</h3>
             </div>
             <div class="card-body">
-              <div id="json-table-container">Loading…</div>
+              <div id="json-table-container">Loading...</div>
             </div>
             <div class="card-footer text-center">
-              <div id="json-table-pager" class="pagination"></div>
+              <div id="json-table-pager" class="std-pager"></div>
             </div>
           </div>
         ',
       ],
     ];
 
-    // Publications (one-third width)
+    // Medical Images
+    $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['medical_images'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['col-xl-3', 'col-lg-6', 'col-md-6', 'col-12', 'std-fixed-files-col']],
+      'card' => [
+        '#type'   => 'markup',
+        '#markup' => '
+          <div class="card">
+            <div class="card-header text-center">
+              <h3>' . $cards[15]['value'] . '</h3>
+            </div>
+            <div class="card-body">
+              <div id="medical-images-table-container">Loading...</div>
+            </div>
+            <div class="card-footer text-center">
+              <div id="medical-images-table-pager" class="std-pager"></div>
+            </div>
+          </div>
+        ',
+      ],
+    ];
+
+    // Publications
     $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['publications'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['col-md-4']],
+      '#attributes' => ['class' => ['col-xl-3', 'col-lg-6', 'col-md-6', 'col-12', 'std-fixed-files-col']],
       'card' => [
         '#type'   => 'markup',
         '#markup' => '
@@ -751,20 +771,20 @@ class ManageStudyForm extends FormBase
               <h3>' . $cards[3]['value'] . '</h3>
             </div>
             <div class="card-body">
-              <div id="publication-table-container">Loading…</div>
+              <div id="publication-table-container">Loading...</div>
             </div>
             <div class="card-footer text-center">
-              <div id="publication-table-pager" class="pagination"></div>
+              <div id="publication-table-pager" class="std-pager"></div>
             </div>
           </div>
         ',
       ],
     ];
 
-    // Media (one-third width)
+    // Media
     $form['row2']['accordion']['item']['collapse']['body']['inner_row']['fixed_cards_container']['fixed_row']['media'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['col-md-4']],
+      '#attributes' => ['class' => ['col-xl-3', 'col-lg-6', 'col-md-6', 'col-12', 'std-fixed-files-col']],
       'card' => [
         '#type'   => 'markup',
         '#markup' => '
@@ -773,10 +793,10 @@ class ManageStudyForm extends FormBase
               <h3>' . $cards[4]['value'] . '</h3>
             </div>
             <div class="card-body">
-              <div id="media-table-container">Loading…</div>
+              <div id="media-table-container">Loading...</div>
             </div>
             <div class="card-footer text-center">
-              <div id="media-table-pager" class="pagination"></div>
+              <div id="media-table-pager" class="std-pager"></div>
             </div>
           </div>
         ',
@@ -784,6 +804,7 @@ class ManageStudyForm extends FormBase
     ];
 
     // WORKFLOW EXECUTIONS
+    $preferredProcessLabel = $config->get('preferred_process') ?: 'Workflow';
     $form['row6'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['accordion', 'mt-3'], 'id' => 'accordionWorkflow'],
@@ -806,7 +827,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
-        '#value' => $this->t('<h3 class="mb-0">'.$config->get("preferred_process").' Executions' ?? 'Workflow Executions'.'</h3>'),
+        '#value' => $this->t('<h3 class="mb-0">Executions of ' . $preferredProcessLabel . '</h3>'),
         '#attributes' => [
           'class' => ['accordion-button', 'collapsed'],
           'type' => 'button',
@@ -835,69 +856,80 @@ class ManageStudyForm extends FormBase
 
     $form['row6']['item']['collapse']['body']['cards_row'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['row','row-cols-3','g-0','p-3','pt-0']],
+      '#attributes' => ['class' => ['row','g-0','p-3','pt-0']],
     ];
 
-    foreach ([14] as $key) {
-      switch ($key) {
-        // case 7:
-        //   $title = t('Manage STRs');
-        //   $btn_classes = ['btn', 'btn-primary'];
-        //   break;
-        case 14:
-          $title = t('Create Execution');
-          $btn_classes = ['btn', 'btn-primary',];
-          break;
-      }
+    $workflowRows = '';
+    if (!empty($associatedWorkflows)) {
+      foreach ($associatedWorkflows as $workflow) {
+        $workflowUri = (string) ($workflow->uri ?? '');
+        if ($workflowUri === '') {
+          continue;
+        }
 
-      $card_url = NULL;
-      if ($key === 14) {
-        $card_url = Url::fromRoute('ctt.execution_create', [
-          'studyuri' => base64_encode($this->getStudy()->uri),
-        ]);
-      }
+        $workflowLabel = Html::escape((string) ($workflow->label ?? $workflow->title ?? $workflowUri));
+        $workflowUriEscaped = Html::escape($workflowUri);
 
-      $link_attributes = ['class' => $btn_classes];
-      if ($key === 14) {
-        $link_attributes['target'] = '_blank';
-        $link_attributes['rel'] = 'noopener noreferrer';
-      }
+        $viewWorkflowUrl = Url::fromRoute('rep.describe_element', [
+          'elementuri' => base64_encode($workflowUri),
+        ])->toString();
 
-      $form['row6']['item']['collapse']['body']['cards_row']["card{$key}"] = [
-        '#type'       => 'container',
-        '#attributes' => ['class' => ['col', 'p-2']],
-        'card' => [
-          '#type'       => 'container',
-          '#attributes' => ['class' => ['card', 'h-100', 'text-center']],
-          'body'   => [
-            '#type'       => 'container',
-            '#attributes' => ['class' => ['card-body']],
-            'value' => [
-              '#type'  => 'html_tag',
-              '#tag'   => 'h1',
-              '#value' => $cards[$key]['value'],
+        $actions = '<a href="' . Html::escape($viewWorkflowUrl) . '" class="btn btn-sm btn-secondary me-1" target="_blank" rel="noopener noreferrer">View Workflow</a>';
+
+        if ($isOwner) {
+          $createExecutionUrl = Url::fromRoute('ctt.execution_create', [
+            'studyuri' => base64_encode($this->getStudy()->uri),
+          ], [
+            'query' => [
+              'processUri' => $workflowUri,
             ],
-          ],
-          'footer' => [
-            '#type'       => 'container',
-            '#attributes' => ['class' => ['card-footer']],
-            'link' => [
-              '#type'       => 'link',
-              '#title'      => $title,
-              '#url'        => $card_url ?: Url::fromUserInput($cards[$key]['link']),
-              '#attributes' => $link_attributes,
-            ],
-          ],
-        ],
-      ];
+          ])->toString();
+          $actions .= '<a href="' . Html::escape($createExecutionUrl) . '" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Create Execution</a>';
+        }
+        else {
+          $actions .= '<span class="badge bg-light text-dark border ms-1">Owner only</span>';
+        }
+
+        $workflowRows .= '<tr>'
+          . '<td class="text-break">' . $workflowLabel . '</td>'
+          . '<td class="text-break">' . $workflowUriEscaped . '</td>'
+          . '<td style="white-space: nowrap; text-align: center;">' . $actions . '</td>'
+          . '</tr>';
+      }
     }
+
+    if ($workflowRows === '') {
+      $workflowRows = '<tr><td colspan="3" class="text-center text-muted">No workflows associated with this study were found.</td></tr>';
+    }
+
+    $workflowHint = $isOwner
+      ? 'You can create executions for each associated workflow.'
+      : 'You can view associated workflows. Only the study owner can create executions.';
+
+    $form['row6']['item']['collapse']['body']['cards_row']['workflow_table'] = [
+      '#type' => 'markup',
+      '#markup' => Markup::create(
+        '<div class="col-md-12">'
+          . '<div class="card">'
+          . '<div class="card-header text-center"><h3 class="mb-0">Associated Workflows (' . $totalPRCs . ')</h3></div>'
+          . '<div class="card-body">'
+          . '<table class="table table-striped table-bordered mb-0">'
+          . '<thead><tr><th>Workflow</th><th>URI</th><th style="width: 1%; white-space: nowrap; text-align: center;">Actions</th></tr></thead>'
+          . '<tbody>' . $workflowRows . '</tbody>'
+          . '</table>'
+          . '</div>'
+          . '<div class="card-footer text-center"><small class="text-muted">' . Html::escape($workflowHint) . '</small></div>'
+          . '</div>'
+          . '</div>'
+      ),
+    ];
 
     // Bottom part of the form
     $form['row4'] = array(
       '#type' => 'container',
       '#attributes' => ['class' => ['row']],
       '#type' => 'markup',
-      '#markup' => '<p><br /><b>Note</b>: Data Dictionaires (DD) and Semantic Data Dictionaires (SDD) are added' .
+      '#markup' => '<p><br /><b>Note</b>: Data Dictionaries (DD) and Semantic Data Dictionaries (SDD) are added' .
         ' to studies through their corresponding data files.</p><br>',
     );
 
@@ -950,6 +982,151 @@ class ManageStudyForm extends FormBase
       return $data['total'];
     }
     return -1;
+  }
+
+  /**
+   * @return array<int, object>
+   */
+  private function getAssociatedWorkflowsForStudy($api, string $studyUri, string $userEmail): array
+  {
+    $associated = [];
+    $seenUris = [];
+
+    $appendWorkflow = function ($workflow) use (&$associated, &$seenUris): void {
+      if (!is_object($workflow)) {
+        return;
+      }
+
+      $workflowUri = trim((string) ($workflow->uri ?? ''));
+      if ($workflowUri === '' || isset($seenUris[$workflowUri])) {
+        return;
+      }
+
+      $seenUris[$workflowUri] = TRUE;
+      $associated[] = $workflow;
+    };
+
+    // Preserve explicitly selected study-process association.
+    $storedProcessUri = (string) \Drupal::state()->get('ctt.study_process.' . sha1($studyUri), '');
+    if ($storedProcessUri !== '') {
+      try {
+        $storedProcess = $api->parseObjectResponse($api->getUri($storedProcessUri), 'getUri');
+        $appendWorkflow($storedProcess);
+      }
+      catch (\Throwable $e) {
+        // Keep collecting from list endpoints.
+      }
+    }
+
+    $workflows = [];
+    try {
+      $workflows = $api->parseObjectResponse($api->listByKeyword('workflow', '_', 9999, 0), 'listByKeyword');
+    }
+    catch (\Throwable $e) {
+      $workflows = [];
+    }
+
+    if (!is_array($workflows) || empty($workflows)) {
+      try {
+        $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $userEmail, 9999, 0), 'listByManagerEmail');
+      }
+      catch (\Throwable $e) {
+        $workflows = [];
+      }
+    }
+
+    if (is_array($workflows)) {
+      foreach ($workflows as $workflow) {
+        if (!is_object($workflow)) {
+          continue;
+        }
+
+        if ($this->isWorkflowAssociatedWithStudy($workflow, $studyUri)) {
+          $appendWorkflow($workflow);
+        }
+      }
+    }
+
+    usort($associated, function ($left, $right) {
+      $leftLabel = strtolower((string) ($left->label ?? $left->title ?? $left->uri ?? ''));
+      $rightLabel = strtolower((string) ($right->label ?? $right->title ?? $right->uri ?? ''));
+      return strcmp($leftLabel, $rightLabel);
+    });
+
+    return $associated;
+  }
+
+  private function isWorkflowAssociatedWithStudy(object $workflow, string $studyUri): bool
+  {
+    $fields = [
+      'studyUri',
+      'study',
+      'hasStudy',
+      'hasStudyUri',
+      'hasAssociatedStudy',
+    ];
+
+    foreach ($fields as $field) {
+      if (!property_exists($workflow, $field)) {
+        continue;
+      }
+
+      if ($this->workflowValueMatchesStudy($workflow->{$field}, $studyUri)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
+  }
+
+  private function workflowValueMatchesStudy($value, string $studyUri): bool
+  {
+    if (is_string($value)) {
+      $candidate = trim($value);
+      if ($candidate === '') {
+        return FALSE;
+      }
+
+      if ($candidate === $studyUri) {
+        return TRUE;
+      }
+
+      $decoded = base64_decode($candidate, TRUE);
+      if (is_string($decoded) && $decoded !== '' && trim($decoded) === $studyUri) {
+        return TRUE;
+      }
+
+      if (str_contains($candidate, ',')) {
+        $parts = array_map('trim', explode(',', $candidate));
+        return in_array($studyUri, $parts, TRUE);
+      }
+
+      return FALSE;
+    }
+
+    if (is_object($value)) {
+      if (property_exists($value, 'uri') && is_string($value->uri) && trim($value->uri) === $studyUri) {
+        return TRUE;
+      }
+
+      foreach (get_object_vars($value) as $innerValue) {
+        if ($this->workflowValueMatchesStudy($innerValue, $studyUri)) {
+          return TRUE;
+        }
+      }
+
+      return FALSE;
+    }
+
+    if (is_array($value)) {
+      foreach ($value as $innerValue) {
+        if ($this->workflowValueMatchesStudy($innerValue, $studyUri)) {
+          return TRUE;
+        }
+      }
+    }
+
+    return FALSE;
   }
 
   /**
