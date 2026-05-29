@@ -65,8 +65,49 @@ final class StudySearchBehaviorTest extends WebDriverTestBase {
     $this->assertFalse($removedFilter->isChecked());
   }
 
+  public function testConfigurableOntologyExpansion(): void {
+    \Drupal::configFactory()
+      ->getEditable('std.settings')
+      ->set('study_search_ontologies', [
+        'uberon' => [
+          'title' => 'Anatomical Category (UBERON)',
+          'token_regexes' => ['/\bUBERON[:_]\d{3,}\b/i'],
+          'uri_template' => 'UBERON:%s',
+          'uri_keywords' => ['uberon'],
+        ],
+        'ncit' => [
+          'title' => 'Procedure Type (NCIT)',
+          'token_regexes' => ['/\bNCIT[:_ ]?C?\d{2,}\b/i'],
+          'uri_template' => 'NCIT:C%s',
+          'uri_keywords' => ['ncit'],
+        ],
+        'sio' => [
+          'title' => 'Signal Semantics (SIO)',
+          'token_regexes' => ['/\bSIO[:_]\d{3,}\b/i'],
+          'uri_template' => 'SIO:%s',
+          'uri_keywords' => ['sio'],
+        ],
+      ])
+      ->save();
+
+    $this->drupalGet('/std/search/studies');
+    $this->assertSession()->pageTextContains('Signal Semantics (SIO)');
+
+    $this->checkVariable('heart-rate');
+    $this->waitForVisibleResults('3');
+
+    $this->checkOntologyByType('sio');
+    $this->waitForVisibleResults('1');
+    $this->waitForChipCount(2);
+  }
+
   private function checkVariable(string $value): void {
     $checkbox = $this->assertSession()->elementExists('css', '.study-variable-checkbox[value="' . $value . '"]');
+    $checkbox->setValue(TRUE);
+  }
+
+  private function checkOntologyByType(string $ontology): void {
+    $checkbox = $this->assertSession()->elementExists('css', '.std-ontology-checkbox[data-ontology="' . $ontology . '"]');
     $checkbox->setValue(TRUE);
   }
 

@@ -42,6 +42,34 @@
       .filter(Boolean);
   };
 
+  const normalizeOntologyKey = function (raw) {
+    return String(raw || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
+  const getOntologyDatasetKey = function (ontologyKey) {
+    const normalized = normalizeOntologyKey(ontologyKey);
+    if (!normalized) {
+      return '';
+    }
+
+    const camel = normalized
+      .split('-')
+      .map((part, index) => {
+        if (index === 0) {
+          return part;
+        }
+
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join('');
+
+    return 'ontology' + camel.charAt(0).toUpperCase() + camel.slice(1) + 'Tags';
+  };
+
   const updateSelectedPreview = function (root, selectedVariableChecks, selectedOntologyChecks) {
     const preview = root.querySelector('#std-selected-preview');
     if (!preview) {
@@ -121,13 +149,19 @@
 
     const selected = selectedVariableChecks.map((el) => el.value);
     const selectedSources = new Set(selectedVariableChecks.map((el) => el.dataset.source || '').filter(Boolean));
+    const selectedOntologyByType = {};
+    selectedOntologyChecks.forEach((checkbox) => {
+      const ontology = normalizeOntologyKey(checkbox.dataset.ontology || '');
+      if (!ontology) {
+        return;
+      }
 
-    const selectedUberon = selectedOntologyChecks
-      .filter((el) => (el.dataset.ontology || '') === 'uberon')
-      .map((el) => el.value);
-    const selectedNcit = selectedOntologyChecks
-      .filter((el) => (el.dataset.ontology || '') === 'ncit')
-      .map((el) => el.value);
+      if (!Array.isArray(selectedOntologyByType[ontology])) {
+        selectedOntologyByType[ontology] = [];
+      }
+
+      selectedOntologyByType[ontology].push(checkbox.value);
+    });
 
     const logicInput = root.querySelector('input[name="std-search-logic"]:checked');
     const logic = logicInput ? logicInput.value : 'or';
@@ -142,8 +176,6 @@
 
     cards.forEach((card) => {
       const tags = splitTags(card.dataset.tags);
-      const cardUberonTags = splitTags(card.dataset.uberonTags);
-      const cardNcitTags = splitTags(card.dataset.ncitTags);
 
       // Studies are shown only when at least one variable is selected.
       let visible = false;
@@ -156,12 +188,21 @@
         }
       }
 
-      if (visible && selectedUberon.length > 0) {
-        visible = selectedUberon.some((term) => cardUberonTags.includes(term));
-      }
+      if (visible) {
+        Object.keys(selectedOntologyByType).forEach((ontology) => {
+          if (!visible) {
+            return;
+          }
 
-      if (visible && selectedNcit.length > 0) {
-        visible = selectedNcit.some((term) => cardNcitTags.includes(term));
+          const selectedTerms = selectedOntologyByType[ontology];
+          if (!Array.isArray(selectedTerms) || selectedTerms.length === 0) {
+            return;
+          }
+
+          const datasetKey = getOntologyDatasetKey(ontology);
+          const cardOntologyTags = splitTags(datasetKey ? card.dataset[datasetKey] : '');
+          visible = selectedTerms.some((term) => cardOntologyTags.includes(term));
+        });
       }
 
       if (visible) {

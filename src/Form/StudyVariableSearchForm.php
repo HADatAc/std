@@ -62,6 +62,15 @@ class StudyVariableSearchForm extends FormBase {
     $variablesBySource = is_array($context['variables_by_source'] ?? NULL)
       ? $context['variables_by_source']
       : [];
+    $ontologyDefinitions = is_array($context['ontology_definitions'] ?? NULL)
+      ? $context['ontology_definitions']
+      : [];
+    if (empty($ontologyDefinitions)) {
+      $ontologyDefinitions = [
+        'uberon' => 'Anatomical Category (UBERON)',
+        'ncit' => 'Procedure Type (NCIT)',
+      ];
+    }
     $ontologyFilters = is_array($context['ontology_filters'] ?? NULL)
       ? $context['ontology_filters']
       : [];
@@ -72,6 +81,8 @@ class StudyVariableSearchForm extends FormBase {
       ? $context['errors']
       : [];
 
+    $form['#attached']['drupalSettings']['stdStudySearch']['ontologyKeys'] = array_values(array_map('strval', array_keys($ontologyDefinitions)));
+
     $sidebarHtml = '';
     foreach (self::SOURCE_TITLES as $sourceKey => $sourceTitle) {
       $sidebarHtml .= $this->renderSourceSection(
@@ -80,18 +91,20 @@ class StudyVariableSearchForm extends FormBase {
         $sourceKey,
       );
     }
-    $sidebarHtml .= $this->renderOntologySection(
-      'Anatomical Category (UBERON)',
-      is_array($ontologyFilters['uberon'] ?? NULL) ? $ontologyFilters['uberon'] : [],
-      'uberon',
-    );
-    $sidebarHtml .= $this->renderOntologySection(
-      'Procedure Type (NCIT)',
-      is_array($ontologyFilters['ncit'] ?? NULL) ? $ontologyFilters['ncit'] : [],
-      'ncit',
-    );
+    foreach ($ontologyDefinitions as $ontology => $ontologyTitle) {
+      $ontologyKey = trim((string) $ontology);
+      if ($ontologyKey === '') {
+        continue;
+      }
 
-    $cardsHtml = $this->renderStudyCards($studyCards);
+      $sidebarHtml .= $this->renderOntologySection(
+        trim((string) $ontologyTitle) !== '' ? (string) $ontologyTitle : strtoupper($ontologyKey),
+        is_array($ontologyFilters[$ontologyKey] ?? NULL) ? $ontologyFilters[$ontologyKey] : [],
+        $ontologyKey,
+      );
+    }
+
+    $cardsHtml = $this->renderStudyCards($studyCards, $ontologyDefinitions);
     $errorBanner = $this->renderErrorBanner($errors);
 
     $form['search_page'] = [
@@ -237,7 +250,7 @@ class StudyVariableSearchForm extends FormBase {
     return $html;
   }
 
-  private function renderStudyCards(array $studyCards): string {
+  private function renderStudyCards(array $studyCards, array $ontologyDefinitions): string {
     $cardsHtml = '';
     foreach ($studyCards as $card) {
       if (!is_array($card)) {
@@ -248,14 +261,24 @@ class StudyVariableSearchForm extends FormBase {
       $sourceTags = is_array($card['source_tags'] ?? NULL) ? $card['source_tags'] : [];
       $ontologyTags = is_array($card['ontology_tags'] ?? NULL) ? $card['ontology_tags'] : [];
 
+      $ontologyAttributes = '';
+      foreach ($ontologyDefinitions as $ontologyKey => $ontologyTitle) {
+        $normalizedOntologyKey = Html::getClass((string) $ontologyKey);
+        if ($normalizedOntologyKey === '') {
+          continue;
+        }
+
+        $ontologyValues = is_array($ontologyTags[$ontologyKey] ?? NULL) ? $ontologyTags[$ontologyKey] : [];
+        $ontologyAttributes .= ' data-ontology-' . $normalizedOntologyKey . '-tags="' . Html::escape($this->joinTags($ontologyValues)) . '"';
+      }
+
       $cardsHtml .= '<article class="std-study-card"'
         . ' data-tags="' . Html::escape($this->joinTags($tags)) . '"'
         . ' data-simulator-tags="' . Html::escape($this->joinTags(is_array($sourceTags['simulator'] ?? NULL) ? $sourceTags['simulator'] : [])) . '"'
         . ' data-instrument-tags="' . Html::escape($this->joinTags(is_array($sourceTags['instrument'] ?? NULL) ? $sourceTags['instrument'] : [])) . '"'
         . ' data-questionnaire-tags="' . Html::escape($this->joinTags(is_array($sourceTags['questionnaire'] ?? NULL) ? $sourceTags['questionnaire'] : [])) . '"'
         . ' data-component-tags="' . Html::escape($this->joinTags(is_array($sourceTags['component'] ?? NULL) ? $sourceTags['component'] : [])) . '"'
-        . ' data-uberon-tags="' . Html::escape($this->joinTags(is_array($ontologyTags['uberon'] ?? NULL) ? $ontologyTags['uberon'] : [])) . '"'
-        . ' data-ncit-tags="' . Html::escape($this->joinTags(is_array($ontologyTags['ncit'] ?? NULL) ? $ontologyTags['ncit'] : [])) . '"'
+        . $ontologyAttributes
         . ' data-completeness-score="' . Html::escape(number_format((float) ($card['completeness_score'] ?? 0.0), 4, '.', '')) . '"'
         . '>';
 

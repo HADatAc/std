@@ -1142,6 +1142,7 @@ class JsonDataController extends ControllerBase
         $files = [];
         foreach ($paginated_files as $file) {
             $token = $this->buildMedicalViewerToken((string) $file);
+            $viewer_capability = $this->getMedicalViewerCapability((string) $file);
             $encoded_studyuri = rawurlencode($studyuri);
             $view_url = Url::fromRoute('std.view_media_file', [
                 'filename' => $file,
@@ -1160,13 +1161,15 @@ class JsonDataController extends ControllerBase
                 'absolute' => TRUE,
             ])->toString();
 
-            $can_visualize = $this->supportsEmbeddedMedicalViewer((string) $file);
+            $can_visualize = (bool) ($viewer_capability['canVisualize'] ?? FALSE);
+            $preview_message = trim((string) ($viewer_capability['previewMessage'] ?? ''));
 
             $files[] = [
                 'filename' => $file,
                 'view_url' => $view_url,
                 'viewer_url' => $viewer_url,
                 'can_visualize' => $can_visualize,
+                'preview_message' => $preview_message,
                 'delete_url' => '/delete-medical-image-file/' . $file . '/' . $studyuri,
                 'download_url' => \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/OHIF',
             ];
@@ -1297,8 +1300,38 @@ class JsonDataController extends ControllerBase
 
     private function supportsEmbeddedMedicalViewer(string $filename): bool
     {
-        $lower = strtolower(trim($filename));
-        return (bool) preg_match('/\.(dcm|dcim|dicom)$/', $lower);
+        $capability = $this->getMedicalViewerCapability($filename);
+        return (bool) ($capability['canVisualize'] ?? FALSE);
+    }
+
+    private function getMedicalViewerCapability(string $filename): array
+    {
+        $extension = StudyFileTypeResolver::normalizeExtension($filename);
+
+        if (in_array($extension, ['dcm', 'dcim', 'dicom'], TRUE)) {
+            return [
+                'canVisualize' => TRUE,
+                'statusMessage' => 'Rendering in embedded Drupal viewer.',
+                'fallbackMessage' => 'If rendering fails, open the original file or download it.',
+                'previewMessage' => '',
+            ];
+        }
+
+        if (in_array($extension, ['nii', 'nii.gz'], TRUE)) {
+            return [
+                'canVisualize' => FALSE,
+                'statusMessage' => 'NIfTI preview is not available in embedded viewer.',
+                'fallbackMessage' => 'NIfTI files are not previewed in the embedded viewer yet. Open the original file or download it.',
+                'previewMessage' => 'NIfTI preview is not available in embedded viewer yet.',
+            ];
+        }
+
+        return [
+            'canVisualize' => FALSE,
+            'statusMessage' => 'Preview unavailable for this file type.',
+            'fallbackMessage' => 'This file type cannot be previewed in the embedded viewer. Open the original file or download it.',
+            'previewMessage' => 'Preview unavailable for this file type.',
+        ];
     }
 
     private function buildMedicalViewerToken(string $filename): string
@@ -1341,15 +1374,10 @@ class JsonDataController extends ControllerBase
         ])->toString();
 
         $download_url = \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode((string) $filename) . '/' . $studyuri . '/OHIF';
-        $can_visualize = $this->supportsEmbeddedMedicalViewer((string) $filename);
-
-        $status_message = $can_visualize
-            ? 'Rendering in embedded Drupal viewer.'
-            : 'Preview unavailable for this file type.';
-
-        $fallback_message = $can_visualize
-            ? 'If rendering fails, open the original file or download it.'
-            : 'This file type cannot be previewed in the embedded viewer. Open the original file or download it.';
+        $viewer_capability = $this->getMedicalViewerCapability((string) $filename);
+        $can_visualize = (bool) ($viewer_capability['canVisualize'] ?? FALSE);
+        $status_message = (string) ($viewer_capability['statusMessage'] ?? 'Preview unavailable for this file type.');
+        $fallback_message = (string) ($viewer_capability['fallbackMessage'] ?? 'This file type cannot be previewed in the embedded viewer. Open the original file or download it.');
 
         $markup = '<section id="std-medical-viewer" class="std-medical-viewer" data-std-viewer-page="1">'
             . '<div id="std-medical-viewer-canvas-wrap" class="std-medical-viewer-canvas-wrap' . ($can_visualize ? '' : ' d-none') . '" tabindex="0">'

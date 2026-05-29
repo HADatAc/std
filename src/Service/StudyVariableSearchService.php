@@ -20,6 +20,20 @@ final class StudyVariableSearchService {
     'component',
   ];
 
+  /**
+   * Cache response-option labels resolved per codebook URI.
+   *
+   * @var array<string, string[]>
+   */
+  private array $codebookResponseOptionCache = [];
+
+  /**
+   * Cache response-option display labels resolved per response option URI.
+   *
+   * @var array<string, string>
+   */
+  private array $responseOptionLabelCache = [];
+
   public function __construct(
     private readonly object $apiConnector,
     private readonly FileSystemInterface $fileSystem,
@@ -27,12 +41,16 @@ final class StudyVariableSearchService {
 
   public function buildContext(string $userEmail, bool $isAdmin, bool $isAuthenticated): array {
     $errors = [];
+    $ontologyDefinitions = $this->getOntologyDefinitions();
+    $ontologyKeys = array_keys($ontologyDefinitions);
 
     $studies = $this->normalizeItems($this->loadElementsByType('study', $errors));
     $workflowPool = $this->normalizeItems($this->loadElementsByType('workflow', $errors));
+    $codebookPool = $this->normalizeItems($this->loadElementsByType('codebook', $errors));
 
     $studies = $this->applyVisibilityFilter($studies, $userEmail, $isAdmin, $isAuthenticated);
     $workflowPool = $this->applyVisibilityFilter($workflowPool, $userEmail, $isAdmin, $isAuthenticated);
+    $codebookPool = $this->applyVisibilityFilter($codebookPool, $userEmail, $isAdmin, $isAuthenticated);
 
     $variablesBySource = [
       'simulator' => [],
@@ -40,10 +58,7 @@ final class StudyVariableSearchService {
       'questionnaire' => [],
       'component' => [],
     ];
-    $ontologyFilters = [
-      'uberon' => [],
-      'ncit' => [],
-    ];
+    $ontologyFilters = $this->emptyOntologyTagMap($ontologyKeys);
     $studyCards = [];
 
     foreach ($studies as $study) {
@@ -56,7 +71,7 @@ final class StudyVariableSearchService {
         continue;
       }
 
-      $codebookFields = $this->extractCodebookFields($studyUri, $errors);
+      $codebookFields = $this->extractCodebookFields($studyUri, $study, $codebookPool, $errors);
       $associatedWorkflows = $this->findAssociatedWorkflowsForStudy($workflowPool, $studyUri);
       $workflowVariablesBySource = $this->extractWorkflowVariablesBySource($associatedWorkflows);
 
@@ -67,32 +82,29 @@ final class StudyVariableSearchService {
         'questionnaire' => [],
         'component' => [],
       ];
-      $studyOntologyTags = [
-        'uberon' => [],
-        'ncit' => [],
-      ];
+      $studyOntologyTags = $this->emptyOntologyTagMap($ontologyKeys);
 
       foreach ($codebookFields as $fieldLabel) {
-        $record = $this->registerVariable('questionnaire', $fieldLabel, $variablesBySource, $ontologyFilters);
+        $record = $this->registerVariable('questionnaire', $fieldLabel, $variablesBySource, $ontologyFilters, $ontologyDefinitions);
         if ($record === NULL) {
           continue;
         }
 
         $studyTags[$record['slug']] = $record['slug'];
         $studyTagsBySource['questionnaire'][$record['slug']] = $record['slug'];
-        $this->mergeOntologyTags($studyOntologyTags, $record['ontology']);
+        $this->mergeOntologyTags($studyOntologyTags, $record['ontology'], $ontologyDefinitions);
       }
 
       foreach ($workflowVariablesBySource as $source => $labels) {
         foreach ($labels as $label) {
-          $record = $this->registerVariable($source, $label, $variablesBySource, $ontologyFilters);
+          $record = $this->registerVariable($source, $label, $variablesBySource, $ontologyFilters, $ontologyDefinitions);
           if ($record === NULL) {
             continue;
           }
 
           $studyTags[$record['slug']] = $record['slug'];
           $studyTagsBySource[$source][$record['slug']] = $record['slug'];
-          $this->mergeOntologyTags($studyOntologyTags, $record['ontology']);
+          $this->mergeOntologyTags($studyOntologyTags, $record['ontology'], $ontologyDefinitions);
         }
       }
 
@@ -119,10 +131,7 @@ final class StudyVariableSearchService {
           'questionnaire' => array_values($studyTagsBySource['questionnaire']),
           'component' => array_values($studyTagsBySource['component']),
         ],
-        'ontology_tags' => [
-          'uberon' => array_values($studyOntologyTags['uberon']),
-          'ncit' => array_values($studyOntologyTags['ncit']),
-        ],
+        'ontology_tags' => $this->normalizeOntologyTagMap($studyOntologyTags, $ontologyKeys),
         'has_data' => $hasData,
         'has_workflow' => $hasWorkflow,
         'has_images' => $hasImages,
@@ -131,11 +140,17 @@ final class StudyVariableSearchService {
     }
 
     $variablesBySource = $this->normalizeSourceVariables($variablesBySource);
-    $ontologyFilters = $this->normalizeOntologyFilters($ontologyFilters);
+    $ontologyFilters = $this->normalizeOntologyFilters($ontologyFilters, $ontologyDefinitions);
     usort($studyCards, fn(array $a, array $b) => strcasecmp((string) $a['label'], (string) $b['label']));
+
+    $ontologyTitles = [];
+    foreach ($ontologyDefinitions as $ontologyKey => $ontologyDefinition) {
+      $ontologyTitles[$ontologyKey] = (string) ($ontologyDefinition['title'] ?? strtoupper($ontologyKey));
+    }
 
     return [
       'variables_by_source' => $variablesBySource,
+      'ontology_definitions' => $ontologyTitles,
       'ontology_filters' => $ontologyFilters,
       'study_cards' => $studyCards,
       'errors' => array_values(array_unique($errors)),
@@ -193,7 +208,7 @@ final class StudyVariableSearchService {
     return strtolower($raw);
   }
 
-  private function extractCodebookFields(string $studyUri, array &$errors): array {
+  private function extractCodebookFields(string $studyUri, ?object $study, array $codebookPool, array &$errors): array {
     $fields = [];
 
     try {
@@ -227,11 +242,129 @@ final class StudyVariableSearchService {
     }
     catch (\Throwable $e) {
       $errors[] = sprintf('Unable to load codebook fields for study %s.', $studyUri);
-      return [];
+    }
+
+    // Fallback for freshly-created studies/codebooks where virtual columns
+    // are not populated yet: expose response-option labels from codebooks.
+    if (empty($fields)) {
+      foreach ($this->extractFallbackCodebookFieldsForStudy($study, $codebookPool, $errors) as $label) {
+        $clean = trim($label);
+        if ($clean !== '') {
+          $fields[$clean] = $clean;
+        }
+      }
     }
 
     ksort($fields, SORT_NATURAL | SORT_FLAG_CASE);
     return array_values($fields);
+  }
+
+  private function extractFallbackCodebookFieldsForStudy(?object $study, array $codebookPool, array &$errors): array {
+    $fields = [];
+    $studyOwner = strtolower(trim((string) ($study->hasSIRManagerEmail ?? '')));
+
+    foreach ($codebookPool as $codebook) {
+      if (!is_object($codebook)) {
+        continue;
+      }
+
+      $codebookUri = trim((string) ($codebook->uri ?? ''));
+      if ($codebookUri === '') {
+        continue;
+      }
+
+      $codebookOwner = strtolower(trim((string) ($codebook->hasSIRManagerEmail ?? '')));
+      if ($studyOwner !== '' && $codebookOwner !== '' && $studyOwner !== $codebookOwner) {
+        continue;
+      }
+
+      foreach ($this->getCodebookResponseOptionLabels($codebookUri, $errors) as $label) {
+        $clean = trim($label);
+        if ($clean !== '') {
+          $fields[$clean] = $clean;
+        }
+      }
+    }
+
+    ksort($fields, SORT_NATURAL | SORT_FLAG_CASE);
+    return array_values($fields);
+  }
+
+  private function getCodebookResponseOptionLabels(string $codebookUri, array &$errors): array {
+    if (isset($this->codebookResponseOptionCache[$codebookUri])) {
+      return $this->codebookResponseOptionCache[$codebookUri];
+    }
+
+    if (!method_exists($this->apiConnector, 'codebookSlotList')) {
+      $this->codebookResponseOptionCache[$codebookUri] = [];
+      return [];
+    }
+
+    $labels = [];
+    try {
+      $slotsRaw = $this->apiConnector->codebookSlotList($codebookUri);
+      $slots = $this->apiConnector->parseObjectResponse($slotsRaw, 'codebookSlotList');
+      $slots = is_array($slots) ? $slots : [];
+
+      foreach ($slots as $slot) {
+        if (is_array($slot)) {
+          $slot = (object) $slot;
+        }
+        if (!is_object($slot)) {
+          continue;
+        }
+
+        $responseOptionUri = trim((string) ($slot->hasResponseOption ?? ''));
+        if ($responseOptionUri === '') {
+          continue;
+        }
+
+        $label = $this->getResponseOptionDisplayLabel($responseOptionUri, $errors);
+        if ($label !== '') {
+          $labels[$label] = $label;
+        }
+      }
+    }
+    catch (\Throwable $e) {
+      $errors[] = sprintf('Unable to load codebook slot data for codebook %s.', $codebookUri);
+    }
+
+    ksort($labels, SORT_NATURAL | SORT_FLAG_CASE);
+    $this->codebookResponseOptionCache[$codebookUri] = array_values($labels);
+    return $this->codebookResponseOptionCache[$codebookUri];
+  }
+
+  private function getResponseOptionDisplayLabel(string $responseOptionUri, array &$errors): string {
+    if (isset($this->responseOptionLabelCache[$responseOptionUri])) {
+      return $this->responseOptionLabelCache[$responseOptionUri];
+    }
+
+    if (!method_exists($this->apiConnector, 'getUri')) {
+      $this->responseOptionLabelCache[$responseOptionUri] = '';
+      return '';
+    }
+
+    $label = '';
+    try {
+      $responseOptionRaw = $this->apiConnector->getUri($responseOptionUri);
+      $responseOption = $this->apiConnector->parseObjectResponse($responseOptionRaw, 'getUri');
+
+      if (is_array($responseOption)) {
+        $responseOption = (object) $responseOption;
+      }
+
+      if (is_object($responseOption)) {
+        $content = trim((string) ($responseOption->hasContent ?? ''));
+        $fallbackLabel = trim((string) ($responseOption->label ?? ''));
+        $label = $content !== '' ? $content : $fallbackLabel;
+      }
+    }
+    catch (\Throwable $e) {
+      $errors[] = sprintf('Unable to load response option %s.', $responseOptionUri);
+    }
+
+    $this->responseOptionLabelCache[$responseOptionUri] = $label;
+    return $label;
   }
 
   private function findAssociatedWorkflowsForStudy(array $workflowPool, string $studyUri): array {
@@ -383,7 +516,7 @@ final class StudyVariableSearchService {
     }
   }
 
-  private function registerVariable(string $source, string $label, array &$variablesBySource, array &$ontologyFilters): ?array {
+  private function registerVariable(string $source, string $label, array &$variablesBySource, array &$ontologyFilters, array $ontologyDefinitions): ?array {
     $cleanLabel = trim($label);
     if ($cleanLabel === '' || !isset($variablesBySource[$source])) {
       return NULL;
@@ -399,16 +532,13 @@ final class StudyVariableSearchService {
         'slug' => $slug,
         'label' => $cleanLabel,
         'source' => $source,
-        'ontology' => [
-          'uberon' => [],
-          'ncit' => [],
-        ],
+        'ontology' => $this->emptyOntologyTagMap(array_keys($ontologyDefinitions)),
       ];
     }
 
-    $ontologyTerms = $this->extractOntologyTermsFromLabel($cleanLabel);
-    foreach (['uberon', 'ncit'] as $ontology) {
-      foreach ($ontologyTerms[$ontology] as $term) {
+    $ontologyTerms = $this->extractOntologyTermsFromLabel($cleanLabel, $ontologyDefinitions);
+    foreach ($ontologyDefinitions as $ontology => $ontologyDefinition) {
+      foreach (($ontologyTerms[$ontology] ?? []) as $term) {
         $variablesBySource[$source][$slug]['ontology'][$ontology][$term['slug']] = $term['slug'];
         $ontologyFilters[$ontology][$term['slug']] = $term;
       }
@@ -416,82 +546,87 @@ final class StudyVariableSearchService {
 
     return [
       'slug' => $slug,
-      'ontology' => [
-        'uberon' => array_values($variablesBySource[$source][$slug]['ontology']['uberon']),
-        'ncit' => array_values($variablesBySource[$source][$slug]['ontology']['ncit']),
-      ],
+      'ontology' => $this->normalizeOntologyTagMap($variablesBySource[$source][$slug]['ontology'], array_keys($ontologyDefinitions)),
     ];
   }
 
-  private function mergeOntologyTags(array &$target, array $incoming): void {
-    foreach (['uberon', 'ncit'] as $ontology) {
+  private function mergeOntologyTags(array &$target, array $incoming, array $ontologyDefinitions): void {
+    foreach ($ontologyDefinitions as $ontology => $ontologyDefinition) {
       foreach (($incoming[$ontology] ?? []) as $termSlug) {
         $target[$ontology][$termSlug] = $termSlug;
       }
     }
   }
 
-  private function extractOntologyTermsFromLabel(string $label): array {
-    $terms = [
-      'uberon' => [],
-      'ncit' => [],
-    ];
+  private function extractOntologyTermsFromLabel(string $label, array $ontologyDefinitions): array {
+    $terms = $this->emptyOntologyTagMap(array_keys($ontologyDefinitions));
 
-    if (preg_match_all('/\bUBERON[:_]\d{3,}\b/i', $label, $matches)) {
-      foreach ($matches[0] as $raw) {
-        $digits = preg_replace('/\D+/', '', $raw) ?? '';
-        if ($digits === '') {
+    foreach ($ontologyDefinitions as $ontology => $ontologyDefinition) {
+      $tokenRegexes = is_array($ontologyDefinition['token_regexes'] ?? NULL)
+        ? $ontologyDefinition['token_regexes']
+        : [];
+
+      foreach ($tokenRegexes as $tokenRegex) {
+        $regex = trim((string) $tokenRegex);
+        if ($regex === '') {
           continue;
         }
-        $uri = 'UBERON:' . $digits;
-        $slug = $this->slugify($uri);
-        $terms['uberon'][$slug] = [
-          'slug' => $slug,
-          'uri' => $uri,
-          'label' => $uri,
-        ];
+
+        if (@preg_match_all($regex, $label, $matches) === FALSE) {
+          continue;
+        }
+
+        foreach (($matches[0] ?? []) as $rawToken) {
+          $uri = $this->buildOntologyUriFromToken((string) $rawToken, $ontologyDefinition);
+          if ($uri === '') {
+            continue;
+          }
+
+          $slug = $this->slugify($uri);
+          if ($slug === '') {
+            continue;
+          }
+
+          $terms[$ontology][$slug] = [
+            'slug' => $slug,
+            'uri' => $uri,
+            'label' => $uri,
+          ];
+        }
       }
     }
 
-    if (preg_match_all('/\bNCIT[:_ ]?C?\d{2,}\b/i', $label, $matches)) {
-      foreach ($matches[0] as $raw) {
-        $digits = preg_replace('/\D+/', '', $raw) ?? '';
-        if ($digits === '') {
-          continue;
-        }
-        $uri = 'NCIT:C' . $digits;
-        $slug = $this->slugify($uri);
-        $terms['ncit'][$slug] = [
-          'slug' => $slug,
-          'uri' => $uri,
-          'label' => $uri,
-        ];
-      }
-    }
-
-    if (preg_match_all('/https?:\/\/\S+/i', $label, $matches)) {
-      foreach ($matches[0] as $uriRaw) {
-        $uri = trim($uriRaw);
+    if (preg_match_all('/https?:\/\/\S+/i', $label, $matches) !== FALSE) {
+      foreach (($matches[0] ?? []) as $uriRaw) {
+        $uri = trim((string) $uriRaw);
         if ($uri === '') {
           continue;
         }
 
         $uriLower = strtolower($uri);
-        if (str_contains($uriLower, 'uberon')) {
-          $slug = $this->slugify($uri);
-          $terms['uberon'][$slug] = [
-            'slug' => $slug,
-            'uri' => $uri,
-            'label' => $uri,
-          ];
-        }
-        if (str_contains($uriLower, 'ncit')) {
-          $slug = $this->slugify($uri);
-          $terms['ncit'][$slug] = [
-            'slug' => $slug,
-            'uri' => $uri,
-            'label' => $uri,
-          ];
+        foreach ($ontologyDefinitions as $ontology => $ontologyDefinition) {
+          $keywords = is_array($ontologyDefinition['uri_keywords'] ?? NULL)
+            ? $ontologyDefinition['uri_keywords']
+            : [];
+
+          foreach ($keywords as $keyword) {
+            $keywordText = strtolower(trim((string) $keyword));
+            if ($keywordText === '' || !str_contains($uriLower, $keywordText)) {
+              continue;
+            }
+
+            $slug = $this->slugify($uri);
+            if ($slug === '') {
+              continue;
+            }
+
+            $terms[$ontology][$slug] = [
+              'slug' => $slug,
+              'uri' => $uri,
+              'label' => $uri,
+            ];
+            break;
+          }
         }
       }
     }
@@ -509,14 +644,122 @@ final class StudyVariableSearchService {
     return $out;
   }
 
-  private function normalizeOntologyFilters(array $ontologyFilters): array {
-    $out = ['uberon' => [], 'ncit' => []];
-    foreach (['uberon', 'ncit'] as $ontology) {
+  private function normalizeOntologyFilters(array $ontologyFilters, array $ontologyDefinitions): array {
+    $out = $this->emptyOntologyTagMap(array_keys($ontologyDefinitions));
+    foreach ($ontologyDefinitions as $ontology => $ontologyDefinition) {
       $values = array_values($ontologyFilters[$ontology] ?? []);
       usort($values, fn(array $a, array $b) => strcasecmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? '')));
       $out[$ontology] = $values;
     }
     return $out;
+  }
+
+  private function normalizeOntologyTagMap(array $tagMap, array $ontologyKeys): array {
+    $out = $this->emptyOntologyTagMap($ontologyKeys);
+    foreach ($ontologyKeys as $ontology) {
+      $out[$ontology] = array_values($tagMap[$ontology] ?? []);
+    }
+    return $out;
+  }
+
+  private function emptyOntologyTagMap(array $ontologyKeys): array {
+    $out = [];
+    foreach ($ontologyKeys as $ontology) {
+      $out[(string) $ontology] = [];
+    }
+    return $out;
+  }
+
+  private function getOntologyDefinitions(): array {
+    $defaults = [
+      'uberon' => [
+        'title' => 'Anatomical Category (UBERON)',
+        'token_regexes' => ['/\bUBERON[:_]\d{3,}\b/i'],
+        'uri_template' => 'UBERON:%s',
+        'uri_keywords' => ['uberon'],
+      ],
+      'ncit' => [
+        'title' => 'Procedure Type (NCIT)',
+        'token_regexes' => ['/\bNCIT[:_ ]?C?\d{2,}\b/i'],
+        'uri_template' => 'NCIT:C%s',
+        'uri_keywords' => ['ncit'],
+      ],
+    ];
+
+    $configured = \Drupal::config('std.settings')->get('study_search_ontologies');
+    if (!is_array($configured) || empty($configured)) {
+      return $defaults;
+    }
+
+    $out = [];
+    foreach ($configured as $ontologyKey => $definition) {
+      $normalizedKey = $this->normalizeOntologyKey((string) $ontologyKey);
+      if ($normalizedKey === '' || !is_array($definition)) {
+        continue;
+      }
+
+      $base = is_array($defaults[$normalizedKey] ?? NULL)
+        ? $defaults[$normalizedKey]
+        : [
+          'title' => strtoupper($normalizedKey),
+          'token_regexes' => [],
+          'uri_template' => '',
+          'uri_keywords' => [$normalizedKey],
+        ];
+
+      $title = trim((string) ($definition['title'] ?? $base['title']));
+      $tokenRegexes = is_array($definition['token_regexes'] ?? NULL)
+        ? array_values(array_filter(array_map(fn($value) => trim((string) $value), $definition['token_regexes']), fn(string $value) => $value !== ''))
+        : $base['token_regexes'];
+      $uriTemplate = trim((string) ($definition['uri_template'] ?? $base['uri_template']));
+      $uriKeywords = is_array($definition['uri_keywords'] ?? NULL)
+        ? array_values(array_filter(array_map(fn($value) => strtolower(trim((string) $value)), $definition['uri_keywords']), fn(string $value) => $value !== ''))
+        : $base['uri_keywords'];
+
+      if (empty($tokenRegexes) && empty($uriKeywords)) {
+        continue;
+      }
+
+      $out[$normalizedKey] = [
+        'title' => $title !== '' ? $title : strtoupper($normalizedKey),
+        'token_regexes' => $tokenRegexes,
+        'uri_template' => $uriTemplate,
+        'uri_keywords' => $uriKeywords,
+      ];
+    }
+
+    return !empty($out) ? $out : $defaults;
+  }
+
+  private function buildOntologyUriFromToken(string $token, array $ontologyDefinition): string {
+    $cleanToken = trim($token);
+    if ($cleanToken === '') {
+      return '';
+    }
+
+    $uriTemplate = trim((string) ($ontologyDefinition['uri_template'] ?? ''));
+    if ($uriTemplate !== '' && str_contains($uriTemplate, '%s')) {
+      $digits = preg_replace('/\D+/', '', $cleanToken) ?? '';
+      if ($digits !== '') {
+        return sprintf($uriTemplate, $digits);
+      }
+    }
+
+    if ($uriTemplate !== '' && !str_contains($uriTemplate, '%s')) {
+      return $uriTemplate;
+    }
+
+    return str_replace('_', ':', $cleanToken);
+  }
+
+  private function normalizeOntologyKey(string $value): string {
+    $normalized = strtolower(trim($value));
+    if ($normalized === '') {
+      return '';
+    }
+
+    $normalized = preg_replace('/[^a-z0-9_\-]+/', '-', $normalized) ?? '';
+    return trim($normalized, '-');
   }
 
   private function studyHasMedicalImages(string $studyUri): bool {

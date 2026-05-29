@@ -32,6 +32,7 @@ final class StudySearchApiConnectorStub {
         (object) ['label' => 'Blood Pressure'],
         (object) ['label' => 'Left Ventricle UBERON:0002084'],
         (object) ['label' => 'Cardiac MRI NCIT:C16809'],
+        (object) ['label' => 'Signal Quality SIO:000300'],
       ],
       'http://example.org/study/beta' => [
         (object) ['label' => 'Heart Rate'],

@@ -1528,6 +1528,10 @@
 
           response.files.forEach(function (file) {
             const canVisualize = Boolean(file.can_visualize);
+            const previewMessageRaw = String(file.preview_message || "").trim();
+            const previewMessage = previewMessageRaw !== ""
+              ? escapeHtml(previewMessageRaw)
+              : "Preview unavailable for this file type.";
             const fView = canVisualize
               ? `<a href="#"
                      class="btn btn-sm btn-secondary view-medical-image-button"
@@ -1546,6 +1550,9 @@
                         title="Download file">
                       <i class="fa-solid fa-download"></i>
                   </a>`;
+            const previewHint = canVisualize
+              ? ""
+              : `<span class="text-muted small d-inline-block me-2">${previewMessage}</span>`;
             const fDelete = `<a href="#"
                      class="btn btn-sm btn-danger delete-medical-image-button"
                      data-url="${file.delete_url}"
@@ -1556,6 +1563,7 @@
             table += `<tr>
                 <td class="text-break">${file.filename}</td>
                 <td style="text-align: center; white-space: nowrap;">` +
+              previewHint +
               fView +
               fDownload +
               (loggedUser ? fDelete : "") +

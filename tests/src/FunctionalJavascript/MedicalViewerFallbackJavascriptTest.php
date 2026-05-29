@@ -72,6 +72,38 @@ final class MedicalViewerFallbackJavascriptTest extends WebDriverTestBase {
     $this->getSession()->switchToIFrame();
   }
 
+  public function testNiftiShowsExplicitFallbackMessage(): void {
+    $studyUri = 'http://example.org/study/nifti-fallback';
+    $studyKey = 'nifti-fallback';
+    $filename = 'brain-volume.nii.gz';
+
+    $this->createMedicalFile($studyKey, $filename, 'not-a-real-nifti');
+
+    $wrapperPath = '/std-test/medical-viewer-wrapper/'
+      . rawurlencode($filename)
+      . '/'
+      . $this->encodeStudyUri($studyUri)
+      . '/'
+      . $this->buildToken($filename);
+
+    $this->drupalGet($wrapperPath);
+    $this->assertSession()->pageTextContains('Medical Viewer Wrapper');
+    $this->assertSession()->elementExists('css', '#std-medical-viewer-frame');
+
+    $this->getSession()->switchToIFrame('std-medical-viewer-frame');
+    $this->assertSession()->elementExists('css', '#std-medical-viewer');
+
+    $fallbackCondition = "document.querySelector('#std-medical-viewer-fallback-message') && document.querySelector('#std-medical-viewer-fallback-message').textContent.indexOf('NIfTI files are not previewed in the embedded viewer yet.') !== -1";
+
+    $this->assertTrue((bool) $this->getSession()->wait(8000, $fallbackCondition), 'Timed out waiting for NIfTI fallback message in viewer iframe.');
+
+    $this->assertSession()->pageTextContains('NIfTI files are not previewed in the embedded viewer yet.');
+    $this->assertSession()->pageTextContains('Open Original File');
+    $this->assertSession()->pageTextContains('Download');
+
+    $this->getSession()->switchToIFrame();
+  }
+
   private function createMedicalFile(string $studyKey, string $filename, string $contents): void {
     $directory = 'private://std/' . $studyKey . '/OHIF';
 
