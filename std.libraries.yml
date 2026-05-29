@@ -10,7 +10,7 @@ std_js_css:
     - core/jquery.once
     - core/drupalSettings
 json_table:
-  version: 1.4
+  version: 1.5
   css:
     theme:
       css/json_table.css: {}
@@ -18,6 +18,23 @@ json_table:
     js/json_table.js: {}
   dependencies:
     - core/jquery
+    - core/drupal
+    - core/once
+    - core/drupalSettings
+    - std/medical_viewer
+
+medical_viewer:
+  version: 1.3.0
+  css:
+    theme:
+      css/medical_viewer.css: {}
+  js:
+    js/vendor/dicomParser.min.js: {}
+    js/medical_viewer.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
+    - core/drupalSettings
 
 std_workflow:
   version: 1.x

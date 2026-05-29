@@ -127,6 +127,226 @@
     return `${drupalSettings.path.baseUrl}std/${raw.replace(/^\/+/, "")}`;
   };
 
+  const escapeHtml = function (rawValue) {
+    return String(rawValue || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
+  const medicalSeriesNameComparator = (typeof Intl !== "undefined" && typeof Intl.Collator === "function")
+    ? new Intl.Collator(undefined, { numeric: true, sensitivity: "base" })
+    : null;
+
+  const sortMedicalSeriesEntries = function (entries) {
+    if (!Array.isArray(entries)) {
+      return [];
+    }
+
+    return entries.slice().sort(function (left, right) {
+      const leftName = String(left && left.filename ? left.filename : "");
+      const rightName = String(right && right.filename ? right.filename : "");
+
+      if (medicalSeriesNameComparator) {
+        return medicalSeriesNameComparator.compare(leftName, rightName);
+      }
+
+      return leftName.localeCompare(rightName);
+    });
+  };
+
+  const fetchMedicalSeriesFiles = function (studyuri) {
+    if (typeof $ === "undefined") {
+      return Promise.resolve([]);
+    }
+
+    const safeStudyUri = String(studyuri || "").trim();
+    if (!safeStudyUri) {
+      return Promise.resolve([]);
+    }
+
+    const maxSeriesFiles = 2000;
+    const endpoint =
+      drupalSettings.path.baseUrl +
+      `std/get-medical-image-files/${encodeURIComponent(safeStudyUri)}/1/${maxSeriesFiles}`;
+
+    return $.ajax({
+      url: endpoint,
+      type: "GET",
+    })
+      .then(function (response) {
+        const files = response && Array.isArray(response.files) ? response.files : [];
+        const entries = files
+          .filter(function (file) {
+            return Boolean(file && file.can_visualize && file.view_url);
+          })
+          .map(function (file) {
+            return {
+              filename: String(file.filename || "").trim(),
+              fileUrl: resolveViewUrl(file.view_url),
+              downloadUrl: resolveViewUrl(file.download_url || file.view_url),
+            };
+          })
+          .filter(function (entry) {
+            return Boolean(entry.fileUrl);
+          });
+
+        return sortMedicalSeriesEntries(entries);
+      })
+      .catch(function () {
+        return [];
+      });
+  };
+
+  const buildInlineMedicalViewerMarkup = function (options) {
+    const filename = escapeHtml(options.filename || "medical-image");
+    const originalUrl = escapeHtml(options.originalUrl || "");
+    const downloadUrl = escapeHtml(options.downloadUrl || options.originalUrl || "");
+
+    return `
+      <section id="std-medical-viewer" class="std-medical-viewer" data-std-viewer-inline="1">
+        <div id="std-medical-viewer-canvas-wrap" class="std-medical-viewer-canvas-wrap" tabindex="0">
+          <div class="std-medical-viewer-overlay">
+            <div class="std-medical-viewer-file-chip" title="${filename}">File: ${filename}</div>
+            <div id="std-medical-viewer-toolbar" class="std-medical-viewer-toolbar">
+              <button type="button" id="std-medical-viewer-zoom-out" class="btn btn-sm btn-outline-secondary" aria-label="Zoom out">-</button>
+              <button type="button" id="std-medical-viewer-zoom-in" class="btn btn-sm btn-outline-secondary" aria-label="Zoom in">+</button>
+              <button type="button" id="std-medical-viewer-reset" class="btn btn-sm btn-outline-secondary" aria-label="Reset view">Reset</button>
+              <span id="std-medical-viewer-zoom-label" class="std-medical-viewer-zoom-label" aria-live="polite">100%</span>
+              <span id="std-medical-viewer-mode-chip" class="std-medical-viewer-mode-chip d-none" aria-live="polite"></span>
+              <div id="std-medical-viewer-frame-controls" class="std-medical-viewer-frame-controls d-none">
+                <button type="button" id="std-medical-viewer-frame-prev" class="btn btn-sm btn-outline-secondary" aria-label="Previous layer">&lsaquo;</button>
+                <span id="std-medical-viewer-frame-label" class="std-medical-viewer-frame-label" aria-live="polite">Layer 1/1</span>
+                <button type="button" id="std-medical-viewer-frame-next" class="btn btn-sm btn-outline-secondary" aria-label="Next layer">&rsaquo;</button>
+              </div>
+            </div>
+          </div>
+          <canvas id="std-medical-viewer-canvas" aria-label="Rendered medical image"></canvas>
+          <div id="std-medical-viewer-status" class="std-medical-viewer-status" role="status">Rendering in embedded Drupal viewer.</div>
+        </div>
+        <div id="std-medical-viewer-fallback" class="alert alert-warning mt-3 d-none" role="alert">
+          <p id="std-medical-viewer-fallback-message" class="mb-2">If rendering fails, open the original file or download it.</p>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-sm btn-secondary" href="${originalUrl}" target="_blank" rel="noopener noreferrer">Open Original File</a>
+            <a class="btn btn-sm btn-outline-secondary" href="${downloadUrl}">Download</a>
+          </div>
+        </div>
+      </section>
+    `;
+  };
+
+  const mountInlineMedicalViewer = function (container, viewerSettings) {
+    const root = container.querySelector("#std-medical-viewer");
+    if (!root) {
+      return;
+    }
+
+    const runtime = window.StdMedicalViewer;
+    if (!runtime || typeof runtime.mount !== "function") {
+      const status = root.querySelector("#std-medical-viewer-status");
+      const fallback = root.querySelector("#std-medical-viewer-fallback");
+      const fallbackMessage = root.querySelector("#std-medical-viewer-fallback-message");
+      const canvasWrap = root.querySelector("#std-medical-viewer-canvas-wrap");
+      const toolbar = root.querySelector("#std-medical-viewer-toolbar");
+
+      if (canvasWrap) {
+        canvasWrap.classList.add("d-none");
+      }
+      if (toolbar) {
+        toolbar.classList.add("d-none");
+      }
+      if (status) {
+        status.textContent = "Unable to render DICOM preview.";
+      }
+      if (fallbackMessage) {
+        fallbackMessage.textContent = "Embedded viewer runtime is unavailable in this page. Open the original file or download it.";
+      }
+      if (fallback) {
+        fallback.classList.remove("d-none");
+      }
+
+      return;
+    }
+
+    runtime.mount(root, viewerSettings);
+  };
+
+  const getModalElements = function () {
+    const container = document.getElementById("modal-container");
+    if (!container) {
+      return null;
+    }
+
+    return {
+      container: container,
+      content: document.getElementById("modal-content"),
+      pdfContent: document.getElementById("pdf-scroll-container"),
+      backdrop: container.querySelector(".modal-backdrop"),
+    };
+  };
+
+  const openModal = function (mode) {
+    const modal = getModalElements();
+    if (!modal || !modal.content) {
+      return null;
+    }
+
+    modal.container.dataset.returnScrollY = String(window.scrollY || window.pageYOffset || 0);
+    modal.container.classList.remove("hidden");
+    modal.container.classList.remove("std-medical-viewer-open");
+
+    if (mode === "medical") {
+      modal.container.classList.add("std-medical-viewer-open");
+    }
+
+    if (modal.backdrop) {
+      modal.backdrop.classList.remove("hidden");
+    }
+
+    modal.container.setAttribute("aria-hidden", "false");
+    document.documentElement.classList.add("std-modal-open");
+    if (document.body) {
+      document.body.classList.add("std-modal-open");
+    }
+
+    return modal;
+  };
+
+  const closeModal = function () {
+    const modal = getModalElements();
+    if (!modal) {
+      return;
+    }
+
+    modal.container.classList.add("hidden");
+    modal.container.classList.remove("std-medical-viewer-open");
+    modal.container.setAttribute("aria-hidden", "true");
+
+    if (modal.backdrop) {
+      modal.backdrop.classList.add("hidden");
+    }
+
+    if (modal.pdfContent) {
+      modal.pdfContent.innerHTML = "";
+    }
+    if (modal.content) {
+      modal.content.innerHTML = "";
+    }
+
+    document.documentElement.classList.remove("std-modal-open");
+    if (document.body) {
+      document.body.classList.remove("std-modal-open");
+    }
+
+    const storedScroll = Number(modal.container.dataset.returnScrollY || "0");
+    delete modal.container.dataset.returnScrollY;
+    if (Number.isFinite(storedScroll)) {
+      window.scrollTo(0, Math.max(0, storedScroll));
+    }
+  };
+
   const buildStudyUriCandidates = function (value) {
     const out = new Set();
     const raw = String(value || '').trim();
@@ -1222,27 +1442,13 @@
             modalContent.innerHTML = `<p>Unsupported file type: ${contentType}</p>`;
           }
 
-          $("#modal-container").removeClass("hidden");
-          $(".modal-backdrop").removeClass("hidden");
+          openModal("generic");
         },
         error: function (xhr, status, error) {
           showToast(error, "danger");
           modalContent.innerHTML = `<p>Error loading file. <a href="${modalUrl}" download>Click here to download.</a>.</p>`;
         },
       });
-    });
-
-    $(document).on("click", ".close-btn", function () {
-      const modalContainer = document.getElementById("modal-container");
-      if (modalContainer) {
-        modalContainer.classList.add("hidden");
-        const modalPdfContent = document.getElementById("pdf-scroll-container");
-        const modalContent = document.getElementById("modal-content");
-        if (modalPdfContent || modalContent) {
-          modalPdfContent.innerHTML = "";
-          modalContent.innerHTML = "";
-        }
-      }
     });
   };
 
@@ -1321,13 +1527,18 @@
             '<thead><tr><th>Filename</th><th style="width: 1%; white-space: nowrap; text-align: center;">Operations</th></tr></thead><tbody>';
 
           response.files.forEach(function (file) {
-            const fView = `<a href="#"
+            const canVisualize = Boolean(file.can_visualize);
+            const fView = canVisualize
+              ? `<a href="#"
                      class="btn btn-sm btn-secondary view-medical-image-button"
                      data-view-url="${file.view_url}"
+                     data-viewer-url="${file.viewer_url || ""}"
+                     data-download-url="${file.download_url}"
                      style="margin-right:5px"
-                       title="View medical image">
+                     title="Visualize medical image">
                      <i class="fa-solid fa-eye"></i>
-                  </a>`;
+                  </a>`
+              : "";
             const fDownload = `<a href="#"
                       class="btn btn-sm btn-secondary download-medical-url"
                       data-download-url="${file.download_url}"
@@ -1406,31 +1617,79 @@
     $(document).on("click", ".view-medical-image-button", function (e) {
       e.preventDefault();
 
-      const modalUrl = resolveViewUrl($(this).data("view-url"));
-      if (!modalUrl) {
+      const originalUrl = resolveViewUrl($(this).data("view-url"));
+      const downloadUrl = resolveViewUrl($(this).data("download-url"));
+      const filename = String($(this).closest("tr").find("td").first().text() || "").trim() || "medical-image";
+
+      if (!originalUrl) {
         showToast("Invalid file URL.", "danger");
         return;
       }
-      const ohifViewerUrl = `https://viewer.ohif.org/viewer?url=${encodeURIComponent(modalUrl)}`;
+
+      const safeDownloadUrl = downloadUrl || originalUrl;
       const modalContent = document.getElementById("modal-content");
       if (!modalContent) {
         return;
       }
 
-      modalContent.innerHTML = `
-        <div class="alert alert-info mb-3" role="alert">
-          Embedded OHIF is blocked in this browser. Use the actions below to view the medical file.
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-          <a class="btn btn-sm btn-primary" href="${ohifViewerUrl}" target="_blank" rel="noopener noreferrer">Open DICOM Viewer</a>
-          <a class="btn btn-sm btn-secondary" href="${modalUrl}" target="_blank" rel="noopener noreferrer">Open Original File</a>
-          <a class="btn btn-sm btn-outline-secondary" href="${modalUrl}" download>Download</a>
-        </div>
-        <p style="margin-top:12px; margin-bottom:0;">If the viewer cannot render this file, use Open Original File or Download.</p>
-      `;
+      modalContent.innerHTML = buildInlineMedicalViewerMarkup({
+        filename: filename,
+        originalUrl: originalUrl,
+        downloadUrl: safeDownloadUrl,
+      });
+      openModal("medical");
 
-      $("#modal-container").removeClass("hidden");
-      $(".modal-backdrop").removeClass("hidden");
+      const status = modalContent.querySelector("#std-medical-viewer-status");
+      if (status) {
+        status.textContent = "Loading medical image sequence...";
+      }
+
+      const selectedEntry = {
+        filename: filename,
+        fileUrl: originalUrl,
+        downloadUrl: safeDownloadUrl,
+      };
+
+      const mountViewerWithSeries = function (seriesFiles) {
+        const sanitizedSeries = Array.isArray(seriesFiles)
+          ? seriesFiles.filter(function (entry) {
+            return Boolean(entry && entry.fileUrl);
+          })
+          : [];
+
+        let initialSeriesIndex = sanitizedSeries.findIndex(function (entry) {
+          return entry.fileUrl === selectedEntry.fileUrl;
+        });
+
+        if (initialSeriesIndex < 0) {
+          sanitizedSeries.unshift(selectedEntry);
+          initialSeriesIndex = 0;
+        }
+
+        mountInlineMedicalViewer(modalContent, {
+          fileUrl: selectedEntry.fileUrl,
+          downloadUrl: selectedEntry.downloadUrl,
+          filename: selectedEntry.filename,
+          canVisualize: true,
+          fallbackMessage: "If rendering fails, open the original file or download it.",
+          seriesFiles: sanitizedSeries,
+          initialSeriesIndex: initialSeriesIndex,
+        });
+      };
+
+      const studyuri = getStdStudyUri();
+      if (!studyuri) {
+        mountViewerWithSeries([]);
+        return;
+      }
+
+      fetchMedicalSeriesFiles(studyuri)
+        .then(function (seriesFiles) {
+          mountViewerWithSeries(seriesFiles);
+        })
+        .catch(function () {
+          mountViewerWithSeries([]);
+        });
     });
   };
 
@@ -1594,6 +1853,31 @@
     attach: function (context, settings) {
       once("drag-and-drop", "#drop-card", context).forEach(function () {
         attachDragAndDropEvents();
+      });
+    },
+  };
+
+  Drupal.behaviors.stdStudyModalLifecycle = {
+    attach: function (context) {
+      once("std-study-modal-lifecycle", "body", context).forEach(function () {
+        $(document).on("click", "#modal-container.std-study-modal .close-btn", function (event) {
+          event.preventDefault();
+          closeModal();
+        });
+
+        $(document).on("click", "#modal-container.std-study-modal .modal-backdrop", function (event) {
+          event.preventDefault();
+          closeModal();
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            const modal = getModalElements();
+            if (modal && !modal.container.classList.contains("hidden")) {
+              closeModal();
+            }
+          }
+        });
       });
     },
   };

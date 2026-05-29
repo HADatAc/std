@@ -64,7 +64,7 @@ class Study {
       ])->toString());
 
       $manage_elements = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',        
+        'previousurl' => $safe_previousUrl_str,
         'currenturl' => $manage_elements_str,
         'currentroute' => 'std.manage_study_elements',
       ]);
@@ -73,7 +73,7 @@ class Study {
       $view_study_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
       $view_study = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',
+        'previousurl' => $safe_previousUrl_str,
         'currenturl' => $view_study_str,
         'currentroute' => 'rep.describe_element',
       ]);
@@ -84,7 +84,7 @@ class Study {
       ])->toString());
 
       $edit_study = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',
+        'previousurl' => $safe_previousUrl_str,
         'currenturl' => $edit_study_str,
         'currentroute' => 'std.edit_study',
       ]);

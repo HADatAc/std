@@ -19,6 +19,7 @@
       let isLoading = false;
       let page = 1;
       let stopped = cfg.hasMoreInitial === false;
+      const showNoMoreOnInit = cfg.showNoMoreOnInit === true;
       let debouncedOnScroll = null;
 
       const $statusHost = $('#std-select-study-load-status');
@@ -228,7 +229,12 @@
       });
 
       if (stopped) {
-        setStatus(statusNoMore);
+        if (showNoMoreOnInit) {
+          setStatus(statusNoMore);
+        }
+        else {
+          setStatus('');
+        }
         return;
       }
 

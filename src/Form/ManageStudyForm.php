@@ -312,11 +312,11 @@ class ManageStudyForm extends FormBase
     $form['modal'] = [
       '#type' => 'markup',
       '#markup' => Markup::create('
-        <div id="modal-container" class="modal-media hidden" style="position:absolute; top:50px; left:0; width:100%; height:100%;">
-          <div class="modal-content" style="z-index:99999 !important;">
-            <button class="close-btn" type="button">&times;</button>
+        <div id="modal-container" class="modal-media hidden std-study-modal" aria-hidden="true">
+          <div class="modal-content" role="dialog" aria-modal="true" aria-label="File viewer modal">
+            <button class="close-btn" type="button" aria-label="Close viewer">&times;</button>
             <div id="pdf-scroll-container"></div>
-            <div id="modal-content" style="height:100vh;"></div>
+            <div id="modal-content"></div>
           </div>
           <div class="modal-backdrop"></div>
         </div>
@@ -877,14 +877,14 @@ class ManageStudyForm extends FormBase
         $actions = '<a href="' . Html::escape($viewWorkflowUrl) . '" class="btn btn-sm btn-secondary me-1" target="_blank" rel="noopener noreferrer">View Workflow</a>';
 
         if ($isOwner) {
-          $createExecutionUrl = Url::fromRoute('ctt.execution_create', [
+          $createExecutionUrl = Url::fromRoute('ctt.submission_entry', [
             'studyuri' => base64_encode($this->getStudy()->uri),
           ], [
             'query' => [
               'processUri' => $workflowUri,
             ],
           ])->toString();
-          $actions .= '<a href="' . Html::escape($createExecutionUrl) . '" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Create Execution</a>';
+          $actions .= '<a href="' . Html::escape($createExecutionUrl) . '" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Start Structured Submission</a>';
         }
         else {
           $actions .= '<span class="badge bg-light text-dark border ms-1">Owner only</span>';

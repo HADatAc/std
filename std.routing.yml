@@ -21,7 +21,8 @@ std.search_studies_variables:
     _form: '\Drupal\std\Form\StudyVariableSearchForm'
     _title: 'Study Search'
   requirements:
-    _permission: 'access content'
+    _permission: 'access study search+administer study search'
+    _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
@@ -475,6 +476,17 @@ std.view_media_file:
     type: '.+'
   options:
     _format: 'json'
+
+std.medical_viewer:
+  path: '/std/medical-viewer/{filename}/{studyuri}/{token}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::medicalViewerPage'
+    _title: 'Medical Image Viewer'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+    token: '.+'
 
 std.download_file:
   path: '/std/download-file/{fileUri}/{studyUri}/{type}'

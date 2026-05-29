@@ -19,13 +19,13 @@ std.search_option:
    #_permission: 'access content'
 
 std.search_studies_variables:
-  title: Study Search
+  title: Search Study
   description: Search studies by variables and components
   route_name: std.search_studies_variables
   parent: std.top_level
   menu_name: main
   enabled: 1
-  weight: 2
+  weight: 0
   requirements:
     _permission: 'access content'
 

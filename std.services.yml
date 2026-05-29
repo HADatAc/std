@@ -11,3 +11,6 @@ services:
     arguments: ['@config.factory']
     tags:
         - { name: event_subscriber }
+  std.study_variable_search:
+    class: Drupal\std\Service\StudyVariableSearchService
+    arguments: ['@rep.api_connector', '@file_system']

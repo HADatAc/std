@@ -1141,19 +1141,32 @@ class JsonDataController extends ControllerBase
 
         $files = [];
         foreach ($paginated_files as $file) {
-            $token = hash_hmac('sha256', $file, '1357924680');
+            $token = $this->buildMedicalViewerToken((string) $file);
+            $encoded_studyuri = rawurlencode($studyuri);
             $view_url = Url::fromRoute('std.view_media_file', [
                 'filename' => $file,
-                'studyuri' => rawurlencode($studyuri),
+                'studyuri' => $encoded_studyuri,
                 'type' => 'OHIF',
                 'token' => $token,
             ], [
                 'absolute' => TRUE,
             ])->toString();
 
+            $viewer_url = Url::fromRoute('std.medical_viewer', [
+                'filename' => $file,
+                'studyuri' => $encoded_studyuri,
+                'token' => $token,
+            ], [
+                'absolute' => TRUE,
+            ])->toString();
+
+            $can_visualize = $this->supportsEmbeddedMedicalViewer((string) $file);
+
             $files[] = [
                 'filename' => $file,
                 'view_url' => $view_url,
+                'viewer_url' => $viewer_url,
+                'can_visualize' => $can_visualize,
                 'delete_url' => '/delete-medical-image-file/' . $file . '/' . $studyuri,
                 'download_url' => \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/OHIF',
             ];
@@ -1282,6 +1295,111 @@ class JsonDataController extends ControllerBase
         }
     }
 
+    private function supportsEmbeddedMedicalViewer(string $filename): bool
+    {
+        $lower = strtolower(trim($filename));
+        return (bool) preg_match('/\.(dcm|dcim|dicom)$/', $lower);
+    }
+
+    private function buildMedicalViewerToken(string $filename): string
+    {
+        return hash_hmac('sha256', $filename, '1357924680');
+    }
+
+    public function medicalViewerPage($filename, $studyuri, $token = null)
+    {
+        if (empty($studyuri) || empty($filename)) {
+            return new JsonResponse(['error' => 'Missing parameters.'], 400);
+        }
+
+        $expected_token = $this->buildMedicalViewerToken((string) $filename);
+        if ($token === null || !hash_equals($expected_token, (string) $token)) {
+            return new JsonResponse(['error' => 'Access denied.'], 403);
+        }
+
+        $decoded_studyuri = base64_decode(rawurldecode((string) $studyuri));
+        if ($decoded_studyuri === FALSE || trim((string) $decoded_studyuri) === '') {
+            return new JsonResponse(['error' => 'Invalid study URI.'], 400);
+        }
+
+        $safe_study_key = basename((string) $decoded_studyuri);
+        $directory = 'private://std/' . $safe_study_key . '/OHIF/';
+        $file_system = \Drupal::service('file_system');
+        $real_path = $file_system->realpath($directory . $filename);
+
+        if (!$real_path || !file_exists($real_path)) {
+            return new JsonResponse(['error' => 'File not found.'], 404);
+        }
+
+        $view_url = Url::fromRoute('std.view_media_file', [
+            'filename' => $filename,
+            'studyuri' => rawurlencode((string) $studyuri),
+            'type' => 'OHIF',
+            'token' => $expected_token,
+        ], [
+            'absolute' => TRUE,
+        ])->toString();
+
+        $download_url = \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode((string) $filename) . '/' . $studyuri . '/OHIF';
+        $can_visualize = $this->supportsEmbeddedMedicalViewer((string) $filename);
+
+        $status_message = $can_visualize
+            ? 'Rendering in embedded Drupal viewer.'
+            : 'Preview unavailable for this file type.';
+
+        $fallback_message = $can_visualize
+            ? 'If rendering fails, open the original file or download it.'
+            : 'This file type cannot be previewed in the embedded viewer. Open the original file or download it.';
+
+        $markup = '<section id="std-medical-viewer" class="std-medical-viewer" data-std-viewer-page="1">'
+            . '<div id="std-medical-viewer-canvas-wrap" class="std-medical-viewer-canvas-wrap' . ($can_visualize ? '' : ' d-none') . '" tabindex="0">'
+            . '<div class="std-medical-viewer-overlay">'
+            . '<div class="std-medical-viewer-file-chip" title="' . Html::escape((string) $filename) . '">File: ' . Html::escape((string) $filename) . '</div>'
+            . '<div id="std-medical-viewer-toolbar" class="std-medical-viewer-toolbar' . ($can_visualize ? '' : ' d-none') . '">'
+            . '<button type="button" id="std-medical-viewer-zoom-out" class="btn btn-sm btn-outline-secondary" aria-label="Zoom out">-</button>'
+            . '<button type="button" id="std-medical-viewer-zoom-in" class="btn btn-sm btn-outline-secondary" aria-label="Zoom in">+</button>'
+            . '<button type="button" id="std-medical-viewer-reset" class="btn btn-sm btn-outline-secondary" aria-label="Reset view">Reset</button>'
+            . '<span id="std-medical-viewer-zoom-label" class="std-medical-viewer-zoom-label" aria-live="polite">100%</span>'
+            . '<span id="std-medical-viewer-mode-chip" class="std-medical-viewer-mode-chip d-none" aria-live="polite"></span>'
+            . '<div id="std-medical-viewer-frame-controls" class="std-medical-viewer-frame-controls d-none">'
+            . '<button type="button" id="std-medical-viewer-frame-prev" class="btn btn-sm btn-outline-secondary" aria-label="Previous layer">&lsaquo;</button>'
+            . '<span id="std-medical-viewer-frame-label" class="std-medical-viewer-frame-label" aria-live="polite">Layer 1/1</span>'
+            . '<button type="button" id="std-medical-viewer-frame-next" class="btn btn-sm btn-outline-secondary" aria-label="Next layer">&rsaquo;</button>'
+            . '</div>'
+            . '</div>'
+            . '</div>'
+            . '<canvas id="std-medical-viewer-canvas" aria-label="Rendered medical image"></canvas>'
+            . '<div id="std-medical-viewer-status" class="std-medical-viewer-status" role="status">' . Html::escape($status_message) . '</div>'
+            . '</div>'
+            . '<div id="std-medical-viewer-fallback" class="alert alert-warning mt-3' . ($can_visualize ? ' d-none' : '') . '" role="alert">'
+            . '<p id="std-medical-viewer-fallback-message" class="mb-2">' . Html::escape($fallback_message) . '</p>'
+            . '<div class="d-flex flex-wrap gap-2">'
+            . '<a class="btn btn-sm btn-secondary" href="' . Html::escape($view_url) . '" target="_blank" rel="noopener noreferrer">Open Original File</a>'
+            . '<a class="btn btn-sm btn-outline-secondary" href="' . Html::escape($download_url) . '">Download</a>'
+            . '</div>'
+            . '</div>'
+            . '</section>';
+
+        return [
+            '#type' => 'markup',
+            '#markup' => $markup,
+            '#allowed_tags' => ['section', 'p', 'div', 'canvas', 'a', 'button', 'span'],
+            '#attached' => [
+                'library' => ['std/medical_viewer'],
+                'drupalSettings' => [
+                    'stdMedicalViewer' => [
+                        'fileUrl' => $view_url,
+                        'downloadUrl' => $download_url,
+                        'filename' => (string) $filename,
+                        'canVisualize' => $can_visualize,
+                        'fallbackMessage' => $fallback_message,
+                    ],
+                ],
+            ],
+            '#cache' => ['max-age' => 0],
+        ];
+    }
+
     /*
     ** VIEW FILES
     */
@@ -1304,7 +1422,7 @@ class JsonDataController extends ControllerBase
         }
 
         // Validate signed token for all inline file views.
-        $expected_token = hash_hmac('sha256', $filename, '1357924680');
+        $expected_token = $this->buildMedicalViewerToken((string) $filename);
         if ($token === null || $token !== $expected_token) {
             \Drupal::logger('custom_module')->warning('Access denied for file: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
             return new JsonResponse(['error' => 'Access denied.'], 403);

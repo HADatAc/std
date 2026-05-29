@@ -6,13 +6,21 @@ use Drupal\Component\Utility\Html;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Markup;
-use Drupal\Core\Url;
 use Drupal\rep\ManageOwnerFilter;
+use Drupal\std\Service\StudyVariableSearchService;
+use Drupal\std\Support\StudySearchRanking;
 
 /**
- * Study search page with variable sidebar and AND/OR filtering.
+ * Study search page with hierarchical variable browser and ranking metadata.
  */
 class StudyVariableSearchForm extends FormBase {
+
+  private const SOURCE_TITLES = [
+    'simulator' => 'Simulators',
+    'instrument' => 'Medical Instruments',
+    'questionnaire' => 'Questionnaires / Codebooks',
+    'component' => 'Components / Actuators',
+  ];
 
   /**
    * {@inheritdoc}
@@ -26,142 +34,73 @@ class StudyVariableSearchForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $form['#attached']['library'][] = 'std/study_variable_search';
+    $form['#attached']['drupalSettings']['stdStudySearch'] = [
+      'weights' => StudySearchRanking::defaultWeights(),
+    ];
 
-    $api = \Drupal::service('rep.api_connector');
+    /** @var \Drupal\std\Service\StudyVariableSearchService $searchService */
+    if (\Drupal::hasService('std.study_variable_search')) {
+      $searchService = \Drupal::service('std.study_variable_search');
+    }
+    else {
+      // Fallback keeps page functional if container cache is stale.
+      $searchService = new StudyVariableSearchService(
+        \Drupal::service('rep.api_connector'),
+        \Drupal::service('file_system'),
+      );
+    }
     $currentUser = \Drupal::currentUser();
     $userEmail = trim((string) $currentUser->getEmail());
-    $isAdmin = ManageOwnerFilter::isAdmin();
+    $isAdmin = ManageOwnerFilter::isAdmin() || $currentUser->hasPermission('administer study search');
 
-    $studies = $this->loadStudies($api, $userEmail, $isAdmin, $currentUser->isAuthenticated());
-    $workflowPool = $this->loadWorkflowPool($api, $userEmail, $isAdmin, $currentUser->isAuthenticated());
+    $context = $searchService->buildContext(
+      $userEmail,
+      $isAdmin,
+      $currentUser->isAuthenticated(),
+    );
 
-    $allCodebookFields = [];
-    $allDetectorComponents = [];
-    $studyCards = [];
-
-    foreach ($studies as $study) {
-      if (!is_object($study)) {
-        continue;
-      }
-
-      $studyUri = trim((string) ($study->uri ?? ''));
-      if ($studyUri === '') {
-        continue;
-      }
-
-      $studyLabel = trim((string) ($study->label ?? $study->title ?? $studyUri));
-      $studyDescription = trim((string) ($study->comment ?? ''));
-
-      $codebookFields = $this->extractCodebookFields($api, $studyUri);
-      $associatedWorkflows = $this->findAssociatedWorkflowsForStudy($workflowPool, $studyUri);
-      $detectorComponents = $this->extractDetectorComponents($associatedWorkflows);
-
-      foreach ($codebookFields as $field) {
-        $allCodebookFields[$field] = $field;
-      }
-      foreach ($detectorComponents as $component) {
-        $allDetectorComponents[$component] = $component;
-      }
-
-      $tags = [];
-      foreach (array_merge($codebookFields, $detectorComponents) as $value) {
-        $slug = $this->slugify($value);
-        if ($slug !== '') {
-          $tags[$slug] = $slug;
-        }
-      }
-
-      $manageUrl = Url::fromRoute('std.manage_study_elements', [
-        'studyuri' => base64_encode($studyUri),
-      ])->toString();
-
-      $studyCards[] = [
-        'label' => $studyLabel,
-        'uri' => $studyUri,
-        'description' => $studyDescription,
-        'manage_url' => $manageUrl,
-        'codebook_count' => count($codebookFields),
-        'component_count' => count($detectorComponents),
-        'tags' => implode('|', array_values($tags)),
-      ];
-    }
-
-    ksort($allCodebookFields, SORT_NATURAL | SORT_FLAG_CASE);
-    ksort($allDetectorComponents, SORT_NATURAL | SORT_FLAG_CASE);
+    $variablesBySource = is_array($context['variables_by_source'] ?? NULL)
+      ? $context['variables_by_source']
+      : [];
+    $ontologyFilters = is_array($context['ontology_filters'] ?? NULL)
+      ? $context['ontology_filters']
+      : [];
+    $studyCards = is_array($context['study_cards'] ?? NULL)
+      ? $context['study_cards']
+      : [];
+    $errors = is_array($context['errors'] ?? NULL)
+      ? $context['errors']
+      : [];
 
     $sidebarHtml = '';
-
-    $sidebarHtml .= '<div class="std-search-section">';
-    $sidebarHtml .= '<h4 class="std-search-section-title">Codebook Fields</h4>';
-    if (empty($allCodebookFields)) {
-      $sidebarHtml .= '<p class="text-muted mb-0">No codebook fields were found.</p>';
+    foreach (self::SOURCE_TITLES as $sourceKey => $sourceTitle) {
+      $sidebarHtml .= $this->renderSourceSection(
+        $sourceTitle,
+        is_array($variablesBySource[$sourceKey] ?? NULL) ? $variablesBySource[$sourceKey] : [],
+        $sourceKey,
+      );
     }
-    else {
-      foreach ($allCodebookFields as $field) {
-        $slug = $this->slugify($field);
-        if ($slug === '') {
-          continue;
-        }
-        $sidebarHtml .= '<label class="std-search-checkbox">'
-          . '<input type="checkbox" class="study-variable-checkbox" data-group="codebook" value="' . Html::escape($slug) . '">'
-          . '<span>' . Html::escape($field) . '</span>'
-          . '</label>';
-      }
-    }
-    $sidebarHtml .= '</div>';
+    $sidebarHtml .= $this->renderOntologySection(
+      'Anatomical Category (UBERON)',
+      is_array($ontologyFilters['uberon'] ?? NULL) ? $ontologyFilters['uberon'] : [],
+      'uberon',
+    );
+    $sidebarHtml .= $this->renderOntologySection(
+      'Procedure Type (NCIT)',
+      is_array($ontologyFilters['ncit'] ?? NULL) ? $ontologyFilters['ncit'] : [],
+      'ncit',
+    );
 
-    $sidebarHtml .= '<div class="std-search-section mt-4">';
-    $sidebarHtml .= '<h4 class="std-search-section-title">Detector Components</h4>';
-    if (empty($allDetectorComponents)) {
-      $sidebarHtml .= '<p class="text-muted mb-0">No detector components were found.</p>';
-    }
-    else {
-      foreach ($allDetectorComponents as $component) {
-        $slug = $this->slugify($component);
-        if ($slug === '') {
-          continue;
-        }
-        $sidebarHtml .= '<label class="std-search-checkbox">'
-          . '<input type="checkbox" class="study-variable-checkbox" data-group="detector" value="' . Html::escape($slug) . '">'
-          . '<span>' . Html::escape($component) . '</span>'
-          . '</label>';
-      }
-    }
-    $sidebarHtml .= '</div>';
-
-    $cardsHtml = '';
-    foreach ($studyCards as $card) {
-      $cardsHtml .= '<article class="std-study-card" data-tags="' . Html::escape($card['tags']) . '">';
-      $cardsHtml .= '<div class="std-study-card-header">';
-      $cardsHtml .= '<h4>' . Html::escape($card['label']) . '</h4>';
-      $cardsHtml .= '<p class="std-study-uri mb-2">' . Html::escape($card['uri']) . '</p>';
-      $cardsHtml .= '</div>';
-
-      if ($card['description'] !== '') {
-        $cardsHtml .= '<p class="std-study-description">' . Html::escape($card['description']) . '</p>';
-      }
-
-      $cardsHtml .= '<div class="std-study-meta">'
-        . '<span class="badge bg-light text-dark">Codebook: ' . (int) $card['codebook_count'] . '</span>'
-        . '<span class="badge bg-light text-dark">Components: ' . (int) $card['component_count'] . '</span>'
-        . '</div>';
-
-      $cardsHtml .= '<div class="std-study-actions mt-3">'
-        . '<a class="btn btn-sm btn-primary" href="' . Html::escape($card['manage_url']) . '">Manage Study</a>'
-        . '</div>';
-      $cardsHtml .= '</article>';
-    }
-
-    if ($cardsHtml === '') {
-      $cardsHtml = '<p class="text-muted">No studies are available in the current context.</p>';
-    }
+    $cardsHtml = $this->renderStudyCards($studyCards);
+    $errorBanner = $this->renderErrorBanner($errors);
 
     $form['search_page'] = [
       '#type' => 'markup',
       '#markup' => Markup::create(
         '<section id="std-study-variable-search" class="std-study-search">'
+          . $errorBanner
           . '<header class="std-search-header">'
-          . '<p class="text-muted mb-3">Select variables from the left panel to filter studies using AND/OR logic.</p>'
+          . '<p class="text-muted mb-3">Use the hierarchical variable browser to select filters and rank related studies by relevance.</p>'
           . '<div class="std-filter-topbar">'
           . '<div class="std-logic-toggle" role="radiogroup" aria-label="Filter logic">'
           . '<label><input type="radio" name="std-search-logic" value="and"> AND</label>'
@@ -177,8 +116,10 @@ class StudyVariableSearchForm extends FormBase {
           . '</div>'
           . '</aside>'
           . '<div class="col-12 col-lg-8">'
+          . '<div id="std-selected-preview" class="std-selected-preview mb-2" aria-live="polite"></div>'
           . '<div class="std-results-header mb-2">'
           . '<strong id="std-visible-results">0</strong> studies visible'
+          . '<span class="text-muted ms-2" id="std-ranking-indicator"></span>'
           . '</div>'
           . '<p id="std-study-empty-state" class="text-muted mb-3">Select at least one variable to display studies.</p>'
           . '<div id="std-study-cards" class="std-study-grid">'
@@ -207,206 +148,191 @@ class StudyVariableSearchForm extends FormBase {
     // No submit action for this page.
   }
 
-  private function loadStudies($api, string $userEmail, bool $isAdmin, bool $isAuthenticated): array {
-    try {
-      if ($isAuthenticated && !$isAdmin && $userEmail !== '') {
-        $raw = $api->listByManagerEmail('study', $userEmail, 9999, 0);
-        $items = $api->parseObjectResponse($raw, 'listByManagerEmail');
-      }
-      else {
-        $raw = $api->listByKeyword('study', '_', 9999, 0);
-        $items = $api->parseObjectResponse($raw, 'listByKeyword');
-      }
+  private function renderSourceSection(string $title, array $variables, string $source): string {
+    $html = '<div class="std-search-section">';
+    $html .= '<h4 class="std-search-section-title">' . Html::escape($title) . '</h4>';
 
-      return is_array($items) ? $items : [];
-    }
-    catch (\Throwable $e) {
-      return [];
-    }
-  }
-
-  private function loadWorkflowPool($api, string $userEmail, bool $isAdmin, bool $isAuthenticated): array {
-    try {
-      if ($isAuthenticated && !$isAdmin && $userEmail !== '') {
-        $raw = $api->listByManagerEmail('workflow', $userEmail, 9999, 0);
-        $items = $api->parseObjectResponse($raw, 'listByManagerEmail');
-      }
-      else {
-        $raw = $api->listByKeyword('workflow', '_', 9999, 0);
-        $items = $api->parseObjectResponse($raw, 'listByKeyword');
-      }
-
-      return is_array($items) ? $items : [];
-    }
-    catch (\Throwable $e) {
-      return [];
-    }
-  }
-
-  private function extractCodebookFields($api, string $studyUri): array {
-    $fields = [];
-
-    try {
-      $virtualColumnsRaw = $api->virtualColumnsByStudy($studyUri);
-      $virtualColumns = $api->parseObjectResponse($virtualColumnsRaw, 'virtualColumnsByStudy');
-
-      if (is_array($virtualColumns)) {
-        foreach ($virtualColumns as $virtualColumn) {
-          if (!is_object($virtualColumn)) {
-            continue;
-          }
-
-          $candidates = [
-            (string) ($virtualColumn->label ?? ''),
-            (string) ($virtualColumn->socreference ?? ''),
-            (string) ($virtualColumn->groundingLabel ?? ''),
-          ];
-
-          foreach ($candidates as $candidate) {
-            $clean = trim($candidate);
-            if ($clean !== '') {
-              $fields[$clean] = $clean;
-            }
-          }
-        }
-      }
-    }
-    catch (\Throwable $e) {
-      return [];
+    if (empty($variables)) {
+      $html .= '<p class="text-muted mb-0">No variables were found in this source.</p>';
+      $html .= '</div>';
+      return $html;
     }
 
-    ksort($fields, SORT_NATURAL | SORT_FLAG_CASE);
-    return array_values($fields);
-  }
-
-  private function findAssociatedWorkflowsForStudy(array $workflowPool, string $studyUri): array {
-    $out = [];
-    foreach ($workflowPool as $workflow) {
-      if (!is_object($workflow)) {
+    $groups = [];
+    foreach ($variables as $variable) {
+      if (!is_array($variable)) {
         continue;
       }
 
-      if ($this->valueMatchesStudy($workflow, $studyUri)) {
-        $out[] = $workflow;
+      $label = trim((string) ($variable['label'] ?? ''));
+      $slug = trim((string) ($variable['slug'] ?? ''));
+      if ($label === '' || $slug === '') {
+        continue;
       }
+
+      $first = strtoupper(substr($label, 0, 1));
+      if ($first === '' || !preg_match('/[A-Z0-9]/', $first)) {
+        $first = '#';
+      }
+
+      $groups[$first][] = [
+        'label' => $label,
+        'slug' => $slug,
+      ];
     }
-    return $out;
+
+    ksort($groups, SORT_NATURAL | SORT_FLAG_CASE);
+    foreach ($groups as $groupKey => $groupItems) {
+      usort($groupItems, fn(array $a, array $b) => strcasecmp($a['label'], $b['label']));
+
+      $html .= '<details class="std-search-subgroup" open>';
+      $html .= '<summary>' . Html::escape($groupKey) . ' (' . count($groupItems) . ')</summary>';
+      $html .= '<div class="std-search-subgroup-body">';
+      foreach ($groupItems as $item) {
+        $html .= '<label class="std-search-checkbox">'
+          . '<input type="checkbox" class="study-variable-checkbox" data-source="' . Html::escape($source) . '" data-label="' . Html::escape($item['label']) . '" value="' . Html::escape($item['slug']) . '">'
+          . '<span>' . Html::escape($item['label']) . '</span>'
+          . '</label>';
+      }
+      $html .= '</div>';
+      $html .= '</details>';
+    }
+
+    $html .= '</div>';
+    return $html;
   }
 
-  private function valueMatchesStudy($value, string $studyUri): bool {
-    if (is_string($value)) {
-      $candidate = trim($value);
-      if ($candidate === '') {
-        return FALSE;
-      }
+  private function renderOntologySection(string $title, array $options, string $ontology): string {
+    $html = '<div class="std-search-section mt-4">';
+    $html .= '<h4 class="std-search-section-title">' . Html::escape($title) . '</h4>';
 
-      if ($candidate === $studyUri) {
-        return TRUE;
-      }
-
-      $decoded = base64_decode($candidate, TRUE);
-      return is_string($decoded) && trim($decoded) === $studyUri;
+    if (empty($options)) {
+      $html .= '<p class="text-muted mb-0">No ontology terms were found.</p>';
+      $html .= '</div>';
+      return $html;
     }
 
-    if (is_object($value)) {
-      foreach (get_object_vars($value) as $key => $nested) {
-        if (in_array($key, ['study', 'studyUri', 'hasStudy', 'hasStudyUri', 'hasAssociatedStudy'], TRUE)) {
-          if ($this->valueMatchesStudy($nested, $studyUri)) {
-            return TRUE;
-          }
-        }
-        elseif ($this->valueMatchesStudy($nested, $studyUri)) {
-          return TRUE;
-        }
+    foreach ($options as $option) {
+      if (!is_array($option)) {
+        continue;
       }
-      return FALSE;
+
+      $slug = trim((string) ($option['slug'] ?? ''));
+      $label = trim((string) ($option['label'] ?? ''));
+      $uri = trim((string) ($option['uri'] ?? ''));
+      if ($slug === '' || $label === '') {
+        continue;
+      }
+
+      $html .= '<label class="std-search-checkbox">'
+        . '<input type="checkbox" class="std-ontology-checkbox" data-ontology="' . Html::escape($ontology) . '" data-label="' . Html::escape($label) . '" data-uri="' . Html::escape($uri) . '" value="' . Html::escape($slug) . '">'
+        . '<span>' . Html::escape($label) . '</span>';
+      if ($uri !== '') {
+        $html .= '<small class="std-ontology-uri">' . Html::escape($uri) . '</small>';
+      }
+      $html .= '</label>';
     }
 
-    if (is_array($value)) {
-      foreach ($value as $nested) {
-        if ($this->valueMatchesStudy($nested, $studyUri)) {
-          return TRUE;
-        }
-      }
-    }
-
-    return FALSE;
+    $html .= '</div>';
+    return $html;
   }
 
-  private function extractDetectorComponents(array $workflows): array {
-    $components = [];
-    $keywords = ['component', 'detector'];
+  private function renderStudyCards(array $studyCards): string {
+    $cardsHtml = '';
+    foreach ($studyCards as $card) {
+      if (!is_array($card)) {
+        continue;
+      }
 
-    foreach ($workflows as $workflow) {
-      $this->collectStringsByKey($workflow, $keywords, $components, 0);
+      $tags = is_array($card['tags'] ?? NULL) ? $card['tags'] : [];
+      $sourceTags = is_array($card['source_tags'] ?? NULL) ? $card['source_tags'] : [];
+      $ontologyTags = is_array($card['ontology_tags'] ?? NULL) ? $card['ontology_tags'] : [];
+
+      $cardsHtml .= '<article class="std-study-card"'
+        . ' data-tags="' . Html::escape($this->joinTags($tags)) . '"'
+        . ' data-simulator-tags="' . Html::escape($this->joinTags(is_array($sourceTags['simulator'] ?? NULL) ? $sourceTags['simulator'] : [])) . '"'
+        . ' data-instrument-tags="' . Html::escape($this->joinTags(is_array($sourceTags['instrument'] ?? NULL) ? $sourceTags['instrument'] : [])) . '"'
+        . ' data-questionnaire-tags="' . Html::escape($this->joinTags(is_array($sourceTags['questionnaire'] ?? NULL) ? $sourceTags['questionnaire'] : [])) . '"'
+        . ' data-component-tags="' . Html::escape($this->joinTags(is_array($sourceTags['component'] ?? NULL) ? $sourceTags['component'] : [])) . '"'
+        . ' data-uberon-tags="' . Html::escape($this->joinTags(is_array($ontologyTags['uberon'] ?? NULL) ? $ontologyTags['uberon'] : [])) . '"'
+        . ' data-ncit-tags="' . Html::escape($this->joinTags(is_array($ontologyTags['ncit'] ?? NULL) ? $ontologyTags['ncit'] : [])) . '"'
+        . ' data-completeness-score="' . Html::escape(number_format((float) ($card['completeness_score'] ?? 0.0), 4, '.', '')) . '"'
+        . '>';
+
+      $cardsHtml .= '<div class="std-study-card-header">';
+      $cardsHtml .= '<h4>' . Html::escape((string) ($card['label'] ?? '')) . '</h4>';
+      $cardsHtml .= '<p class="std-study-uri mb-2">' . Html::escape((string) ($card['uri'] ?? '')) . '</p>';
+      $cardsHtml .= '</div>';
+
+      $description = trim((string) ($card['description'] ?? ''));
+      if ($description !== '') {
+        $cardsHtml .= '<p class="std-study-description">' . Html::escape($description) . '</p>';
+      }
+
+      $cardsHtml .= '<div class="std-study-meta">'
+        . '<span class="badge bg-light text-dark">Questionnaires: ' . (int) ($card['codebook_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">Components: ' . (int) ($card['component_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">Simulators: ' . (int) ($card['simulator_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">Instruments: ' . (int) ($card['instrument_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">Completeness: ' . (int) round(((float) ($card['completeness_score'] ?? 0.0)) * 100) . '%</span>'
+        . '</div>';
+
+      $cardsHtml .= '<div class="std-study-capabilities mt-2">';
+      if ((int) ($card['has_data'] ?? 0) === 1) {
+        $cardsHtml .= '<span class="badge bg-success-subtle text-success-emphasis border">Data</span>';
+      }
+
+      if ((int) ($card['has_images'] ?? 0) === 1) {
+        $cardsHtml .= '<span class="badge bg-info-subtle text-info-emphasis border">Images</span>';
+      }
+
+      if ((int) ($card['has_workflow'] ?? 0) === 1) {
+        $cardsHtml .= '<span class="badge bg-primary-subtle text-primary-emphasis border">Workflow</span>';
+      }
+
+      $cardsHtml .= '</div>';
+
+      $cardsHtml .= '<div class="std-study-actions mt-3">'
+        . '<a class="btn btn-sm btn-primary" href="' . Html::escape((string) ($card['manage_url'] ?? '#')) . '">Manage Study</a>'
+        . '</div>';
+      $cardsHtml .= '</article>';
     }
 
-    ksort($components, SORT_NATURAL | SORT_FLAG_CASE);
-    return array_values($components);
+    if ($cardsHtml === '') {
+      $cardsHtml = '<p class="text-muted">No studies are available in the current context.</p>';
+    }
+
+    return $cardsHtml;
   }
 
-  private function collectStringsByKey($value, array $keywords, array &$collector, int $depth): void {
-    if ($depth > 6) {
-      return;
-    }
-
-    if (is_string($value)) {
-      $clean = trim($value);
-      if ($clean !== '' && strlen($clean) <= 120 && !str_starts_with($clean, 'http://') && !str_starts_with($clean, 'https://')) {
-        $collector[$clean] = $clean;
-      }
-      return;
-    }
-
-    if (is_array($value)) {
-      foreach ($value as $item) {
-        $this->collectStringsByKey($item, $keywords, $collector, $depth + 1);
-      }
-      return;
-    }
-
-    if (is_object($value)) {
-      foreach (get_object_vars($value) as $key => $item) {
-        $keyText = strtolower((string) $key);
-        $matchesKey = FALSE;
-        foreach ($keywords as $keyword) {
-          if (str_contains($keyText, $keyword)) {
-            $matchesKey = TRUE;
-            break;
-          }
-        }
-
-        if ($matchesKey) {
-          if (is_object($item) || is_array($item)) {
-            if (is_object($item) && isset($item->label) && is_string($item->label)) {
-              $label = trim($item->label);
-              if ($label !== '') {
-                $collector[$label] = $label;
-              }
-            }
-            $this->collectStringsByKey($item, $keywords, $collector, $depth + 1);
-            continue;
-          }
-
-          if (is_string($item)) {
-            $clean = trim($item);
-            if ($clean !== '' && strlen($clean) <= 120 && !str_starts_with($clean, 'http://') && !str_starts_with($clean, 'https://')) {
-              $collector[$clean] = $clean;
-            }
-          }
-        }
+  private function joinTags(array $tags): string {
+    $clean = [];
+    foreach ($tags as $tag) {
+      $value = trim((string) $tag);
+      if ($value !== '') {
+        $clean[$value] = $value;
       }
     }
+    return implode('|', array_values($clean));
   }
 
-  private function slugify(string $value): string {
-    $value = strtolower(trim($value));
-    if ($value === '') {
+  private function renderErrorBanner(array $errors): string {
+    if (empty($errors)) {
       return '';
     }
 
-    $value = preg_replace('/[^a-z0-9]+/', '-', $value);
-    return trim((string) $value, '-');
+    $html = '<div class="alert alert-warning" role="alert">';
+    $html .= '<strong>Partial data warning:</strong>';
+    $html .= '<ul class="mb-0 mt-2">';
+    foreach ($errors as $error) {
+      $text = trim((string) $error);
+      if ($text !== '') {
+        $html .= '<li>' . Html::escape($text) . '</li>';
+      }
+    }
+    $html .= '</ul>';
+    $html .= '</div>';
+    return $html;
   }
 
 }

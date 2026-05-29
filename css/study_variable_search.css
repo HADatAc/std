@@ -42,12 +42,90 @@
   margin-bottom: 10px;
 }
 
+.std-search-subgroup {
+  border: 1px solid #ececec;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: #fafafa;
+}
+
+.std-search-subgroup > summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.std-search-subgroup-body {
+  padding: 8px 10px;
+  background: #fff;
+  border-top: 1px solid #ececec;
+}
+
 .std-search-checkbox {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
   gap: 8px;
   margin-bottom: 8px;
   font-size: 0.95rem;
+}
+
+.std-search-checkbox span {
+  line-height: 1.25;
+}
+
+.std-ontology-uri {
+  grid-column: 2 / -1;
+  color: #6b7280;
+  font-size: 0.78rem;
+  margin-top: -4px;
+}
+
+.std-selected-preview {
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+}
+
+.std-selected-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #4b5563;
+  margin-bottom: 8px;
+}
+
+.std-selected-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.std-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d9d9d9;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.82rem;
+  background: #f8fafc;
+}
+
+.std-chip-remove {
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+.std-chip-remove:hover {
+  color: #111827;
 }
 
 .std-study-grid {
@@ -82,6 +160,12 @@
 .std-study-meta {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.std-study-capabilities {
+  display: flex;
+  gap: 6px;
   flex-wrap: wrap;
 }
 

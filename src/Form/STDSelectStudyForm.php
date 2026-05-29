@@ -76,6 +76,7 @@ class STDSelectStudyForm extends FormBase
       'noMore' => (string) $this->t('No more items to load.'),
       'loadFailed' => (string) $this->t('Could not load more items. Scroll again to retry.'),
     ];
+    $form['#attached']['drupalSettings']['std_select_study_form']['showNoMoreOnInit'] = FALSE;
 
     $this->element_type = $elementtype ?? 'study';
     $form['#attached']['drupalSettings']['std_select_study_form']['elementType'] = $this->element_type;
@@ -151,7 +152,13 @@ class STDSelectStudyForm extends FormBase
     switch ($this->element_type) {
       case "study":
         $this->single_class_name = ucfirst($preferred_study);
-        $this->plural_class_name = ucfirst($preferred_study)."s";
+        $studyLabel = ucfirst((string) $preferred_study);
+        if (preg_match('/[^aeiou]y$/i', $studyLabel)) {
+          $this->plural_class_name = substr($studyLabel, 0, -1) . 'ies';
+        }
+        else {
+          $this->plural_class_name = $studyLabel . 's';
+        }
         break;
       // PROCESS STEM
       case "workflowstem":
@@ -389,7 +396,10 @@ class STDSelectStudyForm extends FormBase
       }
       $total_items = $this->getListSize();
       $has_more_initial = ((int) $total_items > ((int) $page * (int) $pagesize));
+      $show_no_more_initial = !$has_more_initial
+        && (((int) $page > 1) || ((int) $total_items > (int) $pagesize));
       $form['#attached']['drupalSettings']['std_select_study_form']['hasMoreInitial'] = $has_more_initial;
+      $form['#attached']['drupalSettings']['std_select_study_form']['showNoMoreOnInit'] = $show_no_more_initial;
 
       $form['cards_lazy_wrapper'] = [
         '#type' => 'container',
@@ -425,7 +435,7 @@ class STDSelectStudyForm extends FormBase
         ],
       ];
 
-      if (!$has_more_initial) {
+      if ($show_no_more_initial) {
         $form['cards_lazy_wrapper']['load_more_wrapper']['message'] = [
           '#markup' => '<span class="text-muted">' . $this->t('No more items to load.') . '</span>',
         ];
