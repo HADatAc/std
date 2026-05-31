@@ -94,7 +94,8 @@ final class MedicalImageViewerEndpointTest extends BrowserTestBase {
 
     $this->assertSession()->statusCodeEquals(200);
     $this->assertSession()->pageTextContains('Medical Image Viewer');
-    $this->assertSession()->pageTextContains('Preview unavailable for this file type.');
+    $this->assertSession()->pageTextContains('NIfTI preview is not available in embedded viewer.');
+    $this->assertSession()->pageTextContains('NIfTI files are not previewed in the embedded viewer yet. Open the original file or download it.');
     $this->assertSession()->pageTextContains('Open Original File');
     $this->assertSession()->pageTextContains('Download');
 
