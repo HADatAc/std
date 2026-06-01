@@ -124,6 +124,8 @@ class ManageStudyForm extends FormBase
 
     $isOwner = isset($this->getStudy()->hasSIRManagerEmail)
       && strcasecmp(trim((string) $this->getStudy()->hasSIRManagerEmail), trim((string) $useremail)) === 0;
+    $canAccessCttEditor = \Drupal::currentUser()->hasPermission('access ctt editor');
+    $canSubmitCttWorkflow = \Drupal::currentUser()->hasPermission('submit ctt workflow');
 
 	// ROW CONTENT
     $session = \Drupal::service('session');
@@ -870,13 +872,38 @@ class ManageStudyForm extends FormBase
         $workflowLabel = Html::escape((string) ($workflow->label ?? $workflow->title ?? $workflowUri));
         $workflowUriEscaped = Html::escape($workflowUri);
 
-        $viewWorkflowUrl = Url::fromRoute('rep.describe_element', [
-          'elementuri' => base64_encode($workflowUri),
-        ])->toString();
+        $viewWorkflowUrl = $canAccessCttEditor
+          ? Url::fromRoute('ctt.editor', [], [
+            'query' => [
+              'studyUri' => $this->getStudy()->uri,
+              'processUri' => $workflowUri,
+            ],
+          ])->toString()
+          : Url::fromRoute('rep.describe_element', [
+            'elementuri' => base64_encode($workflowUri),
+          ])->toString();
 
         $actions = '<a href="' . Html::escape($viewWorkflowUrl) . '" class="btn btn-sm btn-secondary me-1" target="_blank" rel="noopener noreferrer">View Workflow</a>';
 
-        if ($isOwner) {
+        if ($canSubmitCttWorkflow) {
+          $toolsRepositoryUrl = Url::fromRoute('ctt.tools_repository', [], [
+            'query' => [
+              'studyUri' => $this->getStudy()->uri,
+            ],
+          ])->toString();
+
+          $rAnalysisUrl = Url::fromRoute('ctt.r_analysis', [], [
+            'query' => [
+              'studyUri' => $this->getStudy()->uri,
+              'processUri' => $workflowUri,
+            ],
+          ])->toString();
+
+          $actions .= '<a href="' . Html::escape($toolsRepositoryUrl) . '" class="btn btn-sm btn-outline-secondary me-1" target="_blank" rel="noopener noreferrer">Tools Repository</a>';
+          $actions .= '<a href="' . Html::escape($rAnalysisUrl) . '" class="btn btn-sm btn-outline-secondary me-1" target="_blank" rel="noopener noreferrer">R Analysis</a>';
+        }
+
+        if ($isOwner && $canSubmitCttWorkflow) {
           $createExecutionUrl = Url::fromRoute('ctt.submission_entry', [
             'studyuri' => base64_encode($this->getStudy()->uri),
           ], [
@@ -886,8 +913,15 @@ class ManageStudyForm extends FormBase
           ])->toString();
           $actions .= '<a href="' . Html::escape($createExecutionUrl) . '" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Start Structured Submission</a>';
         }
+        elseif ($isOwner) {
+          $actions .= '<span class="badge bg-light text-dark border ms-1">Missing submit ctt workflow permission</span>';
+        }
         else {
           $actions .= '<span class="badge bg-light text-dark border ms-1">Owner only</span>';
+        }
+
+        if (!$canAccessCttEditor) {
+          $actions .= '<span class="badge bg-light text-dark border ms-1">Canvas requires access ctt editor</span>';
         }
 
         $workflowRows .= '<tr>'
