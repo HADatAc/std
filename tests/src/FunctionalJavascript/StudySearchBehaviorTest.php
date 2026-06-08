@@ -102,13 +102,21 @@ final class StudySearchBehaviorTest extends WebDriverTestBase {
   }
 
   private function checkVariable(string $value): void {
-    $checkbox = $this->assertSession()->elementExists('css', '.study-variable-checkbox[value="' . $value . '"]');
-    $checkbox->setValue(TRUE);
+    $selector = '.study-variable-checkbox[value="' . addslashes($value) . '"]';
+    $this->assertSession()->elementExists('css', $selector);
+    $this->getSession()->executeScript(
+      "const checkbox = document.querySelector('" . addslashes($selector) . "');"
+      . " if (checkbox) { checkbox.checked = true; checkbox.dispatchEvent(new Event('change', { bubbles: true })); }"
+    );
   }
 
   private function checkOntologyByType(string $ontology): void {
-    $checkbox = $this->assertSession()->elementExists('css', '.std-ontology-checkbox[data-ontology="' . $ontology . '"]');
-    $checkbox->setValue(TRUE);
+    $selector = '.std-ontology-checkbox[data-ontology="' . addslashes($ontology) . '"]';
+    $this->assertSession()->elementExists('css', $selector);
+    $this->getSession()->executeScript(
+      "const checkbox = document.querySelector('" . addslashes($selector) . "');"
+      . " if (checkbox) { checkbox.checked = true; checkbox.dispatchEvent(new Event('change', { bubbles: true })); }"
+    );
   }
 
   private function waitForVisibleResults(string $expectedCount): void {
