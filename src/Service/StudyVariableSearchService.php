@@ -74,6 +74,11 @@ final class StudyVariableSearchService {
       $codebookFields = $this->extractCodebookFields($studyUri, $study, $codebookPool, $errors);
       $associatedWorkflows = $this->findAssociatedWorkflowsForStudy($workflowPool, $studyUri);
       $workflowVariablesBySource = $this->extractWorkflowVariablesBySource($associatedWorkflows);
+      $socVariablesBySource = $this->extractSocVariablesBySource($studyUri, $errors);
+      $sourceVariablesByStudy = $this->mergeSourceVariableBuckets(
+        $workflowVariablesBySource,
+        $socVariablesBySource,
+      );
 
       $studyTags = [];
       $studyTagsBySource = [
@@ -95,7 +100,7 @@ final class StudyVariableSearchService {
         $this->mergeOntologyTags($studyOntologyTags, $record['ontology'], $ontologyDefinitions);
       }
 
-      foreach ($workflowVariablesBySource as $source => $labels) {
+      foreach ($sourceVariablesByStudy as $source => $labels) {
         foreach ($labels as $label) {
           $record = $this->registerVariable($source, $label, $variablesBySource, $ontologyFilters, $ontologyDefinitions);
           if ($record === NULL) {
@@ -458,6 +463,162 @@ final class StudyVariableSearchService {
     }
 
     return $bySource;
+  }
+
+  private function extractSocVariablesBySource(string $studyUri, array &$errors): array {
+    $bySource = [
+      'simulator' => [],
+      'instrument' => [],
+      'questionnaire' => [],
+      'component' => [],
+    ];
+
+    if (!method_exists($this->apiConnector, 'studyObjectCollectionsByStudy') || !method_exists($this->apiConnector, 'studyObjectsBySOCwithPage')) {
+      return $bySource;
+    }
+
+    try {
+      $socsRaw = $this->apiConnector->studyObjectCollectionsByStudy($studyUri);
+      $socs = $this->apiConnector->parseObjectResponse($socsRaw, 'studyObjectCollectionsByStudy');
+      $socs = $this->normalizeItems(is_array($socs) ? $socs : []);
+
+      foreach ($socs as $soc) {
+        $socUri = trim((string) ($soc->uri ?? ''));
+        if ($socUri === '') {
+          continue;
+        }
+
+        $socSourceHint = $this->inferSourceFromHints([
+          (string) ($soc->hasSOCReference ?? ''),
+          (string) ($soc->socreference ?? ''),
+          (string) ($soc->hasGroundingLabel ?? ''),
+          (string) ($soc->groundingLabel ?? ''),
+          (string) ($soc->label ?? ''),
+          (string) ($soc->comment ?? ''),
+          (string) (($soc->virtualColumn->hasSOCReference ?? '') ?: ($soc->virtualColumn->socreference ?? '')),
+          (string) ($soc->virtualColumn->label ?? ''),
+          (string) ($soc->virtualColumn->hasGroundingLabel ?? ''),
+        ]);
+
+        $objectsRaw = $this->apiConnector->studyObjectsBySOCwithPage($socUri, 999, 0);
+        $objects = $this->apiConnector->parseObjectResponse($objectsRaw, 'studyObjectsBySOCwithPage');
+        $objects = $this->normalizeItems(is_array($objects) ? $objects : []);
+
+        foreach ($objects as $object) {
+          $source = $this->inferSourceFromHints([
+            (string) ($object->typeLabel ?? ''),
+            (string) ($object->typeUri ?? ''),
+            (string) ($object->hascoTypeLabel ?? ''),
+            (string) ($object->hascoTypeUri ?? ''),
+            (string) (($object->isMemberOf->hasSOCReference ?? '') ?: ($object->isMemberOf->socreference ?? '')),
+            (string) ($object->isMemberOf->hasGroundingLabel ?? ''),
+            (string) (($object->isMemberOf->virtualColumn->hasSOCReference ?? '') ?: ($object->isMemberOf->virtualColumn->socreference ?? '')),
+            (string) ($object->isMemberOf->virtualColumn->label ?? ''),
+            (string) ($object->isMemberOf->virtualColumn->hasGroundingLabel ?? ''),
+            $socSourceHint,
+          ]);
+
+          if ($source === '') {
+            continue;
+          }
+
+          $label = $this->resolveStudyObjectDisplayLabel($object);
+          if ($label === '') {
+            continue;
+          }
+
+          $bySource[$source][$label] = $label;
+        }
+      }
+    }
+    catch (\Throwable $e) {
+      $errors[] = sprintf('Unable to load study object variables for study %s.', $studyUri);
+    }
+
+    foreach ($bySource as $source => $values) {
+      ksort($values, SORT_NATURAL | SORT_FLAG_CASE);
+      $bySource[$source] = array_values($values);
+    }
+
+    return $bySource;
+  }
+
+  private function mergeSourceVariableBuckets(array ...$buckets): array {
+    $merged = [
+      'simulator' => [],
+      'instrument' => [],
+      'questionnaire' => [],
+      'component' => [],
+    ];
+
+    foreach ($buckets as $bucket) {
+      foreach (self::SOURCE_KEYS as $source) {
+        $values = is_array($bucket[$source] ?? NULL) ? $bucket[$source] : [];
+        foreach ($values as $value) {
+          $label = trim((string) $value);
+          if ($label === '') {
+            continue;
+          }
+          $merged[$source][$label] = $label;
+        }
+      }
+    }
+
+    foreach ($merged as $source => $values) {
+      ksort($values, SORT_NATURAL | SORT_FLAG_CASE);
+      $merged[$source] = array_values($values);
+    }
+
+    return $merged;
+  }
+
+  private function inferSourceFromHints(array $hints): string {
+    foreach ($hints as $hint) {
+      $text = strtolower(trim((string) $hint));
+      if ($text === '') {
+        continue;
+      }
+
+      if (str_contains($text, 'simulator')) {
+        return 'simulator';
+      }
+
+      if (str_contains($text, 'instrument') || str_contains($text, 'device')) {
+        return 'instrument';
+      }
+
+      if (str_contains($text, 'component') || str_contains($text, 'actuator') || str_contains($text, 'detector')) {
+        return 'component';
+      }
+
+      if (str_contains($text, 'questionnaire') || str_contains($text, 'codebook')) {
+        return 'questionnaire';
+      }
+    }
+
+    return '';
+  }
+
+  private function resolveStudyObjectDisplayLabel(object $object): string {
+    $typeLabel = trim((string) ($object->typeLabel ?? ''));
+    $normalizedTypeLabel = strtolower($typeLabel);
+    $genericTypeLabels = [
+      'entity entry point',
+      'entity',
+      'class',
+      'study object',
+    ];
+
+    if ($typeLabel !== '' && !in_array($normalizedTypeLabel, $genericTypeLabels, TRUE)) {
+      return $typeLabel;
+    }
+
+    $originalIdLabel = trim((string) ($object->originalIdLabel ?? ''));
+    if ($originalIdLabel !== '') {
+      return $originalIdLabel;
+    }
+
+    return trim((string) ($object->label ?? ''));
   }
 
   private function collectStringsByKey($value, array $keywords, array &$collector, int $depth, bool $collectAll): void {

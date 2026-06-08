@@ -162,16 +162,8 @@ class StudyVariableSearchForm extends FormBase {
   }
 
   private function renderSourceSection(string $title, array $variables, string $source): string {
-    $html = '<div class="std-search-section">';
-    $html .= '<h4 class="std-search-section-title">' . Html::escape($title) . '</h4>';
-
-    if (empty($variables)) {
-      $html .= '<p class="text-muted mb-0">No variables were found in this source.</p>';
-      $html .= '</div>';
-      return $html;
-    }
-
     $groups = [];
+    $totalVariables = 0;
     foreach ($variables as $variable) {
       if (!is_array($variable)) {
         continue;
@@ -192,7 +184,20 @@ class StudyVariableSearchForm extends FormBase {
         'label' => $label,
         'slug' => $slug,
       ];
+      $totalVariables++;
     }
+
+    $html = '<details class="std-search-section std-search-source-section">';
+    $html .= '<summary class="std-search-section-summary">';
+    $html .= '<span class="std-search-section-title">' . Html::escape($title) . ' (' . $totalVariables . ')</span>';
+    $html .= '</summary>';
+
+    if ($totalVariables === 0) {
+      $html .= '</details>';
+      return $html;
+    }
+
+    $html .= '<div class="std-search-section-body">';
 
     ksort($groups, SORT_NATURAL | SORT_FLAG_CASE);
     foreach ($groups as $groupKey => $groupItems) {
@@ -212,19 +217,12 @@ class StudyVariableSearchForm extends FormBase {
     }
 
     $html .= '</div>';
+    $html .= '</details>';
     return $html;
   }
 
   private function renderOntologySection(string $title, array $options, string $ontology): string {
-    $html = '<div class="std-search-section mt-4">';
-    $html .= '<h4 class="std-search-section-title">' . Html::escape($title) . '</h4>';
-
-    if (empty($options)) {
-      $html .= '<p class="text-muted mb-0">No ontology terms were found.</p>';
-      $html .= '</div>';
-      return $html;
-    }
-
+    $terms = [];
     foreach ($options as $option) {
       if (!is_array($option)) {
         continue;
@@ -237,6 +235,30 @@ class StudyVariableSearchForm extends FormBase {
         continue;
       }
 
+      $terms[] = [
+        'slug' => $slug,
+        'label' => $label,
+        'uri' => $uri,
+      ];
+    }
+
+    $html = '<details class="std-search-section std-search-source-section std-search-ontology-section mt-4">';
+    $html .= '<summary class="std-search-section-summary">';
+    $html .= '<span class="std-search-section-title">' . Html::escape($title) . ' (' . count($terms) . ')</span>';
+    $html .= '</summary>';
+
+    if (empty($terms)) {
+      $html .= '</details>';
+      return $html;
+    }
+
+    $html .= '<div class="std-search-section-body">';
+
+    foreach ($terms as $term) {
+      $slug = $term['slug'];
+      $label = $term['label'];
+      $uri = $term['uri'];
+
       $html .= '<label class="std-search-checkbox">'
         . '<input type="checkbox" class="std-ontology-checkbox" data-ontology="' . Html::escape($ontology) . '" data-label="' . Html::escape($label) . '" data-uri="' . Html::escape($uri) . '" value="' . Html::escape($slug) . '">'
         . '<span>' . Html::escape($label) . '</span>';
@@ -247,6 +269,7 @@ class StudyVariableSearchForm extends FormBase {
     }
 
     $html .= '</div>';
+    $html .= '</details>';
     return $html;
   }
 

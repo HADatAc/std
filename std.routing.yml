@@ -324,6 +324,14 @@ std.deployment_autocomplete:
   requirements:
     _permission: 'access content'
 
+std.workflow_autocomplete:
+  path: '/std/workflow/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiWorkflowController::handleAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
 # LOAD MORE
 std.load_more_data:
   path: '/std/select/study/load-more-data'

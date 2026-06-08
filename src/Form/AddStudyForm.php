@@ -382,10 +382,18 @@ class AddStudyForm extends FormBase {
 
 
         $api = \Drupal::service('rep.api_connector');
-        $message = $api->parseObjectResponse($api->elementAdd('study',$studyJSON),'elementAdd');
-        if ($message != null) {
-          \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been added successfully."));
+        $addResponse = $api->elementAdd('study', $studyJSON);
+        $created = $api->parseObjectResponse($addResponse, 'elementAdd');
+        if ($created === NULL) {
+          throw new \RuntimeException('API rejected study creation payload.');
         }
+
+        $verify = $api->parseObjectResponse($api->getUri($newStudyUri), 'getUri');
+        if ($verify === NULL) {
+          throw new \RuntimeException('Study was not persisted after create call.');
+        }
+
+        \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been added successfully."));
         self::backUrl();
         return;
 

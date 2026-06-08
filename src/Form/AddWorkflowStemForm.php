@@ -526,6 +526,11 @@ class AddWorkflowStemForm extends FormBase {
         }
       }
 
+      $verify = $api->parseObjectResponse($api->getUri($newWorkflowStemUri), 'getUri');
+      if ($verify === NULL) {
+        throw new \RuntimeException('Workflow Stem was not persisted after create call.');
+      }
+
       \Drupal::messenger()->addMessage(t("Added a new Workflow Stem with URI: ".$newWorkflowStemUri));
       self::backUrl();
       return;

@@ -482,7 +482,16 @@ class AddWorkflowForm extends FormBase {
         . '"comment":"",'
         . '"hasWebDocument":"",'
         . '"hasSIRManagerEmail":"' . $useremail . '"}';
-      $api->elementAdd('task',$taskJSON);
+      $taskAddResponse = $api->elementAdd('task', $taskJSON);
+      $createdTask = $api->parseObjectResponse($taskAddResponse, 'elementAdd');
+      if ($createdTask === NULL) {
+        throw new \RuntimeException('API rejected top task creation payload.');
+      }
+
+      $taskVerify = $api->parseObjectResponse($api->getUri($newTaskUri), 'getUri');
+      if ($taskVerify === NULL) {
+        throw new \RuntimeException('Top task was not persisted after create call.');
+      }
 
       // Prepare data to be sent to the external service
       $processJSON = '{"uri":"' . $newWorkflowUri . '",'
@@ -498,9 +507,18 @@ class AddWorkflowForm extends FormBase {
         . '"hasTopTaskUri":"'. $newTaskUri .'",'
         . '"hasSIRManagerEmail":"' . $useremail . '"}';
 
-      $message = $api->elementAdd('workflow',$processJSON);
-      if ($message != null)
-        \Drupal::messenger()->addMessage($this->t("Workflow has been added successfully."));
+      $workflowAddResponse = $api->elementAdd('workflow', $processJSON);
+      $createdWorkflow = $api->parseObjectResponse($workflowAddResponse, 'elementAdd');
+      if ($createdWorkflow === NULL) {
+        throw new \RuntimeException('API rejected workflow creation payload.');
+      }
+
+      $workflowVerify = $api->parseObjectResponse($api->getUri($newWorkflowUri), 'getUri');
+      if ($workflowVerify === NULL) {
+        throw new \RuntimeException('Workflow was not persisted after create call.');
+      }
+
+      \Drupal::messenger()->addMessage($this->t("Workflow has been added successfully."));
 
       self::backUrl();
       return;
