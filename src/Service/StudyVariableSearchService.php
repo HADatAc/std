@@ -47,10 +47,12 @@ final class StudyVariableSearchService {
     $studies = $this->normalizeItems($this->loadElementsByType('study', $errors));
     $workflowPool = $this->normalizeItems($this->loadElementsByType('workflow', $errors));
     $codebookPool = $this->normalizeItems($this->loadElementsByType('codebook', $errors));
+    $semanticVariablePool = $this->normalizeItems($this->loadElementsByType('semanticvariable', $errors));
 
     $studies = $this->applyVisibilityFilter($studies, $userEmail, $isAdmin, $isAuthenticated);
     $workflowPool = $this->applyVisibilityFilter($workflowPool, $userEmail, $isAdmin, $isAuthenticated);
     $codebookPool = $this->applyVisibilityFilter($codebookPool, $userEmail, $isAdmin, $isAuthenticated);
+    $semanticVariablePool = $this->applyVisibilityFilter($semanticVariablePool, $userEmail, $isAdmin, $isAuthenticated);
 
     $variablesBySource = [
       'simulator' => [],
@@ -71,7 +73,10 @@ final class StudyVariableSearchService {
         continue;
       }
 
-      $codebookFields = $this->extractCodebookFields($studyUri, $study, $codebookPool, $errors);
+      $semanticVariableFields = $this->extractSemanticVariableFields($studyUri, $semanticVariablePool);
+      $codebookFields = !empty($semanticVariableFields)
+        ? $semanticVariableFields
+        : $this->extractCodebookFields($studyUri, $study, $codebookPool, $errors);
       $associatedWorkflows = $this->findAssociatedWorkflowsForStudy($workflowPool, $studyUri);
       $workflowVariablesBySource = $this->extractWorkflowVariablesBySource($associatedWorkflows);
       $socVariablesBySource = $this->extractSocVariablesBySource($studyUri, $errors);
@@ -211,6 +216,61 @@ final class StudyVariableSearchService {
     }
 
     return strtolower($raw);
+  }
+
+  private function extractSemanticVariableFields(string $studyUri, array $semanticVariablePool): array {
+    $fields = [];
+
+    foreach ($semanticVariablePool as $semanticVariable) {
+      if (!is_object($semanticVariable) || !$this->semanticVariableBelongsToStudy($semanticVariable, $studyUri)) {
+        continue;
+      }
+
+      $label = $this->resolveSemanticVariableDisplayLabel($semanticVariable);
+      if ($label === '') {
+        continue;
+      }
+
+      $fields[$label] = $label;
+    }
+
+    ksort($fields, SORT_NATURAL | SORT_FLAG_CASE);
+    return array_values($fields);
+  }
+
+  private function semanticVariableBelongsToStudy(object $semanticVariable, string $studyUri): bool {
+    $studyCandidates = [
+      $semanticVariable->entityUri ?? NULL,
+      $semanticVariable->hasEntityUri ?? NULL,
+      $semanticVariable->hasEntity ?? NULL,
+    ];
+
+    foreach ($studyCandidates as $candidate) {
+      if ($this->valueMatchesStudy($candidate, $studyUri, 0)) {
+        return TRUE;
+      }
+    }
+
+    return FALSE;
+  }
+
+  private function resolveSemanticVariableDisplayLabel(object $semanticVariable): string {
+    $candidates = [
+      (string) ($semanticVariable->label ?? ''),
+      (string) ($semanticVariable->originalIdLabel ?? ''),
+      (string) ($semanticVariable->hasContent ?? ''),
+      (string) ($semanticVariable->slug ?? ''),
+      (string) ($semanticVariable->name ?? ''),
+    ];
+
+    foreach ($candidates as $candidate) {
+      $clean = trim($candidate);
+      if ($clean !== '') {
+        return $clean;
+      }
+    }
+
+    return '';
   }
 
   private function extractCodebookFields(string $studyUri, ?object $study, array $codebookPool, array &$errors): array {

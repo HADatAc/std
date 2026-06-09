@@ -18,7 +18,7 @@ class StudyVariableSearchForm extends FormBase {
   private const SOURCE_TITLES = [
     'simulator' => 'Simulators',
     'instrument' => 'Medical Instruments',
-    'questionnaire' => 'Questionnaires / Codebooks',
+    'questionnaire' => 'Variables',
     'component' => 'Components / Actuators',
   ];
 
@@ -316,7 +316,7 @@ class StudyVariableSearchForm extends FormBase {
       }
 
       $cardsHtml .= '<div class="std-study-meta">'
-        . '<span class="badge bg-light text-dark">Questionnaires: ' . (int) ($card['codebook_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">Variables: ' . (int) ($card['codebook_count'] ?? 0) . '</span>'
         . '<span class="badge bg-light text-dark">Components: ' . (int) ($card['component_count'] ?? 0) . '</span>'
         . '<span class="badge bg-light text-dark">Simulators: ' . (int) ($card['simulator_count'] ?? 0) . '</span>'
         . '<span class="badge bg-light text-dark">Instruments: ' . (int) ($card['instrument_count'] ?? 0) . '</span>'
