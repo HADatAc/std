@@ -47,6 +47,9 @@ class Workflow {
       if ($element->typeLabel != NULL) {
         $typeLabel = $element->typeLabel;
       }
+      if (trim((string) $typeLabel) === '' && trim((string) $type) !== '') {
+        $typeLabel = $type;
+      }
       $uri = Utils::namespaceUri($uri);
       $label = ' ';
       if ($element->label != NULL) {

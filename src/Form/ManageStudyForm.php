@@ -1040,11 +1040,42 @@ class ManageStudyForm extends FormBase
       $associated[] = $workflow;
     };
 
-    // Preserve explicitly selected study-process association.
-    $storedProcessUri = (string) \Drupal::state()->get('ctt.study_process.' . sha1($studyUri), '');
+    // Preserve explicitly selected study-process associations.
+    $studyHash = sha1($studyUri);
+    $storedProcessUris = [];
+
+    $storedProcessUri = (string) \Drupal::state()->get('ctt.study_process.' . $studyHash, '');
     if ($storedProcessUri !== '') {
+      $storedProcessUris[$storedProcessUri] = TRUE;
+    }
+
+    $storedProcessList = \Drupal::state()->get('ctt.study_processes.' . $studyHash, []);
+    if (is_string($storedProcessList) && trim($storedProcessList) !== '') {
+      $decoded = json_decode($storedProcessList, TRUE);
+      if (is_array($decoded)) {
+        $storedProcessList = $decoded;
+      }
+      else {
+        $storedProcessList = array_map('trim', explode(',', $storedProcessList));
+      }
+    }
+
+    if (is_array($storedProcessList)) {
+      foreach ($storedProcessList as $candidateUri) {
+        if (!is_scalar($candidateUri)) {
+          continue;
+        }
+
+        $candidateUri = trim((string) $candidateUri);
+        if ($candidateUri !== '') {
+          $storedProcessUris[$candidateUri] = TRUE;
+        }
+      }
+    }
+
+    foreach (array_keys($storedProcessUris) as $candidateUri) {
       try {
-        $storedProcess = $api->parseObjectResponse($api->getUri($storedProcessUri), 'getUri');
+        $storedProcess = $api->parseObjectResponse($api->getUri($candidateUri), 'getUri');
         $appendWorkflow($storedProcess);
       }
       catch (\Throwable $e) {

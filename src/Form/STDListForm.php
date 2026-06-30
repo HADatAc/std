@@ -6,6 +6,7 @@ use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Drupal\rep\ListKeywordPage;
+use Drupal\rep\ListKeywordLanguagePage;
 use Drupal\rep\Entity\StudyObject;
 use Drupal\rep\Entity\MetadataTemplate;
 use Drupal\std\Entity\Study;
@@ -107,6 +108,13 @@ class STDListForm extends FormBase {
     if (empty($elementtype)) {
       $elementtype = 'dsg';
     }
+
+    // Workflow/workflow stem do not have card renderers in this form.
+    if ($view_type === 'cards' && in_array($elementtype, ['workflow', 'workflowstem'], TRUE)) {
+      $view_type = 'table';
+      $session->set('std_view_type', 'table');
+    }
+
     $form_state->set('std_current_elementtype', (string) $elementtype);
     // Route params + keyword filter (defaults from route)
     $page = $page ?? 1;
@@ -117,11 +125,17 @@ class STDListForm extends FormBase {
       $text_filter = ($keyword !== NULL && $keyword !== '_' ? $keyword : '');
     }
     $keyword_param = ($text_filter === NULL || $text_filter === '') ? '_' : $text_filter;
+    $use_language_listing = in_array($elementtype, ['workflow', 'workflowstem'], TRUE);
 
     // Get total number of elements.
     $this->setListSize(-1);
     if ($elementtype != NULL) {
-      $this->setListSize(ListKeywordPage::total($elementtype, $keyword_param));
+      if ($use_language_listing) {
+        $this->setListSize(ListKeywordLanguagePage::total($elementtype, $keyword_param, '_', '_', '_', '_'));
+      }
+      else {
+        $this->setListSize(ListKeywordPage::total($elementtype, $keyword_param));
+      }
     }
     if (gettype($this->list_size) == 'string') {
       $total_pages = 0;
@@ -169,7 +183,12 @@ class STDListForm extends FormBase {
     }
 
     // Retrieve elements using a custom method.
-    $this->setList(ListKeywordPage::exec($elementtype, $keyword_param, $page, $pagesize));
+    if ($use_language_listing) {
+      $this->setList(ListKeywordLanguagePage::exec($elementtype, $keyword_param, '_', '_', '_', '_', $page, $pagesize));
+    }
+    else {
+      $this->setList(ListKeywordPage::exec($elementtype, $keyword_param, $page, $pagesize));
+    }
 
     // Initialize variables for class name, header, and output.
     $class_name = "";
@@ -282,14 +301,18 @@ class STDListForm extends FormBase {
       case "workflowstem":
         $class_name = ucfirst($preferred_process)." Stems";
         $header = WorkflowStem::generateHeader();
-        $output = WorkflowStem::generateOutput($this->getList());
+        $workflowstem_output = WorkflowStem::generateOutput($this->getList());
+        $output = $workflowstem_output['output'] ?? [];
+        $output = $this->stripInternalListColumns($output);
         break;
 
       // PROCESS
       case "workflow":
         $class_name = ucfirst($preferred_process)."s";
         $header = Workflow::generateHeader();
-        $output = Workflow::generateOutput($this->getList());
+        $workflow_output = Workflow::generateOutput($this->getList());
+        $output = $workflow_output['output'] ?? [];
+        $output = $this->stripInternalListColumns($output);
         break;
 
       default:
@@ -635,6 +658,21 @@ class STDListForm extends FormBase {
       default:
         return [];
     }
+  }
+
+  /**
+   * Removes technical metadata keys from list rows before table rendering.
+   */
+  protected function stripInternalListColumns(array $rows): array {
+    foreach ($rows as $row_key => $row) {
+      if (!is_array($row)) {
+        continue;
+      }
+      unset($rows[$row_key]['element_hasStatus']);
+      unset($rows[$row_key]['element_hasLanguage']);
+      unset($rows[$row_key]['element_hasImageUri']);
+    }
+    return $rows;
   }
 
   /**
