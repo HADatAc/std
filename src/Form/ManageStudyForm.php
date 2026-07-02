@@ -194,6 +194,34 @@ class ManageStudyForm extends FormBase
       $associatedWorkflows = [];
     }
 
+    $associatedWorkflowUris = [];
+    foreach ($associatedWorkflows as $workflow) {
+      $workflowUri = trim((string) ($workflow->uri ?? ''));
+      if ($workflowUri !== '') {
+        $associatedWorkflowUris[$workflowUri] = TRUE;
+      }
+    }
+
+    $workflowAssociationOptions = [];
+    if ($isOwner && $canSubmitCttWorkflow) {
+      $associationCandidates = $this->getWorkflowAssociationCandidates($api, $useremail);
+      foreach ($associationCandidates as $workflow) {
+        $workflowUri = trim((string) ($workflow->uri ?? ''));
+        if ($workflowUri === '' || isset($associatedWorkflowUris[$workflowUri])) {
+          continue;
+        }
+
+        $workflowLabel = trim((string) ($workflow->label ?? $workflow->title ?? ''));
+        if ($workflowLabel === '') {
+          $workflowLabel = $workflowUri;
+        }
+
+        $workflowAssociationOptions[$workflowUri] = $this->formatWorkflowOptionLabel($workflowLabel, $workflowUri);
+      }
+    }
+
+    $availableWorkflowCount = count($workflowAssociationOptions);
+
     // SET STREAM LIST
     $this->setStreamList($api->parseObjectResponse($api->streamByStudyState($this->getStudy()->uri,HASCO::ACTIVE,9999,0), 'streamByStudyState'));
 
@@ -861,6 +889,102 @@ class ManageStudyForm extends FormBase
       '#attributes' => ['class' => ['row','g-0','p-3','pt-0']],
     ];
 
+    if ($isOwner && $canSubmitCttWorkflow) {
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['col-12', 'mb-4']],
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['card']],
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['header'] = [
+        '#type' => 'markup',
+        '#markup' => Markup::create(
+          '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">'
+            . '<div class="d-flex align-items-center gap-2">'
+            . '<strong>Associate Workflow to This Study</strong>'
+            . '<span class="badge bg-secondary">Associated: ' . $totalPRCs . '</span>'
+            . '<span class="badge bg-info text-dark">Available: ' . $availableWorkflowCount . '</span>'
+            . '</div>'
+            . '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#ctt-associate-workflow-panel" aria-expanded="false" aria-controls="ctt-associate-workflow-panel">'
+            . 'Show / Hide'
+            . '</button>'
+            . '</div>'
+        ),
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'id' => 'ctt-associate-workflow-panel',
+          'class' => ['collapse'],
+        ],
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['card-body', 'border-top']],
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['intro'] = [
+        '#type' => 'markup',
+        '#markup' => '<small class="text-muted d-block mb-2">Select a workflow and click Associate to add it to this study.</small>',
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['row', 'g-2', 'align-items-end']],
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['associate_workflow_uri'] = [
+        '#type' => 'select',
+        '#title' => $this->t('Workflow / Process'),
+        '#options' => $workflowAssociationOptions,
+        '#empty_option' => $this->t('- Select workflow -'),
+        '#parents' => ['associate_workflow_uri'],
+        '#wrapper_attributes' => ['class' => ['col-lg-9', 'col-md-8', 'col-12']],
+        '#disabled' => empty($workflowAssociationOptions),
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['actions'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['col-lg-3', 'col-md-4', 'col-12', 'd-grid', 'gap-2']],
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['actions']['associate_submit'] = [
+        '#type' => 'submit',
+        '#name' => 'associate_workflow',
+        '#value' => $this->t('Associate'),
+        '#attributes' => ['class' => ['btn', 'btn-primary', 'btn-sm']],
+        '#disabled' => empty($workflowAssociationOptions),
+      ];
+
+      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['actions']['create_workflow'] = [
+        '#type' => 'link',
+        '#title' => $this->t('Create New Workflow'),
+        '#url' => Url::fromRoute('std.add_workflow', ['state' => 'basic']),
+        '#attributes' => ['class' => ['btn', 'btn-outline-secondary', 'btn-sm'], 'target' => '_blank', 'rel' => 'noopener noreferrer'],
+      ];
+
+      if (empty($workflowAssociationOptions)) {
+        $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['hint'] = [
+          '#type' => 'markup',
+          '#markup' => '<small class="text-muted d-block mt-2">No workflows available to associate. Create one first.</small>',
+        ];
+      }
+      else {
+        $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['hint'] = [
+          '#type' => 'markup',
+          '#markup' => '<small class="text-muted d-block mt-2">Select and click Associate.</small>',
+        ];
+      }
+    }
+
+    $workflowTableColumnClasses = ['col-12', 'mt-2'];
+
     $workflowRows = '';
     if (!empty($associatedWorkflows)) {
       foreach ($associatedWorkflows as $workflow) {
@@ -943,7 +1067,7 @@ class ManageStudyForm extends FormBase
     $form['row6']['item']['collapse']['body']['cards_row']['workflow_table'] = [
       '#type' => 'markup',
       '#markup' => Markup::create(
-        '<div class="col-md-12">'
+        '<div class="' . Html::escape(implode(' ', $workflowTableColumnClasses)) . '">'
           . '<div class="card">'
           . '<div class="card-header text-center"><h3 class="mb-0">Associated Workflows (' . $totalPRCs . ')</h3></div>'
           . '<div class="card-body">'
@@ -994,7 +1118,17 @@ class ManageStudyForm extends FormBase
     return $form;
   }
 
-  public function validateForm(array &$form, FormStateInterface $form_state) {}
+  public function validateForm(array &$form, FormStateInterface $form_state) {
+    $triggering_element = $form_state->getTriggeringElement();
+    $button_name = $triggering_element['#name'] ?? '';
+
+    if ($button_name === 'associate_workflow') {
+      $workflowUri = trim((string) $form_state->getValue('associate_workflow_uri', ''));
+      if ($workflowUri === '') {
+        $form_state->setErrorByName('associate_workflow_uri', $this->t('Select a workflow to associate.'));
+      }
+    }
+  }
 
   /**
    * {@inheritdoc}
@@ -1002,11 +1136,78 @@ class ManageStudyForm extends FormBase
   public function submitForm(array &$form, FormStateInterface $form_state)
   {
     $triggering_element = $form_state->getTriggeringElement();
-    $button_name = $triggering_element['#name'];
+    $button_name = $triggering_element['#name'] ?? '';
+
+    if ($button_name === 'associate_workflow') {
+      $encodedStudyUri = (string) (\Drupal::routeMatch()->getParameter('studyuri') ?? '');
+      $decodedStudyUri = base64_decode($encodedStudyUri, TRUE);
+      if (!is_string($decodedStudyUri) || trim($decodedStudyUri) === '') {
+        \Drupal::messenger()->addError($this->t('Unable to associate workflow: invalid study URI.'));
+        return;
+      }
+
+      $workflowUri = trim((string) $form_state->getValue('associate_workflow_uri', ''));
+      if ($workflowUri === '') {
+        \Drupal::messenger()->addError($this->t('Select a workflow to associate.'));
+        return;
+      }
+
+      $this->persistStudyWorkflowAssociation($decodedStudyUri, $workflowUri);
+      \Drupal::messenger()->addStatus($this->t('Workflow successfully associated with this study.'));
+
+      $form_state->setRedirect('std.manage_study_elements', [
+        'studyuri' => $encodedStudyUri,
+      ]);
+      return;
+    }
 
     if ($button_name === 'back') {
       self::backUrl();
     }
+  }
+
+  private function persistStudyWorkflowAssociation(string $studyUri, string $workflowUri): void
+  {
+    $studyUri = trim($studyUri);
+    $workflowUri = trim($workflowUri);
+    if ($studyUri === '' || $workflowUri === '') {
+      return;
+    }
+
+    $state = \Drupal::state();
+    $studyHash = sha1($studyUri);
+
+    $state->set('ctt.study_process.' . $studyHash, $workflowUri);
+
+    $existing = $state->get('ctt.study_processes.' . $studyHash, []);
+    if (is_string($existing) && trim($existing) !== '') {
+      $decoded = json_decode($existing, TRUE);
+      if (is_array($decoded)) {
+        $existing = $decoded;
+      }
+      else {
+        $existing = array_map('trim', explode(',', $existing));
+      }
+    }
+
+    if (!is_array($existing)) {
+      $existing = [];
+    }
+
+    $normalized = [];
+    foreach ($existing as $candidate) {
+      if (!is_scalar($candidate)) {
+        continue;
+      }
+
+      $candidate = trim((string) $candidate);
+      if ($candidate !== '') {
+        $normalized[$candidate] = TRUE;
+      }
+    }
+
+    $normalized[$workflowUri] = TRUE;
+    $state->set('ctt.study_processes.' . $studyHash, array_keys($normalized));
   }
 
   public function extractValue($jsonString)
@@ -1119,6 +1320,82 @@ class ManageStudyForm extends FormBase
     });
 
     return $associated;
+  }
+
+  /**
+   * @return array<int, object>
+   */
+  private function getWorkflowAssociationCandidates($api, string $userEmail): array
+  {
+    $candidates = [];
+    $seenUris = [];
+
+    $appendWorkflow = function ($workflow) use (&$candidates, &$seenUris): void {
+      if (!is_object($workflow)) {
+        return;
+      }
+
+      $workflowUri = trim((string) ($workflow->uri ?? ''));
+      if ($workflowUri === '' || isset($seenUris[$workflowUri])) {
+        return;
+      }
+
+      $seenUris[$workflowUri] = TRUE;
+      $candidates[] = $workflow;
+    };
+
+    $workflowsByOwner = [];
+    try {
+      $workflowsByOwner = $api->parseObjectResponse($api->listByManagerEmail('workflow', $userEmail, 9999, 0), 'listByManagerEmail');
+    }
+    catch (\Throwable $e) {
+      $workflowsByOwner = [];
+    }
+
+    if (is_array($workflowsByOwner)) {
+      foreach ($workflowsByOwner as $workflow) {
+        $appendWorkflow($workflow);
+      }
+    }
+
+    $allWorkflows = [];
+    try {
+      $allWorkflows = $api->parseObjectResponse($api->listByKeyword('workflow', '_', 9999, 0), 'listByKeyword');
+    }
+    catch (\Throwable $e) {
+      $allWorkflows = [];
+    }
+
+    if (is_array($allWorkflows)) {
+      foreach ($allWorkflows as $workflow) {
+        $appendWorkflow($workflow);
+      }
+    }
+
+    usort($candidates, function ($left, $right) {
+      $leftLabel = strtolower((string) ($left->label ?? $left->title ?? $left->uri ?? ''));
+      $rightLabel = strtolower((string) ($right->label ?? $right->title ?? $right->uri ?? ''));
+      return strcmp($leftLabel, $rightLabel);
+    });
+
+    return $candidates;
+  }
+
+  private function formatWorkflowOptionLabel(string $label, string $workflowUri): string
+  {
+    $label = trim($label);
+    $workflowUri = trim($workflowUri);
+
+    if ($label === '') {
+      $label = $workflowUri;
+    }
+
+    if (strlen($workflowUri) <= 70) {
+      return $label . ' [' . $workflowUri . ']';
+    }
+
+    $shortUri = substr($workflowUri, 0, 35) . '...' . substr($workflowUri, -25);
+    return $label . ' [' . $shortUri . ']';
   }
 
   private function isWorkflowAssociatedWithStudy(object $workflow, string $studyUri): bool
