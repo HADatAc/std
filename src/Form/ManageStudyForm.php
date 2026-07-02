@@ -1285,16 +1285,35 @@ class ManageStudyForm extends FormBase
     }
 
     $workflows = [];
+    $workflowsAreStudyScoped = FALSE;
+
     try {
-      $workflows = $api->parseObjectResponse($api->listByKeyword('workflow', '_', 9999, 0), 'listByKeyword');
+      $studyScoped = $api->parseObjectResponse(
+        $api->listByManagerEmailByStudy($studyUri, 'workflow', $userEmail, 9999, 0),
+        'listByManagerEmail'
+      );
+
+      if (is_array($studyScoped) && !empty($studyScoped)) {
+        $workflows = $studyScoped;
+        $workflowsAreStudyScoped = TRUE;
+      }
     }
     catch (\Throwable $e) {
-      $workflows = [];
+      // Fallback handled below.
+    }
+
+    if (empty($workflows)) {
+      try {
+        $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $userEmail, 9999, 0), 'listByManagerEmail');
+      }
+      catch (\Throwable $e) {
+        $workflows = [];
+      }
     }
 
     if (!is_array($workflows) || empty($workflows)) {
       try {
-        $workflows = $api->parseObjectResponse($api->listByManagerEmail('workflow', $userEmail, 9999, 0), 'listByManagerEmail');
+        $workflows = $api->parseObjectResponse($api->listByKeyword('workflow', '_', 9999, 0), 'listByKeyword');
       }
       catch (\Throwable $e) {
         $workflows = [];
@@ -1307,7 +1326,7 @@ class ManageStudyForm extends FormBase
           continue;
         }
 
-        if ($this->isWorkflowAssociatedWithStudy($workflow, $studyUri)) {
+        if ($workflowsAreStudyScoped || $this->isWorkflowAssociatedWithStudy($workflow, $studyUri)) {
           $appendWorkflow($workflow);
         }
       }
