@@ -167,25 +167,30 @@ class EditWorkflowForm extends FormBase {
       '#disabled' => TRUE,
     ];
     // Legacy Drupal-forms task editor (Basic / Sub-Tasks / Instruments tabs).
+    // The global .btn-primary override paints the background green but leaves
+    // the Bootstrap blue border; match the border to green and keep the me-2
+    // gap so the adjacent Canvas button does not touch this one.
     $form['process_header']['process_actions']['edit_task'] = [
       '#type' => 'submit',
       '#value' => $this->t('Edit Task Model'),
       '#submit' => ['::openLegacyEditor'],
       '#limit_validation_errors' => [],
       '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'edit-task-button', 'edit-element-button', 'top-icon'],
-        'style' => 'max-width: 120px;'
+        'class' => ['btn', 'btn-primary', 'me-2', 'edit-task-button', 'edit-element-button', 'top-icon'],
+        'style' => 'max-width: 120px; border-color: #006600;'
       ],
     ];
-    // Visual React canvas editor.
+    // Visual React canvas editor. Same green edit-tile identity as the legacy
+    // "Edit Task Model" button; the extra edit-task-canvas-button class is a
+    // targeting hook.
     $form['process_header']['process_actions']['edit_task_canvas'] = [
       '#type' => 'submit',
       '#value' => $this->t('Edit Task Model - Canvas'),
       '#submit' => ['::openCanvasEditor'],
       '#limit_validation_errors' => [],
       '#attributes' => [
-        'class' => ['btn', 'btn-success', 'edit-task-canvas-button', 'top-icon'],
-        'style' => 'max-width: 150px;'
+        'class' => ['btn', 'btn-primary', 'edit-task-button', 'edit-element-button', 'top-icon', 'edit-task-canvas-button'],
+        'style' => 'max-width: 120px; border-color: #006600;'
       ],
     ];
 
