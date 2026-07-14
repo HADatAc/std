@@ -149,11 +149,12 @@ class EditWorkflowForm extends FormBase {
     $form['process_header']['process_actions']['validate_task_model'] = [
       '#type' => 'submit',
       '#value' => $this->t('Validate Task Model'),
+      '#submit' => ['::validateTaskModel'],
+      '#limit_validation_errors' => [],
       '#attributes' => [
         'class' => ['btn','btn-primary','me-2', 'check-button', 'top-icon'],
         'style' => 'max-width: 120px;'
       ],
-      '#disabled' => TRUE,
     ];
     $form['process_header']['process_actions']['execute_task_model'] = [
       '#type' => 'submit',
@@ -165,13 +166,26 @@ class EditWorkflowForm extends FormBase {
       ],
       '#disabled' => TRUE,
     ];
+    // Legacy Drupal-forms task editor (Basic / Sub-Tasks / Instruments tabs).
     $form['process_header']['process_actions']['edit_task'] = [
       '#type' => 'submit',
       '#value' => $this->t('Edit Task Model'),
-      '#submit' => ['::setBackUrl'],
+      '#submit' => ['::openLegacyEditor'],
+      '#limit_validation_errors' => [],
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'edit-task-button', 'edit-element-button', 'top-icon'],
         'style' => 'max-width: 120px;'
+      ],
+    ];
+    // Visual React canvas editor.
+    $form['process_header']['process_actions']['edit_task_canvas'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Edit Task Model - Canvas'),
+      '#submit' => ['::openCanvasEditor'],
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['btn', 'btn-success', 'edit-task-canvas-button', 'top-icon'],
+        'style' => 'max-width: 150px;'
       ],
     ];
 
@@ -811,116 +825,135 @@ class EditWorkflowForm extends FormBase {
   }
 
   /**
-   * Submit handler for editing an element in card view.
+   * Open the visual React canvas editor for the workflow's task model.
+   *
+   * Note: this intentionally does NOT rewrite the task graph. A previous
+   * implementation re-typed every task-with-children to AbstractTask via
+   * delete+add, which destroyed the CTT task types and corrupted the tree
+   * (the Top Task became unresolvable and the canvas rendered empty).
    */
-  public function setBackUrl(array &$form, FormStateInterface $form_state) {
+  public function openCanvasEditor(array &$form, FormStateInterface $form_state) {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
-
-    $api = \Drupal::service('rep.api_connector');
-    $this->normalizeAbstractTasks($this->getProcess()->hasTopTaskUri, []);
     $url = NULL;
 
     // Prefer opening the React CTT editor inside Drupal when available.
     try {
       $routeProvider = \Drupal::service('router.route_provider');
-
       try {
         $routeProvider->getRouteByName('hasco_workflow.editor.page');
         $url = Url::fromRoute('hasco_workflow.editor.page', [], [
-          'query' => [
-            'processUri' => $this->getWorkflowUri(),
-          ],
+          'query' => ['processUri' => $this->getWorkflowUri()],
         ]);
       }
       catch (\Exception $e) {
-        try {
-          $routeProvider->getRouteByName('ctt.editor');
-          $url = Url::fromRoute('ctt.editor', [], [
-            'query' => [
-              'processUri' => $this->getWorkflowUri(),
-            ],
-          ]);
-        }
-        catch (\Exception $e2) {
-          throw $e2;
-        }
+        $routeProvider->getRouteByName('ctt.editor');
+        $url = Url::fromRoute('ctt.editor', [], [
+          'query' => ['processUri' => $this->getWorkflowUri()],
+        ]);
       }
     }
     catch (\Exception $e) {
-      // Fallback to legacy task-model editor route.
-      $topTask = $api->parseObjectResponse($api->getUri($this->getProcess()->hasTopTaskUri),'getUri');
-      $url = Url::fromRoute('std.edit_task', [
-        'workflowuri' => base64_encode($this->getWorkflowUri()),
-        'state' => $topTask->typeUri === VSTOI::ABSTRACT_TASK ? 'tasks' : 'basic',
-        'taskuri' => base64_encode($this->getProcess()->hasTopTaskUri),
-      ]);
+      // Fallback to the legacy task-model editor when the canvas route is absent.
+      $url = $this->legacyEditorUrl();
     }
 
-    // Definir redirecionamento explícito
-    Utils::trackingStoreUrls($uid,$previousUrl,$url->toString());
+    Utils::trackingStoreUrls($uid, $previousUrl, $url->toString());
     $form_state->setRedirectUrl($url);
   }
 
   /**
-   * Ensures tasks that have children are typed as Abstract Task.
-   *
-   * This fixes legacy workflows where tasks were saved as Task even when
-   * hasSubtaskUris is populated, which hides the Sub-Tasks tab in EditTaskForm.
-   *
-   * @param string|null $taskUri
-   *   Task URI to normalize.
-   * @param array $visited
-   *   Guard set to avoid cycles.
+   * Open the legacy Drupal-forms task-model editor (Basic / Sub-Tasks tabs).
    */
-  protected function normalizeAbstractTasks($taskUri, array $visited = []) {
-    if (!$taskUri || isset($visited[$taskUri])) {
-      return;
-    }
-    $visited[$taskUri] = TRUE;
+  public function openLegacyEditor(array &$form, FormStateInterface $form_state) {
+    $uid = \Drupal::currentUser()->id();
+    $previousUrl = \Drupal::request()->getRequestUri();
+    $url = $this->legacyEditorUrl();
+    Utils::trackingStoreUrls($uid, $previousUrl, $url->toString());
+    $form_state->setRedirectUrl($url);
+  }
 
+  /**
+   * Build the URL for the legacy task-model editor route (std.edit_task).
+   */
+  protected function legacyEditorUrl() {
     $api = \Drupal::service('rep.api_connector');
-    $task = $api->parseObjectResponse($api->getUri($taskUri), 'getUri');
-    if (!$task) {
+    $topTaskUri = (string) ($this->getProcess()->hasTopTaskUri ?? '');
+    $topTask = $topTaskUri !== '' ? $api->parseObjectResponse($api->getUri($topTaskUri), 'getUri') : NULL;
+    $state = ($topTask && ($topTask->typeUri ?? '') === VSTOI::ABSTRACT_TASK) ? 'tasks' : 'basic';
+    return Url::fromRoute('std.edit_task', [
+      'workflowuri' => base64_encode($this->getWorkflowUri()),
+      'state' => $state,
+      'taskuri' => base64_encode($topTaskUri),
+    ]);
+  }
+
+  /**
+   * Validate the workflow's task model.
+   *
+   * Checks that there is a single, resolvable Top Task and that its task tree
+   * is fully reachable. Surfaces the exact reason the canvas would be empty
+   * (e.g. Top Task not in the knowledge graph) instead of failing silently.
+   */
+  public function validateTaskModel(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    $api = \Drupal::service('rep.api_connector');
+    $process = $this->getProcess();
+    $topTaskUri = is_object($process) ? trim((string) ($process->hasTopTaskUri ?? '')) : '';
+
+    if ($topTaskUri === '') {
+      \Drupal::messenger()->addError($this->t('Validation failed: this workflow has no Top Task (hasTopTask), so the editor cannot render a task tree.'));
       return;
     }
 
-    $childUris = [];
-    if (!empty($task->hasSubtaskUris) && is_array($task->hasSubtaskUris)) {
-      foreach ($task->hasSubtaskUris as $childUri) {
-        if (is_string($childUri) && $childUri !== '') {
-          $childUris[] = $childUri;
+    $top = $api->parseObjectResponse($api->getUri($topTaskUri), 'getUri');
+    if (!$top) {
+      \Drupal::messenger()->addError($this->t('Validation failed: the Top Task <em>@uri</em> returned no object from the knowledge graph. The canvas shows the empty "Main Task" placeholder. Re-ingest the workflow metatemplate to restore it.', ['@uri' => $topTaskUri]));
+      return;
+    }
+
+    // Breadth-first walk of the task tree from the Top Task.
+    $visited = [];
+    $unresolved = [];
+    $queue = [$topTaskUri];
+    $count = 0;
+    while (!empty($queue)) {
+      $uri = trim((string) array_shift($queue));
+      if ($uri === '' || isset($visited[$uri])) {
+        continue;
+      }
+      $visited[$uri] = TRUE;
+      $task = ($uri === $topTaskUri) ? $top : $api->parseObjectResponse($api->getUri($uri), 'getUri');
+      if (!$task) {
+        $unresolved[] = $uri;
+        continue;
+      }
+      $count++;
+      $subs = $task->hasSubtaskUris ?? [];
+      if (is_string($subs)) {
+        $subs = [$subs];
+      }
+      if (is_array($subs)) {
+        foreach ($subs as $sub) {
+          if (is_string($sub) && trim($sub) !== '') {
+            $queue[] = trim($sub);
+          }
         }
       }
     }
 
-    foreach ($childUris as $childUri) {
-      $this->normalizeAbstractTasks($childUri, $visited);
-    }
-
-    if (empty($childUris) || $task->typeUri === VSTOI::ABSTRACT_TASK) {
+    if (!empty($unresolved)) {
+      \Drupal::messenger()->addWarning($this->t('@n subtask reference(s) do not resolve in the knowledge graph (broken links): @list', [
+        '@n' => count($unresolved),
+        '@list' => implode(', ', array_slice($unresolved, 0, 5)) . (count($unresolved) > 5 ? ', …' : ''),
+      ]));
       return;
     }
 
-    $taskData = [
-      'uri' => $task->uri,
-      'typeUri' => VSTOI::ABSTRACT_TASK,
-      'hascoTypeUri' => VSTOI::TASK,
-      'hasTemporalDependency' => $task->hasTemporalDependency ?? '',
-      'hasStatus' => $task->hasStatus ?? VSTOI::DRAFT,
-      'label' => $task->label ?? '',
-      'hasLanguage' => $task->hasLanguage ?? 'en',
-      'hasVersion' => $task->hasVersion ?? '1',
-      'hasSupertaskUri' => $task->hasSupertaskUri ?? '',
-      'comment' => $task->comment ?? '',
-      'hasWebDocument' => $task->hasWebDocument ?? '',
-      'hasSubtaskUris' => $childUris,
-      'hasSIRManagerEmail' => $task->hasSIRManagerEmail ?? \Drupal::currentUser()->getEmail(),
-      'hasRequiredInstrumentUris' => $task->hasRequiredInstrumentUris ?? [],
-    ];
-
-    $api->elementDel('task', $task->uri);
-    $api->elementAdd('task', json_encode($taskData));
+    \Drupal::messenger()->addStatus($this->t('Task model is valid: @n task(s) reachable from a single Top Task "@label".', [
+      '@n' => $count,
+      '@label' => $top->label ?? $topTaskUri,
+    ]));
   }
 
   /**
