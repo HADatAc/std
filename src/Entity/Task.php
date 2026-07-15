@@ -59,12 +59,50 @@ class Task {
     $api    = \Drupal::service('rep.api_connector');
     $parsed = [];
     $rows = [];
+
+    // Fast path: fetch the whole process task graph in ONE call (the hardened
+    // bulk endpoint) and index it by URI, instead of an N+1 getUri() per
+    // sub-task (which is what made the "Sub-Tasks" tab slow). Any URI the bulk
+    // result does not cover still falls back to a per-item getUri() below.
+    $taskMap = [];
+    $decodedProcess = base64_decode($processuri, TRUE);
+    if ($decodedProcess === FALSE || $decodedProcess === '') {
+      $decodedProcess = $processuri;
+    }
+    if (strpos((string) $decodedProcess, 'http') === 0 && \Drupal::hasService('ctt.hasco_client')) {
+      try {
+        foreach (\Drupal::service('ctt.hasco_client')->getTasksByProcess($decodedProcess) as $t) {
+          if (is_object($t)) {
+            $t = (array) $t;
+          }
+          $u = is_array($t) ? trim((string) ($t['uri'] ?? $t['hasURI'] ?? '')) : '';
+          if ($u === '') {
+            continue;
+          }
+          // The bulk node omits the resolved type label; derive it from typeUri.
+          if (empty($t['typeLabel']) && !empty($t['typeUri'])) {
+            $t['typeLabel'] = preg_replace('/^.*[#\/]/', '', (string) $t['typeUri']);
+          }
+          $taskMap[$u] = $t;
+        }
+      }
+      catch (\Throwable $e) {
+        $taskMap = [];
+      }
+    }
+
     foreach ($list as $item) {
       $item_uri = is_object($item)
         ? ($item->uri ?? NULL)
         : (is_array($item) ? ($item['uri'] ?? NULL) : $item);
 
       if (!is_string($item_uri) || trim($item_uri) === '') {
+        continue;
+      }
+
+      // Prefer the pre-fetched bulk entry (no per-item API round-trip).
+      if (isset($taskMap[$item_uri])) {
+        $parsed[] = $taskMap[$item_uri];
         continue;
       }
 
@@ -132,7 +170,6 @@ class Task {
       }
       // --- a) Extract fields with safe defaults ---
       $uri_raw       = $element['uri'] ?? '';
-      $namespacedUri = Utils::namespaceUri($element['uri']);
       $label         = $element['label'] ?? '';
       $lang_code     = $element['hasLanguage'] ?? NULL;
       $taskType      = $element['typeLabel'] ?? '';

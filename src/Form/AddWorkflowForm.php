@@ -138,6 +138,26 @@ class AddWorkflowForm extends FormBase {
       '#required' => true,
     ];
 
+    // Educational (INACSL) properties — scenario-wide, semicolon-separated. Optional.
+    $form['workflow_learning_objectives'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Learning Objectives'),
+      '#default_value' => '',
+      '#description' => $this->t('Measurable learning outcomes, semicolon-separated (INACSL Criterion 3). Recommended for educational/simulation workflows.'),
+    ];
+    $form['workflow_critical_actions'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Critical Actions'),
+      '#default_value' => '',
+      '#description' => $this->t('Essential performance criteria for assessment, semicolon-separated (INACSL Criterion 5/10).'),
+    ];
+    $form['workflow_debriefing_focus'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Debriefing Focus'),
+      '#default_value' => '',
+      '#description' => $this->t('Structured reflection topics/questions, semicolon-separated (INACSL Criterion 9).'),
+    ];
+
     $form['top_task_row'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['row']],
@@ -505,6 +525,9 @@ class AddWorkflowForm extends FormBase {
         . '"hasWebDocument":"' . $workflow_webdocument . '",'
         . '"hasImageUri":"' . $workflow_image . '",'
         . '"hasTopTaskUri":"'. $newTaskUri .'",'
+        . '"hasLearningObjectives":' . json_encode((string) $form_state->getValue('workflow_learning_objectives')) . ','
+        . '"hasCriticalActions":' . json_encode((string) $form_state->getValue('workflow_critical_actions')) . ','
+        . '"hasDebriefingFocus":' . json_encode((string) $form_state->getValue('workflow_debriefing_focus')) . ','
         . '"hasSIRManagerEmail":"' . $useremail . '"}';
 
       $workflowAddResponse = $api->elementAdd('workflow', $processJSON);
