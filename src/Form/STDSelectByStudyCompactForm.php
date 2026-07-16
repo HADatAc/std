@@ -76,6 +76,8 @@ class STDSelectByStudyCompactForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL, $elementtype = NULL, $mode = NULL, $page = NULL, $pagesize = NULL) {
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     // GET MANAGER EMAIL
     $this->manager_email = \Drupal::currentUser()->getEmail();
     $uid = \Drupal::currentUser()->id();
@@ -90,7 +92,7 @@ class STDSelectByStudyCompactForm extends FormBase {
     $decoded_studyuri = base64_decode($studyuri);
     $study = $api->parseObjectResponse($api->getUri($decoded_studyuri),'getUri');
     if ($study == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".$preferred_study."."));
       self::backUrl();
     } else {
       $this->setStudy($study);
@@ -322,24 +324,6 @@ class STDSelectByStudyCompactForm extends FormBase {
       } else {
         $api = \Drupal::service('rep.api_connector');
         foreach($rows as $uri) {
-          //if ($this->element_type == 'da') {
-          //  $mt = $api->parseObjectResponse($api->getUri($uri),'getUri');
-          //  if ($mt != NULL && $mt->hasDataFile != NULL) {
-          //    // DELETE FILE
-          //    if (isset($mt->hasDataFile->id)) {
-          //      $file = File::load($mt->hasDataFile->id);
-          //      if ($file) {
-          //        $file->delete();
-          //        \Drupal::messenger()->addMessage(t("Deleted file with following ID: ".$mt->hasDataFile->id));
-          //      }
-          //    }
-          //    // DELETE DATAFILE
-          //    if (isset($mt->hasDataFile->uri)) {
-          //      $api->dataFileDel($mt->hasDataFile->uri);
-          //      \Drupal::messenger()->addMessage(t("Deleted DataFile with following URI: ".$mt->hasDataFile->uri));
-          //    }
-          //  }
-          //}
           if ($this->element_type == 'studyrole') {
             $api->studyRoleDel($uri);
           }

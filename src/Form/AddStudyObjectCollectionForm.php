@@ -44,6 +44,7 @@ class AddStudyObjectCollectionForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL, $fixstd = NULL) {
 
     $api = \Drupal::service('rep.api_connector');
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     // HANDLE STUDYURI AND STUDY, IF ANY
     if ($studyuri != NULL) {
@@ -54,7 +55,7 @@ class AddStudyObjectCollectionForm extends FormBase {
         $this->setStudyUri($studyuri_decoded);
         $study = $api->parseObjectResponse($api->getUri($this->getStudyUri()),'getUri');
         if ($study == NULL) {
-          \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+          \Drupal::messenger()->addMessage(t("Failed to retrieve ".$preferred_study."."));
           self::backUrl();
           return;
         } else {
@@ -95,14 +96,14 @@ class AddStudyObjectCollectionForm extends FormBase {
     if ($fixstd == 'T') {
       $form['soc_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#disabled' => TRUE,
       ];
     } else {
       $form['soc_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#autocomplete_route_name' => 'std.study_autocomplete',
       ];
@@ -166,16 +167,18 @@ class AddStudyObjectCollectionForm extends FormBase {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('soc_study')) < 1) {
-        $form_state->setErrorByName('soc_study', $this->t('Please enter a valid study for the Study Object Collection'));
+        $form_state->setErrorByName('soc_study', $this->t('Please enter a valid '.ucfirst($preferred_study).' for the '.ucfirst($preferred_study).' Object Collection'));
       }
       if ((strlen($form_state->getValue('soc_virtualcolumn')) < 1) ||
           ($form_state->getValue('soc_virtualcolumn') == 'none')) {
-        $form_state->setErrorByName('soc_virtualcolumn', $this->t('Please enter a valid virtual column for the Study Object Collection'));
+        $form_state->setErrorByName('soc_virtualcolumn', $this->t('Please enter a valid virtual column for the '.ucfirst($preferred_study).' Object Collection'));
       }
       if(strlen($form_state->getValue('soc_label')) < 1) {
-        $form_state->setErrorByName('soc_label', $this->t('Please enter a label for the Study Object Collection'));
+        $form_state->setErrorByName('soc_label', $this->t('Please enter a label for the '.ucfirst($preferred_study).' Object Collection'));
       }
     }
   }
@@ -187,6 +190,8 @@ class AddStudyObjectCollectionForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -201,7 +206,7 @@ class AddStudyObjectCollectionForm extends FormBase {
     }
 
     if ($studyUri == NULL) {
-      \Drupal::messenger()->addError(t("An error occurred while adding a study object collection: could not find valid URI for study."));
+      \Drupal::messenger()->addError(t("An error occurred while adding a ".$preferred_study." object collection: could not find valid URI for ".$preferred_study."."));
       self::backUrl();
       return;
     }
@@ -215,7 +220,7 @@ class AddStudyObjectCollectionForm extends FormBase {
     }
 
     if ($vcUri == NULL) {
-      \Drupal::messenger()->addError(t("An error occurred while adding a study object collection: could not find valid URI for its virtual column."));
+      \Drupal::messenger()->addError(t("An error occurred while adding a ".$preferred_study." object collection: could not find valid URI for its virtual column."));
       self::backUrl();
       return;
     }
@@ -234,14 +239,14 @@ class AddStudyObjectCollectionForm extends FormBase {
       $api = \Drupal::service('rep.api_connector');
       $message = $api->parseObjectResponse($api->elementAdd('studyobjectcollection',$studyObjectCollectionJSON),'elementAdd');
       if ($message != null) {
-        \Drupal::messenger()->addMessage(t("Study Object Collection has been added successfully."));
+        \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Object Collection has been added successfully."));
       } else {
-        \Drupal::messenger()->addError(t("Study Object Collection failed to be added."));
+        \Drupal::messenger()->addError(t(ucfirst($preferred_study)." Object Collection failed to be added."));
       }
       self::backUrl();
       return;
     } catch(\Exception $e) {
-      \Drupal::messenger()->addError(t("An error occurred while adding a Study Object Collection: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while adding a ".ucfirst($preferred_study)." Object Collection: ".$e->getMessage()));
       self::backUrl();
       return;
     }

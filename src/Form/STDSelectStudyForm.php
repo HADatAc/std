@@ -8,13 +8,16 @@ use Drupal\Core\Url;
 use Drupal\Core\Link;
 use Drupal\Core\Render\Markup;
 use Drupal\rep\ListManagerEmailPage;
+use Drupal\rep\ManageOwnerFilter;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\REPGUI;
+use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\Core\Ajax\AjaxResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Drupal\Component\Utility\Html;
-use Drupal\std\Entity\ProcessStem;
-use Drupal\std\Entity\Process;
+use Symfony\Component\Routing\Exception\RouteNotFoundException;
+use Drupal\std\Entity\WorkflowStem;
+use Drupal\std\Entity\Workflow;
 
 class STDSelectStudyForm extends FormBase
 {
@@ -60,10 +63,20 @@ class STDSelectStudyForm extends FormBase
    */
   public function buildForm(array $form, FormStateInterface $form_state, $elementtype = NULL, $page = NULL, $pagesize = NULL)
   {
+    // Prefered Names
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+    $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
 
     $form['#attached']['library'][] = 'std/std_js_css';
 
     $form['#attached']['drupalSettings']['std_select_study_form']['ajaxUrl'] = Url::fromRoute('std.load_more_data')->toString();
+    $form['#attached']['drupalSettings']['std_select_study_form']['hasMoreInitial'] = FALSE;
+    $form['#attached']['drupalSettings']['std_select_study_form']['messages'] = [
+      'loadingMore' => (string) $this->t('Loading more items...'),
+      'noMore' => (string) $this->t('No more items to load.'),
+      'loadFailed' => (string) $this->t('Could not load more items. Scroll again to retry.'),
+    ];
+    $form['#attached']['drupalSettings']['std_select_study_form']['showNoMoreOnInit'] = FALSE;
 
     $this->element_type = $elementtype ?? 'study';
     $form['#attached']['drupalSettings']['std_select_study_form']['elementType'] = $this->element_type;
@@ -76,6 +89,18 @@ class STDSelectStudyForm extends FormBase
 
     $this->element_type = $elementtype;
 
+    if ($this->element_type === 'workflow') {
+      $hasEmbeddedEditor = $this->hasTaskEditorRoute();
+      $externalCttUrl = $this->getExternalCttUrl();
+
+      if (!$hasEmbeddedEditor && $externalCttUrl !== '') {
+        \Drupal::messenger()->addWarning($this->t('Embedded Task Editor is unavailable. Using external CTT at @url.', ['@url' => $externalCttUrl]));
+      }
+      elseif (!$hasEmbeddedEditor) {
+        \Drupal::messenger()->addWarning($this->t('Task Editor is currently unavailable. Enable hasco_workflow or configure CTT Editor URL in REP settings.'));
+      }
+    }
+
     if ($pagesize === NULL) {
       $pagesize = 9;
     }
@@ -86,26 +111,63 @@ class STDSelectStudyForm extends FormBase
     $session = \Drupal::request()->getSession();
     $view_type = $session->get('std_select_study_view_type', 'card');
     $form_state->set('view_type', $view_type);
+    $table_active_class = ($view_type === 'table') ? ['selected-button'] : [];
+    $card_active_class = ($view_type === 'card') ? ['selected-button'] : [];
+
+    // Persist filter state in session (applied on table view)
+    $status_filter_key = 'std_select_status_filter.' . (string) $this->element_type;
+    $status_filter = $form_state->getValue('status_filter');
+    if ($status_filter === NULL) {
+      $status_filter = $session->get($status_filter_key, '_');
+    }
+    else {
+      $session->set($status_filter_key, $status_filter);
+    }
+
+    $is_admin = ManageOwnerFilter::isAdmin();
+    $manager_filter_key = 'std_select_manager_filter.' . (string) $this->element_type;
+    $manager_filter = $form_state->getValue('manager_filter');
+    if ($manager_filter === NULL) {
+      $manager_filter = $session->get($manager_filter_key, '');
+    }
+    else {
+      $manager_filter = ManageOwnerFilter::normalizeSelectedEmail($manager_filter);
+      $session->set($manager_filter_key, $manager_filter);
+    }
+
+    $effective_manager_email = ManageOwnerFilter::resolveEffectiveOwner($this->manager_email, $manager_filter, $status_filter);
+    $form_state->set('effective_manager_email', $effective_manager_email);
+
+    $triggering_element = $form_state->getTriggeringElement();
+    $trigger_name = (string) ($triggering_element['#name'] ?? '');
+    if (in_array($trigger_name, ['status_filter', 'manager_filter'], TRUE)) {
+      $form_state->set('page', 1);
+      $form_state->set('items_loaded', 0);
+    }
 
     $form_state->set('page_size', $pagesize);
-
-    $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
 
     $this->single_class_name = "";
     $this->plural_class_name = "";
     switch ($this->element_type) {
       case "study":
-        $this->single_class_name = "Study";
-        $this->plural_class_name = "Studies";
+        $this->single_class_name = ucfirst($preferred_study);
+        $studyLabel = ucfirst((string) $preferred_study);
+        if (preg_match('/[^aeiou]y$/i', $studyLabel)) {
+          $this->plural_class_name = substr($studyLabel, 0, -1) . 'ies';
+        }
+        else {
+          $this->plural_class_name = $studyLabel . 's';
+        }
         break;
       // PROCESS STEM
-      case "processstem":
+      case "workflowstem":
         $this->single_class_name = $preferred_process . " Stem";
         $this->plural_class_name = $preferred_process . " Stems";
         break;
 
-      // PROCESS
-      case "process":
+      // WORKFLOW
+      case "workflow":
         $this->single_class_name = $preferred_process;
         $this->plural_class_name =  $preferred_process . "s";
         break;
@@ -121,6 +183,8 @@ class STDSelectStudyForm extends FormBase
         $this->plural_class_name = "Objects of Unknown Types";
     }
 
+    $form['#attached']['drupalSettings']['std_select_study_form']['pluralClassName'] = $this->plural_class_name;
+
     // MONTAR O FORMULÁRIO
     $form['page_title'] = [
       '#type' => 'item',
@@ -135,39 +199,34 @@ class STDSelectStudyForm extends FormBase
       ]),
     ];
 
-    // Adiciona botões de alternância de visualização
-    $form['view_toggle'] = [
+    $show_owner_indicator = $is_admin && $manager_filter !== '' && strcasecmp($effective_manager_email, $manager_filter) === 0;
+    if ($show_owner_indicator) {
+      $form['owner_indicator'] = [
+        '#type' => 'item',
+        '#markup' => $this->t('<div class="alert alert-info py-2 mb-3"><strong>A visualizar owner:</strong> @owner</div>', [
+          '@owner' => $effective_manager_email,
+        ]),
+      ];
+    }
+
+    // Controls row: action buttons (left) + view toggle and filters (right).
+    $form['header_controls'] = [
       '#type' => 'container',
-      '#attributes' => ['class' => ['view-toggle', 'd-flex', 'justify-content-end']],
-    ];
-
-    $form['view_toggle']['table_view'] = [
-      '#type' => 'submit',
-      '#value' => '',
-      '#name' => 'view_table',
       '#attributes' => [
-        'style' => 'padding: 20px;',
-        'class' => ['table-view-button', 'fa-xl', 'mx-1'],
-        'title' => $this->t('Table View'),
+        'class' => ['d-flex', 'justify-content-between', 'align-items-start', 'flex-wrap', 'gap-2', 'mb-0'],
+        'style' => 'margin-bottom:0!important;',
       ],
-      '#submit' => ['::viewTableSubmit'],
-      '#limit_validation_errors' => [],
     ];
 
-    $form['view_toggle']['card_view'] = [
-      '#type' => 'submit',
-      '#value' => '',
-      '#name' => 'view_card',
+    $form['header_controls']['buttons_container'] = [
+      '#type' => 'container',
       '#attributes' => [
-        'style' => 'padding: 20px;',
-        'class' => ['card-view-button', 'fa-xl'],
-        'title' => $this->t('Card View'),
+        'class' => ['d-flex', 'flex-nowrap', 'gap-2'],
+        'style' => 'flex-wrap:nowrap;overflow-x:auto;'
       ],
-      '#submit' => ['::viewCardSubmit'],
-      '#limit_validation_errors' => [],
     ];
 
-    $form['add_element'] = [
+    $form['header_controls']['buttons_container']['add_element'] = [
       '#type' => 'submit',
       '#value' => $this->t('Add New ' . $this->single_class_name),
       '#name' => 'add_element',
@@ -176,18 +235,113 @@ class STDSelectStudyForm extends FormBase
       ],
     ];
 
-    if ($this->element_type == 'processstem') {
-      $form['derive_processstem'] = [
+    if ($this->element_type == 'workflowstem') {
+      $form['header_controls']['buttons_container']['derive_workflowstem'] = [
         '#type' => 'submit',
         '#value' => $this->t('Derive New ' . $this->single_class_name),
-        '#name' => 'derive_processstem',
+        '#name' => 'derive_workflowstem',
         '#attributes' => [
           'class' => ['btn', 'btn-primary', 'derive-button'],
         ],
       ];
     }
 
+    $form['header_controls']['right_controls'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['d-flex', 'flex-column', 'align-items-end', 'gap-2'],
+      ],
+    ];
+
+    $form['header_controls']['right_controls']['view_toggle'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['view-toggle', 'd-flex', 'justify-content-end']],
+    ];
+
+    $form['header_controls']['right_controls']['view_toggle']['table_view'] = [
+      '#type' => 'submit',
+      '#value' => '',
+      '#name' => 'view_table',
+      '#attributes' => [
+        'style' => 'padding: 20px;',
+        'class' => array_merge(['table-view-button', 'fa-xl', 'mx-1'], $table_active_class),
+        'title' => $this->t('Table View'),
+      ],
+      '#submit' => ['::viewTableSubmit'],
+      '#limit_validation_errors' => [],
+    ];
+
+    $form['header_controls']['right_controls']['view_toggle']['card_view'] = [
+      '#type' => 'submit',
+      '#value' => '',
+      '#name' => 'view_card',
+      '#attributes' => [
+        'style' => 'padding: 20px;',
+        'class' => array_merge(['card-view-button', 'fa-xl'], $card_active_class),
+        'title' => $this->t('Card View'),
+      ],
+      '#submit' => ['::viewCardSubmit'],
+      '#limit_validation_errors' => [],
+    ];
+
     if ($view_type == 'card') {
+      $status_options = [
+        '_' => $this->t('All Status'),
+        VSTOI::DRAFT => $this->t('Draft'),
+        VSTOI::UNDER_REVIEW => $this->t('Under Review'),
+        VSTOI::CURRENT => $this->t('Current'),
+        VSTOI::DEPRECATED => $this->t('Deprecated'),
+      ];
+
+      $form['header_controls']['right_controls']['filter_container'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['d-flex', 'ms-auto', 'mb-0'],
+          'style' => 'margin-bottom:0!important;'
+        ],
+      ];
+
+      $form['header_controls']['right_controls']['filter_container']['filter_label'] = [
+        '#type' => 'label',
+        '#title' => $this->t('Filter(s): '),
+        '#attributes' => [
+          'class' => ['pt-3', 'me-2', 'fw-bold'],
+        ],
+      ];
+
+      if ($is_admin) {
+        $form['header_controls']['right_controls']['filter_container']['manager_filter'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('User'),
+          '#title_display' => 'invisible',
+          '#default_value' => $manager_filter,
+          '#ajax' => [
+            'callback' => '::ajaxReloadCards',
+            'wrapper' => 'cards-lazy-wrapper',
+            'event' => 'change',
+          ],
+          '#attributes' => [
+            'class' => ['form-control', 'w-auto', 'mt-2', 'me-1'],
+            'style' => 'min-width:240px;margin-bottom:0!important;float:right;',
+            'placeholder' => $this->t('User email (Draft/Under Review)'),
+          ],
+        ];
+      }
+
+      $form['header_controls']['right_controls']['filter_container']['status_filter'] = [
+        '#type' => 'select',
+        '#options' => $status_options,
+        '#default_value' => $status_filter,
+        '#ajax' => [
+          'callback' => '::ajaxReloadCards',
+          'wrapper' => 'cards-lazy-wrapper',
+          'event' => 'change',
+        ],
+        '#attributes' => [
+          'class' => ['form-select', 'w-auto', 'mt-2'],
+          'style' => 'margin-bottom:0!important;float:right;'
+        ],
+      ];
 
       $form['space1'] = [
         '#type' => 'item',
@@ -212,7 +366,12 @@ class STDSelectStudyForm extends FormBase
 
       // Carrega todas as páginas necessárias para restaurar o estado original
       for ($i = 1; $i <= $total_pages_to_load; $i++) {
-        $additional_items = ListManagerEmailPage::exec($this->element_type, $this->manager_email, $i, $pagesize);
+        if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+          $additional_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $i, $pagesize);
+        }
+        else {
+          $additional_items = ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $i, $pagesize);
+        }
         if ($i == 1) {
           $this->setList($additional_items);
         } else {
@@ -221,28 +380,64 @@ class STDSelectStudyForm extends FormBase
       }
 
       // Recupera os elementos para a página atual
-      $this->setList(ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize));
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setList(ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize));
+      }
+      else {
+        $this->setList(ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $page, $pagesize));
+      }
 
       // Obtém o número total de itens
-      $this->setListSize(ListManagerEmailPage::total($this->element_type, $this->manager_email));
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setListSize(ListManagerEmailPage::total($this->element_type, $effective_manager_email));
+      }
+      else {
+        $this->setListSize(ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE));
+      }
       $total_items = $this->getListSize();
+      $has_more_initial = ((int) $total_items > ((int) $page * (int) $pagesize));
+      $show_no_more_initial = !$has_more_initial
+        && (((int) $page > 1) || ((int) $total_items > (int) $pagesize));
+      $form['#attached']['drupalSettings']['std_select_study_form']['hasMoreInitial'] = $has_more_initial;
+      $form['#attached']['drupalSettings']['std_select_study_form']['showNoMoreOnInit'] = $show_no_more_initial;
+
+      $form['cards_lazy_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'cards-lazy-wrapper'],
+      ];
 
       // Envolve os cartões em um container para AJAX
-      $form['cards_wrapper'] = [
+      $form['cards_lazy_wrapper']['cards_wrapper'] = [
         '#type' => 'container',
         '#attributes' => ['id' => 'cards-wrapper'],
       ];
 
       // Constrói a visualização em cartões dentro do 'cards_wrapper'
-      $this->buildCardView($form['cards_wrapper'], $form_state);
+      $this->buildCardView($form['cards_lazy_wrapper']['cards_wrapper'], $form_state);
 
-      // Verifica se há mais itens para carregar
-      if ($total_items > $page * $pagesize) {
-        $form['load_more_wrapper'] = [
-          '#type' => 'container',
-          '#attributes' => [
-            'class' => ['text-center', 'my-3'],
-          ],
+      $form['cards_lazy_wrapper']['records_count'] = [
+        '#type' => 'item',
+        '#markup' => $this->t('<div id="count-cards" style="font-weight:bold; margin-top:10px; padding-right:2rem;">Currently viewing @count of @total @class</div>', [
+          '@count' => count($this->getList()),
+          '@total' => (int) $this->getListSize(),
+          '@class' => $this->plural_class_name,
+        ]),
+      ];
+
+      $form['cards_lazy_wrapper']['load_more_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'id' => 'std-select-study-load-status',
+          'class' => ['text-center', 'my-3'],
+          'role' => 'status',
+          'aria-live' => 'polite',
+          'aria-atomic' => 'true',
+        ],
+      ];
+
+      if ($show_no_more_initial) {
+        $form['cards_lazy_wrapper']['load_more_wrapper']['message'] = [
+          '#markup' => '<span class="text-muted">' . $this->t('No more items to load.') . '</span>',
         ];
       }
     } else {
@@ -251,22 +446,103 @@ class STDSelectStudyForm extends FormBase
         $page = 1;
       }
 
+      // Status filter UI (table view only)
+      $status_options = [
+        '_' => $this->t('All Status'),
+        VSTOI::DRAFT => $this->t('Draft'),
+        VSTOI::UNDER_REVIEW => $this->t('Under Review'),
+        VSTOI::CURRENT => $this->t('Current'),
+        VSTOI::DEPRECATED => $this->t('Deprecated'),
+      ];
+
+      $form['header_controls']['right_controls']['filter_container'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['d-flex', 'ms-auto', 'mb-0'],
+          'style' => 'margin-bottom:0!important;'
+        ],
+      ];
+
+      $form['header_controls']['right_controls']['filter_container']['filter_label'] = [
+        '#type' => 'label',
+        '#title' => $this->t('Filter(s): '),
+        '#attributes' => [
+          'class' => ['pt-3', 'me-2', 'fw-bold'],
+        ],
+      ];
+
+      if ($is_admin) {
+        $form['header_controls']['right_controls']['filter_container']['manager_filter'] = [
+          '#type' => 'textfield',
+          '#title' => $this->t('User'),
+          '#title_display' => 'invisible',
+          '#default_value' => $manager_filter,
+          '#ajax' => [
+            'callback' => '::ajaxReloadTable',
+            'wrapper' => 'element-table-wrapper',
+            'event' => 'change',
+          ],
+          '#attributes' => [
+            'class' => ['form-control', 'w-auto', 'mt-2', 'me-1'],
+            'style' => 'min-width:240px;margin-bottom:0!important;float:right;',
+            'placeholder' => $this->t('User email (Draft/Under Review)'),
+          ],
+        ];
+      }
+
+      $form['header_controls']['right_controls']['filter_container']['status_filter'] = [
+        '#type' => 'select',
+        '#options' => $status_options,
+        '#default_value' => $status_filter,
+        '#ajax' => [
+          'callback' => '::ajaxReloadTable',
+          'wrapper' => 'element-table-wrapper',
+          'event' => 'change',
+        ],
+        '#attributes' => [
+          'class' => ['form-select', 'w-auto', 'mt-2'],
+          'style' => 'margin-bottom:0!important;float:right;'
+        ],
+      ];
+
+      // Total items (optionally filtered by status)
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setListSize(ListManagerEmailPage::total($this->element_type, $effective_manager_email));
+      }
+      else {
+        $this->setListSize(ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE));
+      }
+      $total_items = $this->getListSize();
+
+      $total_pages = 1;
+      if (is_numeric($total_items) && $pagesize > 0) {
+        $size = (int) $total_items;
+        if ($size > 0) {
+          $total_pages = (int) ceil($size / $pagesize);
+        }
+      }
+
+      // Clamp current page
+      $page = max(1, min((int) $page, (int) $total_pages));
+
       // Store page number and form status
       $form_state->set('page', $page);
 
-      // Build table view
-      $this->setList(ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize));
-      $this->buildTableView($form, $form_state);
-
-      // Get total elements number and pages
-      $this->setListSize(ListManagerEmailPage::total($this->element_type, $this->manager_email));
-      $total_items = $this->getListSize();
-
-      if ($total_items % $pagesize == 0) {
-        $total_pages = $total_items / $pagesize;
-      } else {
-        $total_pages = floor($total_items / $pagesize) + 1;
+      // Retrieve list
+      if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+        $this->setList(ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize));
       }
+      else {
+        $this->setList(ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $page, $pagesize));
+      }
+
+      $form['element_table_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['id' => 'element-table-wrapper'],
+      ];
+
+      // Build table view
+      $this->buildTableView($form['element_table_wrapper'], $form_state);
 
       // Next and Previous page links
       if ($page < $total_pages) {
@@ -283,7 +559,7 @@ class STDSelectStudyForm extends FormBase
       }
 
       // Add pagination on bottom
-      $form['pager'] = [
+      $form['element_table_wrapper']['pager'] = [
         '#theme' => 'list-page',
         '#items' => [
           'page' => strval($page),
@@ -315,6 +591,22 @@ class STDSelectStudyForm extends FormBase
   }
 
   /**
+   * AJAX callback to reload list when filters change.
+   */
+  public function ajaxReloadTable(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    return $form['element_table_wrapper'];
+  }
+
+  /**
+   * AJAX callback to reload cards when filters change.
+   */
+  public function ajaxReloadCards(array &$form, FormStateInterface $form_state) {
+    $form_state->setRebuild(TRUE);
+    return $form['cards_lazy_wrapper'];
+  }
+
+  /**
    * Constroi visualização de Cards
    */
   protected function buildCardView(array &$form, FormStateInterface $form_state)
@@ -323,6 +615,19 @@ class STDSelectStudyForm extends FormBase
     $items = $this->getList();
 
     $cards = [];
+
+    if (empty($items)) {
+      $form['no_results'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['col-12']],
+        'message' => [
+          '#markup' => '<div class="alert alert-info mb-0">'
+            . $this->t('No @items found for the current filters.', ['@items' => $this->plural_class_name])
+            . '</div>',
+        ],
+      ];
+      return;
+    }
 
     // dpm($items);
 
@@ -335,7 +640,35 @@ class STDSelectStudyForm extends FormBase
 
       $pi = is_object($element->pi) ? $element->pi->name : $element->pi ?? '';
 
-      $ins = is_object($element->institution) ? $element->institution->name : $element->institution ?? '';
+      $ins = '';
+      $insUri = '';
+      if (isset($element->institution)) {
+        if (is_object($element->institution)) {
+          $ins = (string) ($element->institution->name ?? ($element->institution->label ?? ''));
+          $insUri = (string) ($element->institution->uri ?? ($element->institutionUri ?? ''));
+        }
+        elseif (is_string($element->institution)) {
+          $insUri = trim((string) $element->institution);
+        }
+      }
+      if ($insUri === '' && isset($element->institutionUri) && is_string($element->institutionUri)) {
+        $insUri = trim((string) $element->institutionUri);
+      }
+      if ($ins === '' && $insUri !== '') {
+        try {
+          $api = \Drupal::service('rep.api_connector');
+          $org = $api->parseObjectResponse($api->getUri($insUri), 'getUri');
+          if (is_object($org)) {
+            $ins = (string) ($org->name ?? ($org->label ?? $insUri));
+          }
+          else {
+            $ins = $insUri;
+          }
+        }
+        catch (\Throwable $e) {
+          $ins = $insUri;
+        }
+      }
       $desc = $element->comment ?? '';
 
       // Build Card Array
@@ -484,9 +817,7 @@ class STDSelectStudyForm extends FormBase
         ]);
 
         // View Link
-        $view_element_str = base64_encode(Url::fromRoute('rep.describe_element', [
-          'elementuri' => $elementUriEncoded,
-        ])->toString());
+        $view_element_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
         $view_element = Url::fromRoute('rep.back_url', [
           'previousurl' => $previousUrl,
@@ -504,6 +835,11 @@ class STDSelectStudyForm extends FormBase
           'currenturl' => $edit_element_str,
           'currentroute' => 'std.edit_'.$this->element_type,
         ]);
+
+        $task_editor = NULL;
+        if ($this->element_type === 'workflow') {
+          $task_editor = $this->getTaskEditorUrl($element->uri);
+        }
 
         // Delete link
         $delete_element = Url::fromRoute('rep.delete_element', [
@@ -548,6 +884,29 @@ class STDSelectStudyForm extends FormBase
               'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
             ],
           ],
+          'link3_5' => ($this->element_type === 'workflow')
+            ? ($task_editor
+              ? [
+                '#type' => 'link',
+                '#title' => Markup::create('<i class="fa-solid fa-diagram-project"></i> Model Task Editor'),
+                '#url' => $task_editor,
+                '#attributes' => [
+                  'class' => ['btn', 'btn-sm', 'btn-info', 'mx-1'],
+                  'target' => '_blank',
+                  'rel' => 'noopener noreferrer',
+                ],
+              ]
+              : [
+                '#type' => 'link',
+                '#title' => Markup::create('<i class="fa-solid fa-triangle-exclamation"></i> Model Task Editor'),
+                '#url' => Url::fromUri('internal:#'),
+                '#attributes' => [
+                  'class' => ['btn', 'btn-sm', 'btn-secondary', 'mx-1'],
+                  'onclick' => 'alert("Task Editor unavailable. Please contact an administrator."); return false;',
+                  'aria-disabled' => 'true',
+                ],
+              ])
+            : [],
           'link4' => [
             '#type' => 'link',
             '#title' => Markup::create('<i class="fa-solid fa-trash-can"></i> Delete'),
@@ -573,17 +932,17 @@ class STDSelectStudyForm extends FormBase
 
       // TODO add derive option to CARDS
 
-      if ($this->element_type == 'processstem') {
-        $card['card']['footer']['actions']['derive_processstem'] = [
+      if ($this->element_type == 'workflowstem') {
+        $card['card']['footer']['actions']['derive_workflowstem'] = [
           '#type' => 'submit',
           '#value' => $this->t('Derive New '),
-          '#name' => 'derive_processstemelements_' . md5($uri),
+          '#name' => 'derive_workflowstemelements_' . md5($uri),
           '#attributes' => [
               'class' => ['btn', 'btn-secondary', 'btn-sm', 'derive-button', 'button', 'js-form-submit', 'form-submit'],
               'data-drupal-selector' => 'edit-derive',
               'id' => 'edit-derive--' . md5($uri),
           ],
-          '#submit' => ['::deriveProcessStemSubmit'],
+          '#submit' => ['::deriveWorkflowStemSubmit'],
           '#limit_validation_errors' => [],
           '#element_uri' => $uri,
         ];
@@ -629,14 +988,14 @@ class STDSelectStudyForm extends FormBase
     ];
 
     // TODO
-    // case "processstem":
-    //   return ProcessStem::generateHeader();
+    // case "workflowstem":
+    //   return WorkflowStem::generateHeader();
     // case "process":
     //   return Process::generateHeader();
 
     // // TODO OUTPUT
-    // case "processstem":
-    //   return ProcessStem::generateOutput($this->getList());
+    // case "workflowstem":
+    //   return WorkflowStem::generateOutput($this->getList());
     // case "process":
     //   return Process::generateOutput($this->getList());
 
@@ -677,9 +1036,7 @@ class STDSelectStudyForm extends FormBase
       ]);
 
       // Link para Visualizar
-      $view_element_str = base64_encode(Url::fromRoute('rep.describe_element', [
-        'elementuri' => $elementUriEncoded,
-      ])->toString());
+      $view_element_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
       $view_element = Url::fromRoute('rep.back_url', [
         'previousurl' => $previousUrl,
@@ -698,6 +1055,11 @@ class STDSelectStudyForm extends FormBase
         'currentroute' => 'std.edit_'.$this->element_type,
       ]);
 
+      $task_editor = NULL;
+      if ($this->element_type === 'workflow') {
+        $task_editor = $this->getTaskEditorUrl($element->uri);
+      }
+
       // Link para Excluir
       $delete_element = Url::fromRoute('rep.delete_element', [
         'elementtype' => $this->element_type,
@@ -705,15 +1067,17 @@ class STDSelectStudyForm extends FormBase
         'currenturl' => $previousUrl,
       ]);
 
-      // Link para Gerenciar Elemento
-      $actions['manage_element'] = [
-        '#type' => 'link',
-        '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
-        '#url' => $manage_elements,
-        '#attributes' => [
-          'class' => ['btn', 'btn-primary', 'btn-sm'],
-        ],
-      ];
+      // Link para Gerenciar Elemento (apenas para Study).
+      if ($this->element_type === 'study') {
+        $actions['manage_element'] = [
+          '#type' => 'link',
+          '#title' => Markup::create('<i class="fa-solid fa-folder-tree"></i> Manage Elements'),
+          '#url' => $manage_elements,
+          '#attributes' => [
+            'class' => ['btn', 'btn-primary', 'btn-sm'],
+          ],
+        ];
+      }
 
       // Link para Visualizar
       $actions['view'] = [
@@ -734,6 +1098,34 @@ class STDSelectStudyForm extends FormBase
           'class' => ['btn', 'btn-warning', 'btn-sm'],
         ],
       ];
+
+      // Link direto para o editor de tarefas (CTT), apenas para Workflow.
+      if ($this->element_type === 'workflow') {
+        if ($task_editor) {
+          $actions['task_editor'] = [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-diagram-project"></i> Model Task Editor'),
+            '#url' => $task_editor,
+            '#attributes' => [
+              'class' => ['btn', 'btn-info', 'btn-sm', 'mx-1'],
+              'target' => '_blank',
+              'rel' => 'noopener noreferrer',
+            ],
+          ];
+        }
+        else {
+          $actions['task_editor'] = [
+            '#type' => 'link',
+            '#title' => Markup::create('<i class="fa-solid fa-triangle-exclamation"></i> Model Task Editor'),
+            '#url' => Url::fromUri('internal:#'),
+            '#attributes' => [
+              'class' => ['btn', 'btn-secondary', 'btn-sm', 'mx-1'],
+              'onclick' => 'alert("Task Editor unavailable. Please contact an administrator."); return false;',
+              'aria-disabled' => 'true',
+            ],
+          ];
+        }
+      }
 
       // Link para Excluir
       $actions['delete'] = [
@@ -766,6 +1158,66 @@ class STDSelectStudyForm extends FormBase
     ];
   }
 
+  protected function hasTaskEditorRoute(): bool
+  {
+    return $this->getEmbeddedTaskEditorRouteName() !== NULL;
+  }
+
+  protected function getExternalCttUrl(): string
+  {
+    $cttUrl = trim((string) \Drupal::config('rep.settings')->get('ctt_url'));
+    return rtrim($cttUrl, '/');
+  }
+
+  protected function getTaskEditorUrl(string $processUri)
+  {
+    $embeddedRoute = $this->getEmbeddedTaskEditorRouteName();
+    if ($embeddedRoute === 'hasco_workflow.editor.page') {
+      return Url::fromRoute('hasco_workflow.editor.page', [], [
+        'query' => ['processUri' => $processUri],
+      ]);
+    }
+
+    if ($embeddedRoute === 'ctt.editor') {
+      return Url::fromRoute('ctt.editor', [], [
+        'query' => ['processUri' => $processUri],
+      ]);
+    }
+
+    $externalCttUrl = $this->getExternalCttUrl();
+    if ($externalCttUrl !== '') {
+      $separator = strpos($externalCttUrl, '?') === FALSE ? '?' : '&';
+      return Url::fromUri($externalCttUrl . $separator . 'processUri=' . rawurlencode($processUri));
+    }
+
+    return NULL;
+  }
+
+  protected function getEmbeddedTaskEditorRouteName(): ?string
+  {
+    static $embeddedRouteName = FALSE;
+
+    if ($embeddedRouteName !== FALSE) {
+      return $embeddedRouteName;
+    }
+
+    $routeProvider = \Drupal::service('router.route_provider');
+    foreach (['hasco_workflow.editor.page', 'ctt.editor'] as $routeName) {
+      try {
+        $routeProvider->getRouteByName($routeName);
+        $embeddedRouteName = $routeName;
+        return $embeddedRouteName;
+      }
+      catch (RouteNotFoundException $e) {
+      }
+      catch (\Exception $e) {
+      }
+    }
+
+    $embeddedRouteName = NULL;
+    return $embeddedRouteName;
+  }
+
   /**
    * Load more function for Cards
    */
@@ -783,12 +1235,32 @@ class STDSelectStudyForm extends FormBase
     $form_state->set('loading', true);
 
     // Carregar a próxima página
-    $page = \Drupal::request()->query->get('page') ?? 1;
+    $page = max(1, (int) (\Drupal::request()->query->get('page') ?? 1));
     $this->element_type = \Drupal::request()->query->get('element_type');
-    $this->manager_email = \Drupal::currentUser()->getEmail();
+    if ($this->element_type === NULL || trim((string) $this->element_type) === '') {
+      $form_state->set('loading', false);
+      return new JsonResponse(['cards' => '', 'message' => 'Missing required query parameter: element_type'], 400);
+    }
 
-    $pagesize = $form_state->get('page_size') ?? 9;
-    $new_items = ListManagerEmailPage::exec($this->element_type, $this->manager_email, $page, $pagesize);
+    $this->manager_email = (string) (\Drupal::currentUser()->getEmail() ?? '');
+
+    $session = \Drupal::request()->getSession();
+    $status_filter = $session->get('std_select_status_filter.' . (string) $this->element_type, '_');
+    $manager_filter = ManageOwnerFilter::normalizeSelectedEmail($session->get('std_select_manager_filter.' . (string) $this->element_type, ''));
+    $effective_manager_email = ManageOwnerFilter::resolveEffectiveOwner($this->manager_email, $manager_filter, $status_filter);
+
+    $pagesize = max(1, (int) ($form_state->get('page_size') ?? 9));
+    if ($status_filter === '_' || $status_filter === NULL || $status_filter === '') {
+      $new_items = ListManagerEmailPage::exec($this->element_type, $effective_manager_email, $page, $pagesize);
+      $total_items = (int) ListManagerEmailPage::total($this->element_type, $effective_manager_email);
+    }
+    else {
+      $new_items = ListManagerEmailPage::execByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE, $page, $pagesize);
+      $total_items = (int) ListManagerEmailPage::totalByStatusManagerEmail($this->element_type, $status_filter, $effective_manager_email, FALSE);
+    }
+    if (!is_array($new_items)) {
+      $new_items = [];
+    }
 
     // Update status on already loaded items
     $items_loaded = $form_state->get('items_loaded') ?? 0;
@@ -797,17 +1269,31 @@ class STDSelectStudyForm extends FormBase
 
     // Build new cards
     $new_cards = [];
-    $this->setList($new_items);
-    $this->buildCardView($new_cards, $form_state);
+    $rendered_cards = '';
+    if (!empty($new_items)) {
+      $this->setList($new_items);
+      $this->buildCardView($new_cards, $form_state);
 
-    // Render new cards
-    $renderer = \Drupal::service('renderer');
-    $rendered_cards = $renderer->renderRoot($new_cards);
+      // Render new cards
+      $renderer = \Drupal::service('renderer');
+      $rendered_cards = $renderer->renderRoot($new_cards);
+    }
 
     // Cancel loading status
     $form_state->set('loading', false);
 
-    return new JsonResponse(['cards' => $rendered_cards, 'page' => $page]);
+    $has_more = ((int) $page * (int) $pagesize) < $total_items;
+    if (empty($new_items)) {
+      $has_more = FALSE;
+    }
+
+    return new JsonResponse([
+      'cards' => $rendered_cards,
+      'page' => $page,
+      'has_more' => $has_more,
+      'total' => $total_items,
+      'loaded' => min($total_items, (int) $page * (int) $pagesize),
+    ]);
   }
 
 
@@ -841,11 +1327,9 @@ class STDSelectStudyForm extends FormBase
   public function submitForm(array &$form, FormStateInterface $form_state)
   {
 
-    // RECUPERA O BOTÃO QUE DISPAROU O ENVIO
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
 
-    // DEFINE O ID DO USUÁRIO E A URL ANTERIOR PARA RASTREAMENTO
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
 
@@ -858,8 +1342,8 @@ class STDSelectStudyForm extends FormBase
     } elseif ($button_name === 'edit_element') {
       // Lida com a edição de elementos selecionados na visualização em tabela
       $this->handleEditSelected($form_state);
-    } elseif ($button_name === 'derive_processstem') {
-      $this->performDeriveProcessStem($form_state);
+    } elseif ($button_name === 'derive_workflowstem') {
+      $this->performDeriveWorkflowStem($form_state);
     } elseif ($button_name === 'delete_element') {
       // Lida com a exclusão de elementos selecionados na visualização em tabela
       $this->handleDeleteSelected($form_state);
@@ -876,13 +1360,13 @@ class STDSelectStudyForm extends FormBase
     if ($this->element_type == 'study') {
       Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_study');
       $url = Url::fromRoute('std.add_study');
-    } elseif ($this->element_type == 'processstem') {
-      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_processstem');
-      $url = Url::fromRoute('std.add_processstem');
-      $url->setRouteParameter('sourceprocessstemuri', 'EMPTY');
-    } elseif ($this->element_type == 'process') {
-      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_process');
-      $url = Url::fromRoute('std.add_process');
+    } elseif ($this->element_type == 'workflowstem') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_workflowstem');
+      $url = Url::fromRoute('std.add_workflowstem');
+      $url->setRouteParameter('sourceworkflowstemuri', 'EMPTY');
+    } elseif ($this->element_type == 'workflow') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_workflow');
+      $url = Url::fromRoute('std.add_workflow');
       $url->setRouteParameter('state', 'basic');
     } elseif ($this->element_type == 'task') {
       Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_task');
@@ -906,10 +1390,10 @@ class STDSelectStudyForm extends FormBase
         'studyuri' => base64_encode($uri),
         'items_loaded' => $items_loaded,
       ]);
-    } elseif ($this->element_type == 'processstem') {
-      $url = Url::fromRoute('sir.edit_processstem', ['processstemuri' => base64_encode($uri)]);
-    } elseif ($this->element_type == 'process') {
-      $url = Url::fromRoute('sir.edit_process', ['state' => 'init', 'processuri' => base64_encode($uri)]);
+    } elseif ($this->element_type == 'workflowstem') {
+      $url = Url::fromRoute('std.edit_workflowstem', ['workflowstemuri' => base64_encode($uri)]);
+    } elseif ($this->element_type == 'workflow') {
+      $url = Url::fromRoute('std.edit_workflow', ['workflowuri' => base64_encode($uri)]);
     } else {
       \Drupal::messenger()->addError($this->t('No edit route found for this element type.'));
       return;
@@ -994,21 +1478,21 @@ class STDSelectStudyForm extends FormBase
   /**
    * Submit handler for deriving a process stem in card view.
    */
-  public function deriveProcessStemSubmit(array &$form, FormStateInterface $form_state) {
+  public function deriveWorkflowStemSubmit(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $uri = $triggering_element['#element_uri'];
-    $this->performDeriveProcessStem($uri, $form_state);
+    $this->performDeriveWorkflowStem($uri, $form_state);
   }
 
   /**
    * Perform derive process stem action.
    */
-  protected function performDeriveProcessStem(FormStateInterface $form_state) {
+  protected function performDeriveWorkflowStem(FormStateInterface $form_state) {
     $uid = \Drupal::currentUser()->id();
     $previousUrl = \Drupal::request()->getRequestUri();
-    Utils::trackingStoreUrls($uid, $previousUrl, 'sir.add_processstem');
-    $url = Url::fromRoute('sir.add_processstem');
-    $url->setRouteParameter('sourceprocessstemuri', 'DERIVED');
+    Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_workflowstem');
+    $url = Url::fromRoute('std.add_workflowstem');
+    $url->setRouteParameter('sourceworkflowstemuri', 'DERIVED');
     // $url->setRouteParameter('containersloturi', 'DERIVED');
     $form_state->setRedirectUrl($url);
   }
@@ -1022,3 +1506,4 @@ class STDSelectStudyForm extends FormBase
     return $url;
   }
 }
+

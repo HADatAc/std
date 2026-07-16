@@ -33,7 +33,7 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($studies as $study) {
       $results[] = [
-        'value' => $study->label . ' [' . $study->uri . ']',
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($study->uri, $study->label), 127),
         'label' => $study->label,
       ];
     }
@@ -59,7 +59,7 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($semanticdatadictionaries as $semanticdatadictionary) {
       $results[] = [
-        'value' => $semanticdatadictionary->label . ' [' . $semanticdatadictionary->uri . ']',
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($semanticdatadictionary->uri, $semanticdatadictionary->label), 127),
         'label' => $semanticdatadictionary->label,
       ];
     }
@@ -85,8 +85,7 @@ class JsonApiController extends ControllerBase{
     }
     foreach ($deployments as $deployment) {
       $results[] = [
-        'value' => $deployment->label . ' [' . $deployment->uri . ']',
-        // 'value' => UTILS::trimAutoCompleteString($deployment->label, $deployment->uri),
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($deployment->uri, $deployment->label), 127),
         'label' => $deployment->label,
       ];
     }

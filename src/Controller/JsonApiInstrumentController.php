@@ -6,6 +6,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\Component\Utility\Xss;
+use Drupal\rep\Utils;
 
 /**
  * Class JsonApiStemController
@@ -34,7 +35,7 @@ class JsonApiInstrumentController extends ControllerBase{
     //dpm($instruments);
     foreach ($instruments as $instrument) {
       $results[] = [
-        'value' => $instrument->label . ' [' . $instrument->uri . ']',
+        'value' => Utils::trimPreserveBracket(Utils::fieldToAutocomplete($instrument->uri, $instrument->label), 127),
         'label' => $instrument->label  . ' [' . $instrument->uri . ']',
       ];
     }

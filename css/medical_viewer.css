@@ -1,0 +1,162 @@
+.std-medical-viewer {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+body.std-medical-viewer-page #main.container-fluid {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+body.std-medical-viewer-page #main .row.row-offcanvas {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+body.std-medical-viewer-page #content.main-content {
+  flex: 0 0 100%;
+  max-width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+body.std-medical-viewer-page #content .section {
+  margin: 0;
+  padding: 0;
+}
+
+body.std-medical-viewer-page #content .block-page-title-block {
+  display: none;
+}
+
+body.std-medical-viewer-page #block-hasco-barrio-content,
+body.std-medical-viewer-page #block-hasco-barrio-content > .content {
+  margin: 0;
+}
+
+.std-medical-viewer-toolbar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.82);
+  pointer-events: auto;
+  max-width: 100%;
+}
+
+.std-medical-viewer-frame-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(248, 249, 250, 0.28);
+}
+
+.std-medical-viewer-frame-label {
+  min-width: 84px;
+  text-align: center;
+  color: #f8f9fa;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.std-medical-viewer-zoom-label {
+  min-width: 52px;
+  text-align: right;
+  color: #f8f9fa;
+  font-weight: 600;
+}
+
+.std-medical-viewer-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.22);
+  border: 1px solid rgba(16, 185, 129, 0.55);
+  color: #ecfdf5;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.std-medical-viewer-canvas-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 260px;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+  border: 1px solid #212529;
+  border-radius: 8px;
+  background: #000;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+  cursor: grab;
+}
+
+.std-medical-viewer-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.24) 68%, rgba(0, 0, 0, 0) 100%);
+}
+
+.std-medical-viewer-file-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 58%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.82);
+  color: #f8f9fa;
+  font-size: 0.9rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.std-medical-viewer-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  margin: 0;
+  padding: 8px 12px;
+  color: #f1f3f5;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.84) 0%, rgba(0, 0, 0, 0.52) 62%, rgba(0, 0, 0, 0) 100%);
+}
+
+.std-medical-viewer-canvas-wrap.is-dragging {
+  cursor: grabbing;
+}
+
+#std-medical-viewer-canvas {
+  image-rendering: pixelated;
+  max-width: none;
+  display: block;
+  height: auto;
+  background: #000;
+  margin: 0 auto;
+}

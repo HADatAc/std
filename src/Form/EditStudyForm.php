@@ -10,6 +10,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\file\Entity\File;
 use Drupal\Core\Render\Markup;
+use Drupal\Component\Utility\Html;
 
 class EditStudyForm extends FormBase {
 
@@ -45,14 +46,26 @@ class EditStudyForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL) {
 
+    // Media preview modal (PDF/image viewer).
+    $form['#attached']['library'][] = 'rep/rep_modal';
+    $form['#attached']['library'][] = 'core/drupal.dialog';
+    $form['#attached']['library'][] = 'rep/pdfjs';
+    $form['#attached']['library'][] = 'rep/webdoc_modal';
+    $base_url = (\Drupal::request()->headers->get('x-forwarded-proto') === 'https' ? 'https://' : 'http://')
+      . \Drupal::request()->getHost() . \Drupal::request()->getBaseUrl();
+    $form['#attached']['drupalSettings']['webdoc_modal'] = [
+      'baseUrl' => $base_url,
+    ];
+
     $uri=$studyuri ?? 'default';
     $uri_decode=base64_decode($uri);
     $this->setStudyUri($uri_decode);
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     $api = \Drupal::service('rep.api_connector');
     $study = $api->parseObjectResponse($api->getUri($this->getStudyUri()),'getUri');
     if ($study == NULL) {
-      \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+      \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
       self::backUrl();
       return;
     } else {
@@ -74,6 +87,54 @@ class EditStudyForm extends FormBase {
       '#title' => $this->t('PI'),
       '#default_value' => $this->getStudy()->pi,
     ];
+
+    $institutionDefault = '';
+    $institutionUri = '';
+    $institutionLabel = '';
+
+    if (isset($this->getStudy()->institution)) {
+      if (is_object($this->getStudy()->institution)) {
+        $institutionUri = (string) ($this->getStudy()->institution->uri ?? ($this->getStudy()->institutionUri ?? ''));
+        $institutionLabel = (string) ($this->getStudy()->institution->name ?? ($this->getStudy()->institution->label ?? ''));
+      }
+      elseif (is_string($this->getStudy()->institution)) {
+        $institutionUri = trim((string) $this->getStudy()->institution);
+      }
+    }
+
+    if ($institutionUri === '' && isset($this->getStudy()->institutionUri) && $this->getStudy()->institutionUri != '') {
+      $institutionUri = trim((string) $this->getStudy()->institutionUri);
+    }
+
+    if ($institutionUri !== '' && $institutionLabel === '') {
+      try {
+        $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
+        if (is_object($institutionObj)) {
+          $institutionLabel = (string) ($institutionObj->name ?? ($institutionObj->label ?? ''));
+        }
+      }
+      catch (\Throwable $e) {
+        $institutionLabel = '';
+      }
+    }
+
+    if ($institutionUri !== '') {
+      $institutionDefault = Utils::fieldToAutocomplete($institutionUri, $institutionLabel !== '' ? $institutionLabel : $institutionUri);
+    }
+
+    $form['study_institution'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Institution'),
+      '#default_value' => $institutionDefault,
+      '#autocomplete_route_name'       => 'rep.social_autocomplete',
+      '#autocomplete_route_parameters' => [
+        'entityType' => 'organization',
+      ],
+      '#attributes' => [
+        'autocomplete' => 'off',
+      ],
+    ];
+
     $form['study_description'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Description'),
@@ -142,18 +203,10 @@ class EditStudyForm extends FormBase {
       ],
     ];
 
-    // Attempt to load an existing file if the document is not a URL.
+    // Attempt to load an existing file if the image is not a URL.
     $existing_image_fid = NULL;
     if ($image_type === 'upload' && !empty($study_image)) {
-      // Build the expected file URI in the private filesystem.
-      $desired_uri = 'private://resources/' . $modUri . '/image/' . $study_image;
-      $files = \Drupal::entityTypeManager()
-        ->getStorage('file')
-        ->loadByProperties(['uri' => $desired_uri]);
-      $file = reset($files);
-      if ($file) {
-        $existing_image_fid = $file->id();
-      }
+      $existing_image_fid = Utils::resolvePrivateResourceFid($modUri, 'image', (string) $study_image);
     }
 
     // 5. Managed file element for uploading a new document.
@@ -165,9 +218,43 @@ class EditStudyForm extends FormBase {
         'file_validate_extensions' => ['png jpg jpeg'], // Allowed file extensions.
         'file_validate_size' => [2097152], // Maximum file size (in bytes).
       ],
+      '#default_value' => $existing_image_fid ? [$existing_image_fid] : NULL,
       // Description in red: allowed file types and a warning that choosing a new image will remove the previous one.
       '#description' => Markup::create('<span style="color: red;">Allowed file types: png, jpg, jpeg. Selecting a new image will remove the previous one.</span>'),
     ];
+
+    // Image preview (thumbnail -> modal).
+    $image_preview_url = '';
+    if ($image_type === 'url' && !empty($study_image)) {
+      $image_preview_url = $study_image;
+    }
+    elseif ($existing_image_fid) {
+      $existing_image_file = File::load($existing_image_fid);
+      if ($existing_image_file) {
+        $image_preview_url = \Drupal::service('file_url_generator')->generateAbsoluteString($existing_image_file->getFileUri());
+      }
+    }
+
+    if (!empty($image_preview_url)) {
+      $escaped_image_url = Html::escape($image_preview_url);
+      $form['study_information']['study_image_preview'] = [
+        '#type' => 'item',
+        '#title' => $this->t('Image Preview'),
+        '#markup' => Markup::create(
+          '<button type="button" class="btn btn-link p-0 view-media-button" data-view-url="' . $escaped_image_url . '" aria-label="' . Html::escape((string) $this->t('Preview image')) . '">' .
+          '<img src="' . $escaped_image_url . '" class="img-thumbnail" style="max-width: 120px; height: auto;" />' .
+          '</button>'
+        ),
+        '#states' => [
+          'visible' => [
+            ':input[name="study_image_type"]' => [
+              ['value' => 'url'],
+              ['value' => 'upload'],
+            ],
+          ],
+        ],
+      ];
+    }
 
     // **** WEBDOCUMENT ****
     // Retrieve the current web document value.
@@ -222,29 +309,76 @@ class EditStudyForm extends FormBase {
     // Attempt to load an existing file if the document is not a URL.
     $existing_fid = NULL;
     if ($webdocument_type === 'upload' && !empty($study_webdocument)) {
-      // Build the expected file URI in the private filesystem.
-      $desired_uri = 'private://resources/' . $modUri . '/webdoc/' . $study_webdocument;
-      $files = \Drupal::entityTypeManager()
-        ->getStorage('file')
-        ->loadByProperties(['uri' => $desired_uri]);
-      $file = reset($files);
-      if ($file) {
-        $existing_fid = $file->id();
-      }
+      $existing_fid = Utils::resolvePrivateResourceFid($modUri, 'webdoc', (string) $study_webdocument, ['webdocument', 'image']);
     }
 
     // 5. Managed file element for uploading a new document.
     $form['study_information']['study_webdocument_upload_wrapper']['study_webdocument_upload'] = [
       '#type' => 'managed_file',
-      '#title' => $this->t('Upload Image'),
-      '#upload_location' => 'private://resources/' . $modUri . '/image',
+      '#title' => $this->t('Upload Document'),
+      '#upload_location' => 'private://resources/' . $modUri . '/webdoc',
       '#upload_validators' => [
         'file_validate_extensions' => ['pdf doc docx txt xls xlsx'],
         'file_validate_size' => [2097152], // Maximum file size (in bytes).
       ],
+      '#default_value' => $existing_fid ? [$existing_fid] : NULL,
       // Description in red: allowed file types and a warning that choosing a new image will remove the previous one.
       '#description' => Markup::create('<span style="color: red;">Allowed file types: pdf, doc, docx, txt, xls, xlsx. Selecting a new document will remove the previous one.</span>'),
     ];
+
+    // Web document preview (thumbnail/button -> modal).
+    $webdoc_preview_url = '';
+    if ($webdocument_type === 'url' && !empty($study_webdocument)) {
+      $webdoc_preview_url = $study_webdocument;
+    }
+    elseif ($existing_fid) {
+      $existing_doc_file = File::load($existing_fid);
+      if ($existing_doc_file) {
+        $webdoc_preview_url = \Drupal::service('file_url_generator')->generateAbsoluteString($existing_doc_file->getFileUri());
+      }
+    }
+
+    if (!empty($webdoc_preview_url)) {
+      $escaped_doc_url = Html::escape($webdoc_preview_url);
+      $extension = '';
+      $parsed_path = parse_url($webdoc_preview_url, PHP_URL_PATH);
+      if (is_string($parsed_path)) {
+        $extension = strtolower(pathinfo($parsed_path, PATHINFO_EXTENSION));
+      }
+
+      $thumb_markup = '';
+      if (in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'], TRUE)) {
+        $thumb_markup = '<img src="' . $escaped_doc_url . '" class="img-thumbnail" style="max-width: 120px; height: auto;" />';
+      }
+      elseif ($extension === 'pdf') {
+        $thumb_markup =
+          '<div class="border rounded" style="width: 120px; height: 160px; overflow: hidden;">' .
+          '<embed src="' . $escaped_doc_url . '#page=1&zoom=70" type="application/pdf" style="width: 120px; height: 160px; pointer-events: none;" />' .
+          '</div>';
+      }
+      else {
+        $label = $parsed_path ? basename($parsed_path) : (string) $this->t('View document');
+        $thumb_markup = '<span class="small">' . Html::escape($label) . '</span>';
+      }
+
+      $form['study_information']['study_webdocument_preview'] = [
+        '#type' => 'item',
+        '#title' => $this->t('Web Document Preview'),
+        '#markup' => Markup::create(
+          '<button type="button" class="btn btn-link p-0 view-media-button" data-view-url="' . $escaped_doc_url . '" aria-label="' . Html::escape((string) $this->t('Preview document')) . '">' .
+          $thumb_markup .
+          '</button>'
+        ),
+        '#states' => [
+          'visible' => [
+            ':input[name="study_webdocument_type"]' => [
+              ['value' => 'url'],
+              ['value' => 'upload'],
+            ],
+          ],
+        ],
+      ];
+    }
 
     $form['update_submit'] = [
       '#type' => 'submit',
@@ -275,13 +409,14 @@ class EditStudyForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('study_short_name')) < 1) {
-        $form_state->setErrorByName('study_short_name', $this->t('Please enter a short name for the Study'));
+        $form_state->setErrorByName('study_short_name', $this->t('Please enter a short name for the '.ucfirst($preferred_study)));
       }
       if(strlen($form_state->getValue('study_name')) < 1) {
-        $form_state->setErrorByName('study_name', $this->t('Please enter a name for the Study'));
+        $form_state->setErrorByName('study_name', $this->t('Please enter a name for the '.ucfirst($preferred_study)));
       }
     }
   }
@@ -292,6 +427,7 @@ class EditStudyForm extends FormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backUrl();
@@ -300,6 +436,16 @@ class EditStudyForm extends FormBase {
 
     try {
       $useremail = \Drupal::currentUser()->getEmail();
+
+      // Compute module-ish URI segment used for private file storage.
+      $study_uri = Utils::namespaceUri($this->getStudyUri());
+      $modUri = '';
+      if (!empty($study_uri)) {
+        $parts = explode(':/', $study_uri);
+        if (count($parts) > 1) {
+          $modUri = $parts[1];
+        }
+      }
 
       // Determine the chosen document type.
       $doc_type = $form_state->getValue('study_webdocument_type');
@@ -311,18 +457,17 @@ class EditStudyForm extends FormBase {
       }
       // If user selected Upload, load the file entity and get its filename.
       elseif ($doc_type === 'upload') {
-        // Get the file IDs from the managed_file element.
-        $fids = $form_state->getValue('study_webdocument_upload');
-        if (!empty($fids)) {
-          // Load the first file (file ID is returned, e.g. "374").
-          $file = File::load(reset($fids));
+        $fids = $form_state->getValue('study_webdocument_upload') ?: [];
+        $submitted_fid = !empty($fids) ? (int) reset($fids) : NULL;
+        $existing_fid = Utils::resolvePrivateResourceFid($modUri, 'webdoc', (string) $this->getStudy()->hasWebDocument, ['webdocument', 'image']);
+
+        // Only treat as "new upload" if user actually selected a different file.
+        if ($submitted_fid && (!$existing_fid || $submitted_fid !== (int) $existing_fid)) {
+          $file = File::load($submitted_fid);
           if ($file) {
-            // Mark the file as permanent and save it.
             $file->setPermanent();
             $file->save();
-            // Optionally register file usage to prevent cleanup.
             \Drupal::service('file.usage')->add($file, 'sir', 'study', 1);
-            // Now get the filename from the file entity.
             $study_webdocument = $file->getFilename();
           }
         }
@@ -338,18 +483,16 @@ class EditStudyForm extends FormBase {
       }
       // If user selected Upload, load the file entity and get its filename.
       elseif ($image_type === 'upload') {
-        // Get the file IDs from the managed_file element.
-        $fids = $form_state->getValue('study_image_upload');
-        if (!empty($fids)) {
-          // Load the first file (file ID is returned, e.g. "374").
-          $file = File::load(reset($fids));
+        $fids = $form_state->getValue('study_image_upload') ?: [];
+        $submitted_fid = !empty($fids) ? (int) reset($fids) : NULL;
+        $existing_fid = Utils::resolvePrivateResourceFid($modUri, 'image', (string) $this->getStudy()->hasImageUri);
+
+        if ($submitted_fid && (!$existing_fid || $submitted_fid !== (int) $existing_fid)) {
+          $file = File::load($submitted_fid);
           if ($file) {
-            // Mark the file as permanent and save it.
             $file->setPermanent();
             $file->save();
-            // Optionally register file usage to prevent cleanup.
             \Drupal::service('file.usage')->add($file, 'sir', 'study', 1);
-            // Now get the filename from the file entity.
             $study_image = $file->getFilename();
           }
         }
@@ -361,6 +504,7 @@ class EditStudyForm extends FormBase {
         '"label":"'.$form_state->getValue('study_short_name').'",'.
         '"title":"'.$form_state->getValue('study_name').'",'.
         '"comment":"'.$form_state->getValue('study_description').'",'.
+        '"institutionUri":"' . Utils::uriFromAutocomplete((string) $form_state->getValue('study_institution')) . '",'.
         // '"pi":"'.$form_state->getValue('study_pi').'",'.
         '"hasWebDocument":"' . $study_webdocument . '",' .
         '"hasImageUri":"' . $study_image . '",' .
@@ -371,32 +515,14 @@ class EditStudyForm extends FormBase {
       $api->elementDel('study',$this->getStudy()->uri);
       $message = $api->elementAdd('study',$studyJson);
 
-      // UPLOAD IMAGE TO API
-      if ($image_type === 'upload' && $study_image !== $this->getStudy()->hasImageUri) {
-        $fids = $form_state->getValue('study_image_upload');
-        $msg = $api->parseObjectResponse($api->uploadFile($this->getStudyUri(), reset($fids)), 'uploadFile');
-        if ($msg == NULL) {
-          \Drupal::messenger()->addError(t("The Uploaded Image FAILED to be submited to API."));
-        }
-      }
-
-      // UPLOAD DOCUMENT TO API
-      if ($doc_type === 'upload' && $study_webdocument !== $this->getStudy()->hasWebDocument) {
-        $fids = $form_state->getValue('study_webdocument_upload');
-        $msg = $api->parseObjectResponse($api->uploadFile($this->getStudyUri(), reset($fids)), 'uploadFile');
-        if ($msg == NULL) {
-          \Drupal::messenger()->addError(t("The Uploaded WebDocument FAILED to be submited to API."));
-        }
-      }
-
       if ($message != null)
-        \Drupal::messenger()->addMessage(t("Study has been updated successfully."));
+        \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been updated successfully."));
 
       self::backUrl();
       return;
 
     } catch(\Exception $e) {
-      \Drupal::messenger()->addMessage(t("An error occurred while updating Study: ".$e->getMessage()));
+      \Drupal::messenger()->addMessage(t("An error occurred while updating ".ucfirst($preferred_study).": ".$e->getMessage()));
       self::backUrl();
       return;
     }

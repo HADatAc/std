@@ -20,6 +20,7 @@ use Drupal\Core\Ajax\RemoveCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Component\Serialization\Json;
 use Drupal\std\Entity\Task;
+use Drupal\Core\Render\Markup;
 
 class AddTaskForm extends FormBase {
 
@@ -69,6 +70,9 @@ class AddTaskForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state, $state=NULL, $toptaskuri = NULL) {
 
     $api = \Drupal::service('rep.api_connector');
+
+    $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
 
     // FOUR groups of values are preserved in state: basic, instruments, objects and codes.
     // for each group, we have render*, update*, save*, add*, remove* (basic has no add* and remove*)
@@ -126,7 +130,7 @@ class AddTaskForm extends FormBase {
     $form['#attached']['library'][] = 'core/drupal.dialog'; // Biblioteca do modal do Drupal
     $form['#attached']['library'][] = 'core/drupal.ajax';
     $form['#attached']['library'][] = 'core/jquery';
-    $form['#attached']['library'][] = 'std/std_task';
+    $form['#attached']['library'][] = 'std/std_js_css';
 
 
     // SET SEPARATOR
@@ -386,8 +390,8 @@ class AddTaskForm extends FormBase {
       $form['instruments']['header'] = array(
         '#type' => 'markup',
         '#markup' =>
-          '<div class="p-2 col bg-secondary text-white border border-white">Instrument</div>' .
-          '<div class="p-2 col bg-secondary text-white border border-white">Components</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">'.ucfirst($preferred_instrument).'</div>' .
+          '<div class="p-2 col bg-secondary text-white border border-white">'.ucfirst($preferred_component).'</div>' .
           '<div class="p-2 col-md-1 bg-secondary text-white border border-white">Operations</div>' . $separator,
       );
 
@@ -405,7 +409,7 @@ class AddTaskForm extends FormBase {
 
       $form['instruments']['actions']['add_row'] = [
         '#type' => 'submit',
-        '#value' => $this->t('New Instrument'),
+        '#value' => $this->t('New '.ucfirst($preferred_instrument)),
         '#name' => 'new_instrument',
         '#attributes' => array('class' => array('btn', 'btn-sm', 'save-button')),
       ];
@@ -794,6 +798,7 @@ class AddTaskForm extends FormBase {
    ******************************/
 
   protected function renderInstrumentRows(array $instruments) {
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
     $form_rows = [];
     $separator = '<div class="w-100"></div>';
     foreach ($instruments as $delta => $instrument) {
@@ -809,7 +814,7 @@ class AddTaskForm extends FormBase {
             $this->t('Status'),
           ],
           '#rows' => [],
-          '#empty' => $this->t('No components yet.'),
+          '#empty' => $this->t('No '.ucfirst($preferred_component).'s yet.'),
         ];
       }
       else {
@@ -1023,12 +1028,14 @@ class AddTaskForm extends FormBase {
   }
 
   protected function saveInstruments($taskUri, array $instruments) {
+
+    $preferred_instrument = \Drupal::config('rep.settings')->get('preferred_instrument') ?? 'instrument';
     if (!isset($taskUri)) {
         \Drupal::messenger()->addError(t("No task URI has been provided to save instruments."));
         return;
     }
     if (empty($instruments)) {
-        \Drupal::messenger()->addWarning(t("Task has no instrument to be saved."));
+        \Drupal::messenger()->addWarning(t("Task has no ".lcfirst($preferred_instrument)." to be saved."));
         return;
     }
 
@@ -1606,12 +1613,14 @@ class AddTaskForm extends FormBase {
       $rows[] = [
         'data' => [
           $checkbox_rendered,
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($component['uri']).'">' . $component['name'] . '</a>'),
-          t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($component['uri']).'">' . UTILS::namespaceUri($component['uri']) . '</a>'),
+          Markup::create(Utils::describeAnchor((string) $component['uri'], (string) $component['name'])),
+          Markup::create(Utils::describeAnchor((string) $component['uri'], (string) UTILS::namespaceUri($component['uri']))),
           $component['status'],
         ],
       ];
     }
+
+    $preferred_component = \Drupal::config('rep.settings')->get('preferred_component') ?? 'component';
 
     return [
       '#type' => 'container',
@@ -1620,7 +1629,7 @@ class AddTaskForm extends FormBase {
         '#type' => 'table',
         '#header' => $header,
         '#rows' => $rows,
-        '#empty' => $this->t('No components found.'),
+        '#empty' => $this->t('No '.ucfirst($preferred_component).'s found.'),
       ],
     ];
   }

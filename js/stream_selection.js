@@ -148,7 +148,7 @@
           var type = (data.streamType || '').toLowerCase().trim();
 
           if (type === 'files') {
-            // ——— FILES-ONLY STREAM ———
+            // --- FILES-ONLY STREAM ---
             $('#data-files-table').html(data.files);
             $('#data-files-pager').html(data.filesPager).show();
             $('#topic-files-pager').hide();
@@ -159,7 +159,7 @@
             $('#stream-topic-list-container, #message-stream-container').hide();
           }
           else {
-            // ——— MESSAGE/TOPIC STREAM ———
+            // --- MESSAGE/TOPIC STREAM ---
             $('#topic-list-table').html(data.topics);
             $('#stream-topic-list-container').show();
             $('#topic-files-pager').html(data.filesPager).show();

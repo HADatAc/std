@@ -15,6 +15,17 @@ std.search:
   options:
     no_cache: 'TRUE'
 
+std.search_studies_variables:
+  path: 'std/search/studies'
+  defaults:
+    _form: '\Drupal\std\Form\StudyVariableSearchForm'
+    _title: 'Study Search'
+  requirements:
+    _permission: 'access study search+administer study search'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
 # Main menu options
 
 std.list_element:
@@ -313,6 +324,14 @@ std.deployment_autocomplete:
   requirements:
     _permission: 'access content'
 
+std.workflow_autocomplete:
+  path: '/std/workflow/autocomplete'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonApiWorkflowController::handleAutocomplete'
+    _format: json
+  requirements:
+    _permission: 'access content'
+
 # LOAD MORE
 std.load_more_data:
   path: '/std/select/study/load-more-data'
@@ -416,11 +435,36 @@ std.get_media_files:
   options:
     _format: 'json'
 
+std.get_medical_image_files:
+  path: '/std/get-medical-image-files/{studyuri}/{page}/{pagesize}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::getMedicalImageFiles'
+    _title: 'Get medical image files'
+  requirements:
+    _permission: 'access content'
+    studyuri: '.+'
+    page: '\d+'
+    pagesize: '\d+'
+  options:
+    _format: 'json'
+
 std.delete_media_file:
   path: '/std/delete-media-file/{filename}/{studyuri}'
   defaults:
     _controller: '\Drupal\std\Controller\JsonDataController::deleteMediaFile'
     _title: 'Delete media file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  options:
+    _format: 'json'
+
+std.delete_medical_image_file:
+  path: '/std/delete-medical-image-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deleteMedicalImageFile'
+    _title: 'Delete medical image file'
   requirements:
     _permission: 'access content'
     filename: '.+'
@@ -441,6 +485,17 @@ std.view_media_file:
   options:
     _format: 'json'
 
+std.medical_viewer:
+  path: '/std/medical-viewer/{filename}/{studyuri}/{token}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::medicalViewerPage'
+    _title: 'Medical Image Viewer'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+    token: '.+'
+
 std.download_file:
   path: '/std/download-file/{fileUri}/{studyUri}/{type}'
   defaults:
@@ -452,10 +507,23 @@ std.download_file:
     studyUri: '.+'
     type: '.+'
 
+std.delete_da_file:
+  path: '/std/delete-da-file/{filename}/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::deleteDAFile'
+    _title: 'Delete DA file'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+  methods: [POST]
+  options:
+    _format: 'json'
+
 # Workflow CRUD options
 
-std.manage_process:
-  path: 'std/manage/process'
+std.manage_workflow:
+  path: 'std/manage/workflow'
   defaults:
     _title: 'Manage Workflow'
   requirements:
@@ -464,27 +532,27 @@ std.manage_process:
   options:
     no_cache: 'TRUE'
 
-std.add_process:
-  path: 'std/manage/addprocess/{state}'
+std.add_workflow:
+  path: 'std/manage/addworkflow/{state}'
   defaults:
-    _form: '\Drupal\std\Form\AddProcessForm'
+    _form: '\Drupal\std\Form\AddWorkflowForm'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
-std.edit_process:
-  path: 'std/manage/editprocess/{processuri}'
+std.edit_workflow:
+  path: 'std/manage/editworkflow/{workflowuri}'
   defaults:
-    _form: '\Drupal\std\Form\EditProcessForm'
+    _form: '\Drupal\std\Form\EditWorkflowForm'
   requirements:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
   options:
     no_cache: 'TRUE'
 
-std.process_instrument_autocomplete:
+std.workflow_instrument_autocomplete:
   path: '/std/manage/instrument/autocomplete'
   defaults:
     _controller: '\Drupal\std\Controller\JsonApiInstrumentController::handleAutocomplete'
@@ -495,26 +563,26 @@ std.process_instrument_autocomplete:
 std.load_components:
   path: '/std/load-components'
   defaults:
-    _controller: '\Drupal\std\Controller\JsonApiProcessController::loadComponents'
+    _controller: '\Drupal\std\Controller\JsonApiWorkflowController::loadComponents'
     _title: 'Load Components'
   requirements:
     _permission: 'access content'
   methods: [GET, POST]
 
-std.process_task_autocomplete:
-  path: '/std/manage/process/autocomplete'
+std.workflow_task_autocomplete:
+  path: '/std/manage/workflow/autocomplete'
   defaults:
-    _controller: '\Drupal\std\Controller\JsonApiProcessController::handleTasksAutocomplete'
+    _controller: '\Drupal\std\Controller\JsonApiWorkflowController::handleTasksAutocomplete'
     _format: json
   requirements:
     _permission: 'access content'
 
 # Workflow Stem CRUD options
 
-std.add_processstem:
-  path: 'std/manage/addprocessstem/{sourceprocessstemuri}'
+std.add_workflowstem:
+  path: 'std/manage/addworkflowstem/{sourceworkflowstemuri}'
   defaults:
-    _form: '\Drupal\std\Form\AddProcessStemForm'
+    _form: '\Drupal\std\Form\AddWorkflowStemForm'
     _title: 'Add Workflow Stem'
   requirements:
     _permission: 'access content'
@@ -522,10 +590,10 @@ std.add_processstem:
   options:
     no_cache: 'TRUE'
 
-std.edit_processstem:
-  path: 'std/manage/editprocessstem/{processstemuri}'
+std.edit_workflowstem:
+  path: 'std/manage/editworkflowstem/{workflowstemuri}'
   defaults:
-    _form: '\Drupal\std\Form\EditProcessStemForm'
+    _form: '\Drupal\std\Form\EditWorkflowStemForm'
     _title: 'Edit Workflow Stem'
   requirements:
     _permission: 'access content'
@@ -556,7 +624,7 @@ std.add_task:
     no_cache: 'TRUE'
 
 std.edit_task:
-  path: 'std/manage/edittask/{processuri}/{state}/{taskuri}'
+  path: 'std/manage/edittask/{workflowuri}/{state}/{taskuri}'
   defaults:
     _form: '\Drupal\std\Form\EditTaskForm'
   requirements:
@@ -574,7 +642,7 @@ std.task_autocomplete:
     _permission: 'access content'
 
 std.delete_subtask:
-  path: '/std/delete-subtask/{processuri}/{state}/{parenttaskuri}/{taskuri}'
+  path: '/std/delete-subtask/{workflowuri}/{state}/{parenttaskuri}/{taskuri}'
   defaults:
     _controller: '\Drupal\std\Controller\SubTaskController::delete'
   requirements:
@@ -583,10 +651,10 @@ std.delete_subtask:
 # REVIEW OPTIONS
 # Workflow Stem
 
-std.review_processstem:
-  path: 'std/manage/reviewprocessstem/{processstemuri}'
+std.review_workflowstem:
+  path: 'std/manage/reviewworkflowstem/{workflowstemuri}'
   defaults:
-    _form: '\Drupal\std\Form\Review\ReviewProcessStemForm'
+    _form: '\Drupal\std\Form\Review\ReviewWorkflowStemForm'
     _title: 'Review Workflow Stem'
   requirements:
     # _permission: 'access reviewer menu'

@@ -1,0 +1,3 @@
+services:
+  rep.api_connector:
+    class: Drupal\std_test\StudySearchApiConnectorStub

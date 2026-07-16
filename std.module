@@ -48,12 +48,12 @@ function std_menu_links_discovered_alter(&$links) {
 
   $preferred_process = \Drupal::config('rep.settings')->get('preferred_process');
 
-  if (isset($links['std.manage_process'])) {
-    $links['std.manage_process']['title'] = 'Manage ' . $preferred_process;
-    $links['std.manage_process']['weight'] = 22;
+  if (isset($links['std.manage_workflow'])) {
+    $links['std.manage_workflow']['title'] = 'Manage ' . $preferred_process;
+    $links['std.manage_workflow']['weight'] = 22;
   }
-  if (isset($links['std.manage_processstems'])) {
-    $links['std.manage_processstems']['title'] = 'Manage ' . $preferred_process . ' Stems';
-    $links['std.manage_processstems']['weight'] = 23;
+  if (isset($links['std.manage_workflowstems'])) {
+    $links['std.manage_workflowstems']['title'] = 'Manage ' . $preferred_process . ' Stems';
+    $links['std.manage_workflowstems']['weight'] = 23;
   }
 }

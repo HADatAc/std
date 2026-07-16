@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
 use Drupal\rep\Entity\Stream;
+use Drupal\std\Support\StudyFileTypeResolver;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Url;
 
@@ -117,10 +118,11 @@ class JsonDataController extends ControllerBase
         // GET STUDY
         $api = \Drupal::service('rep.api_connector');
         $decoded_studyuri = base64_decode($studyuri);
-        $study = $api->parseObjectResponse($api->getUri($decoded_studyuri), 'getUri');
+        $study = $this->parseApiBodyQuiet($api->getUri($decoded_studyuri));
         if (!$study) {
+            $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
             $this->backUrl();
-            return new JsonResponse(['error' => 'Study not found'], 404);
+            return new JsonResponse(['error' => $preferred_study.' not found'], 404);
         } else {
             $this->setStudy($study);
         }
@@ -136,56 +138,130 @@ class JsonDataController extends ControllerBase
         $this->setListSize(-1);
         if ($this->element_type != NULL) {
           //OLD $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
-          $this->setListSize($api->parseObjectResponse($api->getTotalStudyDAsByStudy($this->getStudy()->uri),'getTotalStudyDAsByStudy'));
-        }
-
-        if (gettype($this->list_size) == 'string') {
-            $total_pages = "0";
-        } else {
-            if ($this->list_size % $pagesize == 0) {
-                $total_pages = $this->list_size / $pagesize;
-            } else {
-                $total_pages = floor($this->list_size / $pagesize) + 1;
-            }
-        }
-
-        //AVOID NON EXISTING PAGES
-        if ($this->list_size <= (($page - 1) * 5)) {
-            $page--;
-            $total_pages--;
-        }
-
-        // CREATE LINK FOR NEXT PAGE AND PREVIOUS PAGE
-        if ($page < $total_pages) {
-            $next_page = $page + 1;
-            $next_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $next_page, $pagesize);
-        } else {
-            $next_page_link = '';
-        }
-        if ($page > 1) {
-            $previous_page = $page - 1;
-            $previous_page_link = ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $previous_page, $pagesize);
-        } else {
-            $previous_page_link = '';
+          $totalObj = $this->parseApiBodyQuiet($api->getTotalStudyDAsByStudy($this->getStudy()->uri));
+          if (is_object($totalObj) && isset($totalObj->total) && is_numeric($totalObj->total)) {
+              $this->setListSize((int) $totalObj->total);
+          } elseif (is_numeric($totalObj)) {
+              $this->setListSize((int) $totalObj);
+          } else {
+              $this->setListSize(0);
+          }
         }
 
         // RETRIEVE ELEMENTS
-        $allItems = $api->parseObjectResponse($api->getStudyDAsByStudy($this->getStudy()->uri, $pagesize, $page),'getStudyDAsByStudy');
+        $allItems = [];
+        $usedLocalFallback = false;
+        try {
+            $totalDAs = (int) $this->getListSize();
+            $chunkSize = 500;
+            $offset = 0;
+            $iterations = 0;
+            $maxIterations = 200;
 
-        $unassociated = array_filter($allItems, function ($item) {
-          return empty($item->hasDataFile->streamUri);
-        });
+            while (true) {
+                $iterations++;
+                if ($iterations > $maxIterations) {
+                    \Drupal::logger('std')->warning('Reached max iterations while fetching DAs for study @study. Using partial results.', [
+                        '@study' => $this->getStudy()->uri,
+                    ]);
+                    break;
+                }
 
-        $totalUnassociated = count($unassociated);
-        $this->setListSize($totalUnassociated);
-        $total_pages = (int) ceil($totalUnassociated / $pagesize);
+                $limit = $chunkSize;
+                if ($totalDAs > 0) {
+                    $remaining = $totalDAs - $offset;
+                    if ($remaining <= 0) {
+                        break;
+                    }
+                    $limit = min($chunkSize, $remaining);
+                }
 
-        if (($page - 1) * $pagesize >= $totalUnassociated) {
-          $page = max(1, $page - 1);
+                $retrievedItems = $this->parseApiBodyQuiet($api->getStudyDAsByStudy($this->getStudy()->uri, $limit, $offset));
+
+                if (!is_array($retrievedItems)) {
+                    \Drupal::logger('std')->warning('Expected array from getStudyDAsByStudy for study @study, got @type. Using local DA files fallback.', [
+                        '@study' => $this->getStudy()->uri,
+                        '@type' => gettype($retrievedItems),
+                    ]);
+                    $usedLocalFallback = true;
+                    break;
+                }
+
+                $retrievedCount = count($retrievedItems);
+                if ($retrievedCount === 0) {
+                    break;
+                }
+
+                $allItems = array_merge($allItems, $retrievedItems);
+                $offset += $retrievedCount;
+
+                if ($retrievedCount < $limit) {
+                    break;
+                }
+
+                if ($totalDAs > 0 && $offset >= $totalDAs) {
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            \Drupal::logger('std')->error('Failed to fetch DAs for study @study: @message', [
+                '@study' => $this->getStudy()->uri,
+                '@message' => $e->getMessage(),
+            ]);
+            $usedLocalFallback = true;
         }
 
-        $offset = ($page - 1) * $pagesize;
-        $paged = array_slice($unassociated, $offset, $pagesize);
+        if ($usedLocalFallback) {
+            $totalLocalFiles = $this->countLocalDAFiles($studyuri);
+            $total_pages = max(1, (int) ceil($totalLocalFiles / $pagesize));
+            $page = max(1, min((int) $page, $total_pages));
+
+            $allItems = $this->buildLocalDAFallbackRows($studyuri, $page, $pagesize);
+            $this->setListSize($totalLocalFiles);
+            $this->setList($allItems);
+
+            $header = [
+                'FileName' => 'FileName',
+                'Log' => 'Log',
+                'Operations' => 'Operations',
+            ];
+
+            $data = [
+                'headers' => array_values($header),
+                'output' => $allItems,
+                'pagination' => [
+                    'first' => $page > 1 ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, 1, $pagesize) : null,
+                    'last' => $page < $total_pages ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $total_pages, $pagesize) : null,
+                    'previous' => $page > 1 ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page - 1, $pagesize) : '',
+                    'next' => $page < $total_pages ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page + 1, $pagesize) : '',
+                    'last_page' => strval($total_pages),
+                    'page' => strval($page),
+                    'items' => strval($this->getListSize()),
+                ],
+            ];
+
+            return new JsonResponse($data);
+        }
+
+                $unassociated = array_values(array_filter($allItems, function ($item) {
+                    return empty($item->hasDataFile) || empty($item->hasDataFile->streamUri);
+                }));
+
+                $totalUnassociated = count($unassociated);
+                $this->setListSize($totalUnassociated);
+                $total_pages = max(1, (int) ceil($totalUnassociated / $pagesize));
+
+                $page = max(1, min((int) $page, $total_pages));
+
+                $previous_page_link = $page > 1
+                    ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page - 1, $pagesize)
+                    : '';
+                $next_page_link = $page < $total_pages
+                    ? ListManagerEmailPageByStudy::linkDA($this->getStudy()->uri, $this->element_type, $page + 1, $pagesize)
+                    : '';
+
+                $offset = ($page - 1) * $pagesize;
+                $paged = array_slice($unassociated, $offset, $pagesize);
 
         $this->setList($paged);
 
@@ -234,6 +310,206 @@ class JsonDataController extends ControllerBase
         return new JsonResponse($data);
     }
 
+    private function parseApiBodyQuiet($response)
+    {
+        if ($response === null || $response === '') {
+            return null;
+        }
+
+        $decoded = null;
+        if (is_string($response)) {
+            $decoded = json_decode($response);
+        } elseif (is_object($response) || is_array($response)) {
+            $decoded = $response;
+        }
+
+        if (!$decoded) {
+            return null;
+        }
+
+        $body = null;
+        if (is_object($decoded) && property_exists($decoded, 'body')) {
+            $body = $decoded->body;
+        } elseif (is_array($decoded) && array_key_exists('body', $decoded)) {
+            $body = $decoded['body'];
+        } else {
+            return $decoded;
+        }
+
+        if (is_string($body)) {
+            $trimmed = trim($body);
+            if ($trimmed === '') {
+                return null;
+            }
+            if (($trimmed[0] === '{' && substr($trimmed, -1) === '}') || ($trimmed[0] === '[' && substr($trimmed, -1) === ']')) {
+                $redecoded = json_decode($trimmed);
+                return $redecoded ?: $body;
+            }
+            return $body;
+        }
+
+        return $body;
+    }
+
+    private function countLocalDAFiles($studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/da/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return 0;
+        }
+
+        $realPath = $file_system->realpath($directory);
+        if (!$realPath || !is_dir($realPath)) {
+            return 0;
+        }
+
+        $all_files = scandir($realPath) ?: [];
+        $filtered = array_filter($all_files, function ($file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            return in_array($extension, ['csv', 'xlsx']);
+        });
+
+        return count($filtered);
+    }
+
+    private function buildLocalDAFallbackRows($studyuri, $page, $pagesize)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/da/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return [];
+        }
+
+        $realPath = $file_system->realpath($directory);
+        if (!$realPath || !is_dir($realPath)) {
+            return [];
+        }
+
+        $all_files = scandir($realPath) ?: [];
+        $filtered_files = array_values(array_filter($all_files, function ($file) {
+            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+            return in_array($extension, ['csv', 'xlsx']);
+        }));
+
+        sort($filtered_files);
+        $offset = ($page - 1) * $pagesize;
+        $paginated_files = array_slice($filtered_files, $offset, $pagesize);
+
+        $rows = [];
+        foreach ($paginated_files as $file) {
+            $downloadUrl = \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/da';
+            $deleteUrl = Url::fromRoute('std.delete_da_file', [
+                'filename' => $file,
+                'studyuri' => $studyuri,
+            ])->toString();
+
+            $ingestDisabledTitle = 'Ingest (unavailable while API is offline)';
+            $uningestDisabledTitle = 'Uningest (unavailable while API is offline)';
+
+            $ingestButton = '<button type="button" disabled class="btn btn-sm btn-secondary ingest-button" title="' . Html::escape($ingestDisabledTitle) . '"><i class="fa-solid fa-down-long"></i></button>';
+            $uningestButton = '<button type="button" disabled class="btn btn-sm btn-secondary uningest-button" title="' . Html::escape($uningestDisabledTitle) . '"><i class="fa-solid fa-up-long"></i></button>';
+            $downloadButton = '<a href="#" class="btn btn-sm btn-secondary download-unassociated-url" data-download-url="' . Html::escape($downloadUrl) . '" title="Download file"><i class="fa-solid fa-download"></i></a>';
+            $deleteButton = '<a href="#" title="Delete file" class="btn btn-sm btn-secondary btn-danger delete-button" data-url="' . Html::escape($deleteUrl) . '" onclick="return false;"><i class="fa-solid fa-trash-can"></i></a>';
+
+            $operations = $ingestButton . ' ' . $uningestButton . ' ' . $downloadButton . ' ' . $deleteButton;
+
+            $rows[] = [
+                'FileName' => Html::escape($file),
+                'Log' => 'Fallback list (API unavailable)',
+                'Operations' => $operations,
+            ];
+        }
+
+        return $rows;
+    }
+
+    public function deleteDAFile($filename, $studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $safeFilename = basename((string) $filename);
+
+        if ($safeFilename === '' || $safeFilename === '.' || $safeFilename === '..') {
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid file name.',
+            ], 400);
+        }
+
+        $extension = strtolower(pathinfo($safeFilename, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['csv', 'xlsx'], true)) {
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Invalid file type.',
+            ], 400);
+        }
+
+        $directory = 'private://std/' . $decoded_studyuri . '/da/';
+        $file_path = $directory . $safeFilename;
+
+        try {
+            $file_system = \Drupal::service('file_system');
+            if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Could not access or prepare directory.',
+                ], 500);
+            }
+
+            $real_path = $file_system->realpath($file_path);
+            if (!$real_path || !file_exists($real_path)) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'File not found.',
+                    'file' => $safeFilename,
+                ], 404);
+            }
+
+            unlink($real_path);
+
+            // Best-effort cleanup of Drupal file entities that point to this URI.
+            try {
+                $storage = \Drupal::entityTypeManager()->getStorage('file');
+                $entities = $storage->loadByProperties(['uri' => $file_path]);
+                foreach ($entities as $entity) {
+                    $entity->delete();
+                }
+            }
+            catch (\Throwable $e) {
+                // Ignore cleanup errors.
+            }
+
+            $all_files = scandir($file_system->realpath($directory)) ?: [];
+            $filtered = array_filter($all_files, function ($file) {
+                $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+                return in_array($ext, ['csv', 'xlsx'], true);
+            });
+
+            $totalFiles = count($filtered);
+            $pageSize = 5;
+            $lastPage = max(1, (int) ceil($totalFiles / $pageSize));
+
+            return new JsonResponse([
+                'status' => 'success',
+                'message' => 'File deleted successfully.',
+                'file' => $safeFilename,
+                'total_files' => $totalFiles,
+                'last_page' => $lastPage,
+            ]);
+        } catch (\Exception $e) {
+            \Drupal::logger('std')->error('Error deleting DA file: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error deleting file.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     #UPDATE SESSION TABLE DA POSITION
     public function updateSessionPage(Request $request)
     {
@@ -247,6 +523,7 @@ class JsonDataController extends ControllerBase
             $session->set('da_current_page', 1);
             $session->set('pub_current_page', 1);
             $session->set('media_current_page', 1);
+            $session->set('medical_current_page', 1);
 
             switch ($elementtype) {
                 case 'publications':
@@ -255,6 +532,10 @@ class JsonDataController extends ControllerBase
 
                 case 'media':
                     $session->set('media_current_page', $page);
+                    break;
+
+                case 'medical':
+                    $session->set('medical_current_page', $page);
                     break;
 
                 case 'da':
@@ -272,27 +553,28 @@ class JsonDataController extends ControllerBase
     // ADD STUDY FORM
     public function renderAddDAForm($elementtype = 'da', $studyuri = NULL)
     {
-        if ($studyuri === NULL) {
-            // Retorne uma mensagem de erro em JSON.
-            return new JsonResponse(['status' => 'error', 'message' => t('The study URI is missing.')], 400);
-        }
+      $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+      if ($studyuri === NULL) {
+          // Retorne uma mensagem de erro em JSON.
+          return new JsonResponse(['status' => 'error', 'message' => t('The '.$preferred_study.' URI is missing.')], 400);
+      }
 
-        // Renderizar o formulário usando o formBuilder.
-        $form = \Drupal::formBuilder()->getForm('Drupal\rep\Form\AddMTForm', $elementtype, $studyuri);
+      // Renderizar o formulário usando o formBuilder.
+      $form = \Drupal::formBuilder()->getForm('Drupal\rep\Form\AddMTForm', $elementtype, $studyuri);
 
-        // Use o serviço de renderização para gerar o HTML do formulário.
-        $rendered_form = \Drupal::service('renderer')->renderPlain($form);
+      // Use o serviço de renderização para gerar o HTML do formulário.
+      $rendered_form = \Drupal::service('renderer')->renderPlain($form);
 
-        // SET USER ID AND PREVIOUS URL FOR TRACKING STORE URLS
-        $uid = \Drupal::currentUser()->id();
-        $previousUrl = \Drupal::request()->getRequestUri();
-        Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
+      // SET USER ID AND PREVIOUS URL FOR TRACKING STORE URLS
+      $uid = \Drupal::currentUser()->id();
+      $previousUrl = \Drupal::request()->getRequestUri();
+      Utils::trackingStoreUrls($uid, $previousUrl, 'rep.add_mt');
 
-        // Retorne o formulário renderizado como uma resposta HTML.
-        return new JsonResponse([
-            'status' => 'success',
-            'form' => $rendered_form,
-        ]);
+      // Retorne o formulário renderizado como uma resposta HTML.
+      return new JsonResponse([
+          'status' => 'success',
+          'form' => $rendered_form,
+      ]);
     }
 
     public function upload(Request $request, $field_name, $studyuri = NULL)
@@ -314,20 +596,12 @@ class JsonDataController extends ControllerBase
                 return new JsonResponse(['error' => 'No file uploaded or upload error.'], 400);
             }
 
-            // Obtem a extensão do arquivo.
-            $extension = strtolower($uploaded_file->getClientOriginalExtension());
-
-            // Determina a pasta de destino com base na extensão.
-            $folder = match ($extension) {
-                'csv', 'xlsx' => 'da',
-                'pdf', 'docx' => 'publications',
-                'jpg', 'jpeg', 'png', 'mp4', 'avi' => 'media',
-                default => null,
-            };
+            $originalName = (string) $uploaded_file->getClientOriginalName();
+            $folder = StudyFileTypeResolver::resolveStorageFolderFromFilename($originalName);
 
             if (!$folder) {
                 \Drupal::logger('std')->error('Unsupported file type: @type', [
-                    '@type' => $extension,
+                    '@type' => StudyFileTypeResolver::normalizeExtension($originalName),
                 ]);
                 return new JsonResponse(['error' => 'Unsupported file type.'], 400);
             }
@@ -338,10 +612,10 @@ class JsonDataController extends ControllerBase
             $file_system->prepareDirectory($directory, \Drupal\Core\File\FileSystemInterface::CREATE_DIRECTORY);
 
             // Define o caminho final do arquivo.
-            $destination = $directory . $uploaded_file->getClientOriginalName();
+            $destination = $directory . $originalName;
 
             // Move o arquivo da pasta temporária para o destino final.
-            $uploaded_file->move($file_system->realpath($directory), $uploaded_file->getClientOriginalName());
+            $uploaded_file->move($file_system->realpath($directory), $originalName);
 
             // Cria a entidade de arquivo no Drupal.
             $file = File::create([
@@ -352,7 +626,7 @@ class JsonDataController extends ControllerBase
 
             // Se o tipo for "da", adiciona a lógica adicional.
             if ($folder === 'da') {
-                $streamUri = $this->processDAFile($file, $uploaded_file->getClientOriginalName(), $studyuri);
+                $streamUri = $this->processDAFile($file, $originalName, $studyuri);
             }
 
             // Log de sucesso.
@@ -475,12 +749,18 @@ class JsonDataController extends ControllerBase
             // \Drupal::logger('debug')->debug('MT JSON: @json', ['@json' => $mtJSON]);
 
             // 4) Call API and log responses
-            $msg1 = $api->parseObjectResponse($api->datafileAdd($datafileJSON), 'datafileAdd');
+            $msg1 = $this->parseApiBodyQuiet($api->datafileAdd($datafileJSON));
             // \Drupal::logger('debug')->debug('Response datafileAdd: @resp', [
             //     '@resp' => print_r($msg1, TRUE),
             // ]);
 
-            $msg2 = $api->parseObjectResponse($api->elementAdd('da', $mtJSON), 'elementAdd');
+            $msg2 = $this->parseApiBodyQuiet($api->elementAdd('da', $mtJSON));
+
+            if ($msg1 === null || $msg2 === null) {
+                \Drupal::logger('std')->warning('DA processing completed with API fallback/null response (datafileAdd or elementAdd). file=@file', [
+                    '@file' => $filename,
+                ]);
+            }
             // \Drupal::logger('debug')->debug('Response elementAdd: @resp', [
             //     '@resp' => print_r($msg2, TRUE),
             // ]);
@@ -510,37 +790,38 @@ class JsonDataController extends ControllerBase
             // Decodifica a URI do estudo
             $decodedStudyUri = basename(base64_decode($studyuri));
 
-            // Define os diretórios com base no tipo do arquivo
+            // Define o caminho base do estudo
             $basePath = 'private://std/' . $decodedStudyUri . '/';
-            $directories = [
-                'csv' => 'da/',
-                'xlsx' => 'da/',
-                'pdf' => 'publications/',
-                'doc' => 'publications/',
-                'docx' => 'publications/',
-                'jpg' => 'media/',
-                'jpeg' => 'media/',
-                'png' => 'media/',
-                'mov' => 'media/',
-                'avi' => 'media/',
-                'mpeg' => 'media/',
-                'mp4' => 'media/',
-                'mp3' => 'media/',
-            ];
 
             // Divida o nome do arquivo base e a extensão
-            $parts = pathinfo($fileNameWithoutExtension);
-            $fileBaseName = $parts['filename']; // Parte sem a extensão
-            $extension = strtolower($parts['extension'] ?? '');
+            $originalName = trim((string) $fileNameWithoutExtension);
+            $extension = StudyFileTypeResolver::normalizeExtension($originalName);
+            if ($extension === '') {
+                return new JsonResponse([
+                    'error' => 'Invalid file name.',
+                ], 400);
+            }
 
-            if (!isset($directories[$extension])) {
+            $folder = StudyFileTypeResolver::resolveStorageFolderFromFilename($originalName);
+            if ($folder === NULL) {
                 return new JsonResponse([
                     'error' => 'Invalid file type: ' . $extension,
                 ], 400);
             }
 
+            if ($extension === 'nii.gz') {
+                $fileBaseName = preg_replace('/\.nii\.gz$/i', '', $originalName);
+            }
+            else {
+                $fileBaseName = pathinfo($originalName, PATHINFO_FILENAME);
+            }
+            $fileBaseName = trim((string) $fileBaseName);
+            if ($fileBaseName === '') {
+                $fileBaseName = 'file';
+            }
+
             // Define o diretório baseado na extensão
-            $directoryPath = $basePath . $directories[$extension];
+            $directoryPath = $basePath . $folder . '/';
 
             // Verifica ou cria o diretório
             $fileSystem = \Drupal::service('file_system');
@@ -824,6 +1105,88 @@ class JsonDataController extends ControllerBase
     }
 
     /*
+    ** MEDICAL IMAGES (OHIF FOLDER) TABLE RELATED FUNCTIONS
+    */
+    public function getMedicalImageFiles($studyuri = null, $page = 1, $pagesize = 5)
+    {
+        $session = \Drupal::service('session');
+        $page_from_session = $session->get('medical_current_page', 1);
+        $page = $page ?: $page_from_session;
+        $session->set('medical_current_page', $page);
+
+        if (!is_numeric($page) || $page < 1) {
+            $page = 1;
+        }
+
+        if (empty($studyuri) || !is_numeric($page) || !is_numeric($pagesize)) {
+            return new JsonResponse(['error' => 'Invalid parameters'], 400);
+        }
+
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/OHIF/';
+        $file_system = \Drupal::service('file_system');
+
+        if (!$file_system->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+            return new JsonResponse(['error' => 'Could not access or prepare directory.'], 500);
+        }
+
+        $all_files = scandir($file_system->realpath($directory));
+        $filtered_files = array_values(array_filter($all_files, function ($file) {
+            return StudyFileTypeResolver::isOhifFile((string) $file);
+        }));
+
+        $total_files = count($filtered_files);
+        $offset = ($page - 1) * $pagesize;
+        $paginated_files = array_slice($filtered_files, $offset, $pagesize);
+
+        $files = [];
+        foreach ($paginated_files as $file) {
+            $token = $this->buildMedicalViewerToken((string) $file);
+            $viewer_capability = $this->getMedicalViewerCapability((string) $file);
+            $encoded_studyuri = rawurlencode($studyuri);
+            $view_url = Url::fromRoute('std.view_media_file', [
+                'filename' => $file,
+                'studyuri' => $encoded_studyuri,
+                'type' => 'OHIF',
+                'token' => $token,
+            ], [
+                'absolute' => TRUE,
+            ])->toString();
+
+            $viewer_url = Url::fromRoute('std.medical_viewer', [
+                'filename' => $file,
+                'studyuri' => $encoded_studyuri,
+                'token' => $token,
+            ], [
+                'absolute' => TRUE,
+            ])->toString();
+
+            $can_visualize = (bool) ($viewer_capability['canVisualize'] ?? FALSE);
+            $preview_message = trim((string) ($viewer_capability['previewMessage'] ?? ''));
+
+            $files[] = [
+                'filename' => $file,
+                'view_url' => $view_url,
+                'viewer_url' => $viewer_url,
+                'can_visualize' => $can_visualize,
+                'preview_message' => $preview_message,
+                'delete_url' => '/delete-medical-image-file/' . $file . '/' . $studyuri,
+                'download_url' => \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode($file) . '/' . $studyuri . '/OHIF',
+            ];
+        }
+
+        return new JsonResponse([
+            'files' => $files,
+            'pagination' => [
+                'current_page' => $page,
+                'page_size' => $pagesize,
+                'total_files' => $total_files,
+                'total_pages' => ceil($total_files / $pagesize),
+            ],
+        ]);
+    }
+
+    /*
     ** DELETE MEDIA
     */
     public function deleteMediaFile($filename, $studyuri)
@@ -884,6 +1247,188 @@ class JsonDataController extends ControllerBase
     }
 
     /*
+    ** DELETE MEDICAL IMAGE
+    */
+    public function deleteMedicalImageFile($filename, $studyuri)
+    {
+        $decoded_studyuri = basename(base64_decode($studyuri));
+        $directory = 'private://std/' . $decoded_studyuri . '/OHIF/';
+        $file_path = $directory . $filename;
+
+        try {
+            $file_system = \Drupal::service('file_system');
+            $real_path = $file_system->realpath($file_path);
+            $directory_realpath = $file_system->realpath($directory);
+
+            if (file_exists($real_path)) {
+                unlink($real_path);
+
+                $remaining_files = [];
+                if ($directory_realpath && is_dir($directory_realpath)) {
+                    $remaining_files = array_filter(scandir($directory_realpath), function ($file) {
+                        return StudyFileTypeResolver::isOhifFile((string) $file);
+                    });
+                }
+
+                $totalFiles = count($remaining_files);
+                $pageSize = 5;
+                $lastPage = max(1, (int) ceil($totalFiles / $pageSize));
+
+                return new JsonResponse([
+                    'status' => 'success',
+                    'message' => 'File deleted successfully.',
+                    'file' => $filename,
+                    'total_files' => $totalFiles,
+                    'last_page' => $lastPage,
+                ]);
+            } else {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'File not found.',
+                    'file' => $filename,
+                ], 404);
+            }
+        } catch (\Exception $e) {
+            \Drupal::logger('std')->error('Error deleting file: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error deleting file.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function supportsEmbeddedMedicalViewer(string $filename): bool
+    {
+        $capability = $this->getMedicalViewerCapability($filename);
+        return (bool) ($capability['canVisualize'] ?? FALSE);
+    }
+
+    private function getMedicalViewerCapability(string $filename): array
+    {
+        $extension = StudyFileTypeResolver::normalizeExtension($filename);
+
+        if (in_array($extension, ['dcm', 'dcim', 'dicom'], TRUE)) {
+            return [
+                'canVisualize' => TRUE,
+                'statusMessage' => 'Rendering in embedded Drupal viewer.',
+                'fallbackMessage' => 'If rendering fails, open the original file or download it.',
+                'previewMessage' => '',
+            ];
+        }
+
+        if (in_array($extension, ['nii', 'nii.gz'], TRUE)) {
+            return [
+                'canVisualize' => FALSE,
+                'statusMessage' => 'NIfTI preview is not available in embedded viewer.',
+                'fallbackMessage' => 'NIfTI files are not previewed in the embedded viewer yet. Open the original file or download it.',
+                'previewMessage' => 'NIfTI preview is not available in embedded viewer yet.',
+            ];
+        }
+
+        return [
+            'canVisualize' => FALSE,
+            'statusMessage' => 'Preview unavailable for this file type.',
+            'fallbackMessage' => 'This file type cannot be previewed in the embedded viewer. Open the original file or download it.',
+            'previewMessage' => 'Preview unavailable for this file type.',
+        ];
+    }
+
+    private function buildMedicalViewerToken(string $filename): string
+    {
+        return hash_hmac('sha256', $filename, '1357924680');
+    }
+
+    public function medicalViewerPage($filename, $studyuri, $token = null)
+    {
+        if (empty($studyuri) || empty($filename)) {
+            return new JsonResponse(['error' => 'Missing parameters.'], 400);
+        }
+
+        $expected_token = $this->buildMedicalViewerToken((string) $filename);
+        if ($token === null || !hash_equals($expected_token, (string) $token)) {
+            return new JsonResponse(['error' => 'Access denied.'], 403);
+        }
+
+        $decoded_studyuri = base64_decode(rawurldecode((string) $studyuri));
+        if ($decoded_studyuri === FALSE || trim((string) $decoded_studyuri) === '') {
+            return new JsonResponse(['error' => 'Invalid study URI.'], 400);
+        }
+
+        $safe_study_key = basename((string) $decoded_studyuri);
+        $directory = 'private://std/' . $safe_study_key . '/OHIF/';
+        $file_system = \Drupal::service('file_system');
+        $real_path = $file_system->realpath($directory . $filename);
+
+        if (!$real_path || !file_exists($real_path)) {
+            return new JsonResponse(['error' => 'File not found.'], 404);
+        }
+
+        $view_url = Url::fromRoute('std.view_media_file', [
+            'filename' => $filename,
+            'studyuri' => rawurlencode((string) $studyuri),
+            'type' => 'OHIF',
+            'token' => $expected_token,
+        ], [
+            'absolute' => TRUE,
+        ])->toString();
+
+        $download_url = \Drupal::request()->getBaseUrl() . '/std/download-file/' . base64_encode((string) $filename) . '/' . $studyuri . '/OHIF';
+        $viewer_capability = $this->getMedicalViewerCapability((string) $filename);
+        $can_visualize = (bool) ($viewer_capability['canVisualize'] ?? FALSE);
+        $status_message = (string) ($viewer_capability['statusMessage'] ?? 'Preview unavailable for this file type.');
+        $fallback_message = (string) ($viewer_capability['fallbackMessage'] ?? 'This file type cannot be previewed in the embedded viewer. Open the original file or download it.');
+
+        $markup = '<section id="std-medical-viewer" class="std-medical-viewer" data-std-viewer-page="1">'
+            . '<div id="std-medical-viewer-canvas-wrap" class="std-medical-viewer-canvas-wrap' . ($can_visualize ? '' : ' d-none') . '" tabindex="0">'
+            . '<div class="std-medical-viewer-overlay">'
+            . '<div class="std-medical-viewer-file-chip" title="' . Html::escape((string) $filename) . '">File: ' . Html::escape((string) $filename) . '</div>'
+            . '<div id="std-medical-viewer-toolbar" class="std-medical-viewer-toolbar' . ($can_visualize ? '' : ' d-none') . '">'
+            . '<button type="button" id="std-medical-viewer-zoom-out" class="btn btn-sm btn-outline-secondary" aria-label="Zoom out">-</button>'
+            . '<button type="button" id="std-medical-viewer-zoom-in" class="btn btn-sm btn-outline-secondary" aria-label="Zoom in">+</button>'
+            . '<button type="button" id="std-medical-viewer-reset" class="btn btn-sm btn-outline-secondary" aria-label="Reset view">Reset</button>'
+            . '<span id="std-medical-viewer-zoom-label" class="std-medical-viewer-zoom-label" aria-live="polite">100%</span>'
+            . '<span id="std-medical-viewer-mode-chip" class="std-medical-viewer-mode-chip d-none" aria-live="polite"></span>'
+            . '<div id="std-medical-viewer-frame-controls" class="std-medical-viewer-frame-controls d-none">'
+            . '<button type="button" id="std-medical-viewer-frame-prev" class="btn btn-sm btn-outline-secondary" aria-label="Previous layer">&lsaquo;</button>'
+            . '<span id="std-medical-viewer-frame-label" class="std-medical-viewer-frame-label" aria-live="polite">Layer 1/1</span>'
+            . '<button type="button" id="std-medical-viewer-frame-next" class="btn btn-sm btn-outline-secondary" aria-label="Next layer">&rsaquo;</button>'
+            . '</div>'
+            . '</div>'
+            . '</div>'
+            . '<canvas id="std-medical-viewer-canvas" aria-label="Rendered medical image"></canvas>'
+            . '<div id="std-medical-viewer-status" class="std-medical-viewer-status" role="status">' . Html::escape($status_message) . '</div>'
+            . '</div>'
+            . '<div id="std-medical-viewer-fallback" class="alert alert-warning mt-3' . ($can_visualize ? ' d-none' : '') . '" role="alert">'
+            . '<p id="std-medical-viewer-fallback-message" class="mb-2">' . Html::escape($fallback_message) . '</p>'
+            . '<div class="d-flex flex-wrap gap-2">'
+            . '<a class="btn btn-sm btn-secondary" href="' . Html::escape($view_url) . '" target="_blank" rel="noopener noreferrer">Open Original File</a>'
+            . '<a class="btn btn-sm btn-outline-secondary" href="' . Html::escape($download_url) . '">Download</a>'
+            . '</div>'
+            . '</div>'
+            . '</section>';
+
+        return [
+            '#type' => 'markup',
+            '#markup' => $markup,
+            '#allowed_tags' => ['section', 'p', 'div', 'canvas', 'a', 'button', 'span'],
+            '#attached' => [
+                'library' => ['std/medical_viewer'],
+                'drupalSettings' => [
+                    'stdMedicalViewer' => [
+                        'fileUrl' => $view_url,
+                        'downloadUrl' => $download_url,
+                        'filename' => (string) $filename,
+                        'canVisualize' => $can_visualize,
+                        'fallbackMessage' => $fallback_message,
+                    ],
+                ],
+            ],
+            '#cache' => ['max-age' => 0],
+        ];
+    }
+
+    /*
     ** VIEW FILES
     */
     public function viewFile($filename, $studyuri, $type, $token = null)
@@ -904,18 +1449,18 @@ class JsonDataController extends ControllerBase
             return new JsonResponse(['error' => 'File not found.'], 404);
         }
 
+        // Validate signed token for all inline file views.
+        $expected_token = $this->buildMedicalViewerToken((string) $filename);
+        if ($token === null || $token !== $expected_token) {
+            \Drupal::logger('custom_module')->warning('Access denied for file: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
+            return new JsonResponse(['error' => 'Access denied.'], 403);
+        }
+
         // Identificar o tipo MIME do arquivo
         $mime_type = mime_content_type($real_path);
 
         // Tratamento especial para ficheiros Word
         if (in_array($mime_type, ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])) {
-            // Validar o token
-            $expected_token = hash_hmac('sha256', $filename, '1357924680'); // Substituir pela chave segura
-            if ($token === null || $token !== $expected_token) {
-                \Drupal::logger('custom_module')->warning('Access denied for file: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));
-                return new JsonResponse(['error' => 'Access denied.'], 403);
-            }
-
             // Gerar um link público temporário para o Microsoft Viewer
             $url = \Drupal::service('file_url_generator')->generateAbsoluteString("private://std/$decoded_studyuri/$type/$filename");
             $viewer_url = 'https://view.officeapps.live.com/op/embed.aspx?src=' . urlencode($url);
@@ -932,6 +1477,13 @@ class JsonDataController extends ControllerBase
             \Symfony\Component\HttpFoundation\ResponseHeaderBag::DISPOSITION_INLINE,
             $filename
         );
+
+        if (strcasecmp((string) $type, 'OHIF') === 0) {
+            $response->headers->set('Access-Control-Allow-Origin', '*');
+            $response->headers->set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            $response->headers->set('Access-Control-Allow-Headers', 'Origin, Range, Content-Type, Accept');
+            $response->headers->set('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+        }
 
         // Registrar o log de acesso ao arquivo
         \Drupal::logger('custom_module')->info('File served: ' . htmlspecialchars($filename, ENT_QUOTES, 'UTF-8'));

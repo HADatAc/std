@@ -37,6 +37,8 @@ class AddStudyObjectForm extends FormBase {
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['library'][] = 'core/drupal.dialog';
 
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+
     # SET CONTEXT
     $uri=base64_decode($studyobjectcollectionuri);
 
@@ -76,13 +78,13 @@ class AddStudyObjectForm extends FormBase {
 
     $form['studyobject_study'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Study'),
+      '#title' => $this->t(ucfirst($preferred_study)),
       '#default_value' => $study,
       '#disabled' => TRUE,
     ];
     $form['studyobject_soc'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Study Object Collection (SOC)'),
+      '#title' => $this->t(ucfirst($preferred_study).' Object Collection (SOC)'),
       '#default_value' => $soc,
       '#disabled' => TRUE,
     ];
@@ -179,10 +181,10 @@ class AddStudyObjectForm extends FormBase {
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('studyobject_original_id')) < 1) {
-        $form_state->setErrorByName('studyobject_original_id', $this->t('Please enter an original ID for the Study Object'));
+        $form_state->setErrorByName('studyobject_original_id', $this->t('Please enter an original ID for the '.ucfirst($preferred_study).' Object'));
       }
       if(strlen($form_state->getValue('studyobject_entity')) < 1) {
-        $form_state->setErrorByName('studyobject_entity', $this->t('Please enter a valid entity for the Study Object'));
+        $form_state->setErrorByName('studyobject_entity', $this->t('Please enter a valid entity for the '.ucfirst($preferred_study).' Object'));
       }
     }
   }
@@ -194,6 +196,7 @@ class AddStudyObjectForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
       self::backurl();
@@ -228,14 +231,14 @@ class AddStudyObjectForm extends FormBase {
       $api = \Drupal::service('rep.api_connector');
       $message = $api->parseObjectResponse($api->elementAdd('studyobject',$studyObjectJSON),'elementAdd');
       if ($message != null) {
-        \Drupal::messenger()->addMessage(t("Study Object has been added successfully."));
+        \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Object has been added successfully."));
       } else {
-        \Drupal::messenger()->addError(t("Study Object failed to be added."));
+        \Drupal::messenger()->addError(t(ucfirst($preferred_study)." Object failed to be added."));
       }
       self::backurl();
       return;
     } catch(\Exception $e) {
-      \Drupal::messenger()->addError(t("An error occurred while adding a Study Object: ".$e->getMessage()));
+      \Drupal::messenger()->addError(t("An error occurred while adding a ".ucfirst($preferred_study)." Object: ".$e->getMessage()));
       self::backurl();
       return;
     }

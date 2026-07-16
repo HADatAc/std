@@ -1,0 +1,8 @@
+name: STD Test Support
+type: module
+description: Test support module for Study Search functional tests.
+package: Testing
+core_version_requirement: ^9 || ^10
+dependencies:
+  - drupal:std
+  - drupal:rep

@@ -18,6 +18,17 @@ std.search_option:
   #requirements:
    #_permission: 'access content'
 
+std.search_studies_variables:
+  title: Search Study
+  description: Search studies by variables and components
+  route_name: std.search_studies_variables
+  parent: std.top_level
+  menu_name: main
+  enabled: 1
+  weight: 0
+  requirements:
+    _permission: 'access content'
+
 std.manage_top_level:
   title: Manage Elements
   description: Manage STD Elements
@@ -127,12 +138,12 @@ std.manage_studies:
     _permission: 'access content'
     _role: 'authenticated'
 
-std.manage_processstems :
+std.manage_workflowstems:
   title: Manage Workflow Stems
   description: Manage Workflow Stems
   route_name: std.select_study
   route_parameters:
-    elementtype: 'processstem'
+    elementtype: 'workflowstem'
     page: '1'
     pagesize: '9'
   parent: std.manage_top_level
@@ -142,12 +153,12 @@ std.manage_processstems :
     _permission: 'access content'
     _role: 'authenticated'
 
-std.manage_process :
-  title: Manage Processes
-  description: Manage Processes
+std.manage_workflow:
+  title: Manage Workflows
+  description: Manage Workflows
   route_name: std.select_study
   route_parameters:
-    elementtype: 'process'
+    elementtype: 'workflow'
     page: '1'
     pagesize: '9'
   parent: std.manage_top_level

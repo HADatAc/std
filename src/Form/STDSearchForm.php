@@ -65,6 +65,9 @@ class STDSearchForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
   $form['#attached']['library'][] = 'std/std_icons';
 
+  $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+  $preferred_process = \Drupal::config('rep.settings')->get('preferred_process') ?? 'workflow';
+
   // GET URL INFO
   $request = \Drupal::request();
   $pathInfo = $request->getPathInfo();
@@ -94,13 +97,13 @@ class STDSearchForm extends FormBase {
 
   $element_types = [
     'da' => ['label' => 'DAs', 'image' => 'white/da_placeholder.png'],
-    'study' => ['label' => 'Studies', 'image' => 'white/study_placeholder.png'],
-    'studyrole' => ['label' => 'Study Roles', 'image' => 'white/studyrole_placeholder.png'],
+    'study' => ['label' => ucfirst($preferred_study).'s', 'image' => 'white/study_placeholder.png'],
+    'studyrole' => ['label' => ucfirst($preferred_study).' Roles', 'image' => 'white/studyrole_placeholder.png'],
     'virtualcolumn' => ['label' => 'Virtual Columns', 'image' => 'white/virtualcolumn_placeholder.png'],
     'studyobjectcollection' => ['label' => 'Object Collections', 'image' => 'white/studyobjectcollection_placeholder.png'],
-    'studyobject' => ['label' => 'Study Objects', 'image' => 'white/studyobject_placeholder.png'],
-    'processstem' => ['label' => 'Workflow Stems', 'image' => 'white/processstem_placeholder.png'],
-    'process' => ['label' => 'Processes', 'image' => 'white/process_placeholder.png'],
+    'studyobject' => ['label' => ucfirst($preferred_study).' Objects', 'image' => 'white/studyobject_placeholder.png'],
+    'workflowstem' => ['label' => ucfirst($preferred_process).' Stems', 'image' => 'white/workflowstem_placeholder.png'],
+    'workflow' => ['label' => ucfirst($preferred_process).'s', 'image' => 'white/workflow_placeholder.png'],
   ];
 
   foreach ($element_types as $type => $info) {
@@ -199,3 +202,4 @@ class STDSearchForm extends FormBase {
   $form_state->setValue('search_keyword', '');
 }
 }
+

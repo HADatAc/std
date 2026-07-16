@@ -64,18 +64,16 @@ class Study {
       ])->toString());
 
       $manage_elements = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',        
+        'previousurl' => $safe_previousUrl_str,
         'currenturl' => $manage_elements_str,
         'currentroute' => 'std.manage_study_elements',
       ]);
 
       // Link para Visualizar
-      $view_study_str = base64_encode(Url::fromRoute('rep.describe_element', [
-        'elementuri' => $studyUriEncoded,
-      ])->toString());
+      $view_study_str = base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE));
 
       $view_study = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',
+        'previousurl' => $safe_previousUrl_str,
         'currenturl' => $view_study_str,
         'currentroute' => 'rep.describe_element',
       ]);
@@ -86,7 +84,7 @@ class Study {
       ])->toString());
 
       $edit_study = Url::fromRoute('rep.back_url', [
-        'previousurl' => 'std.manage_study_elements',
+        'previousurl' => $safe_previousUrl_str,
         'currenturl' => $edit_study_str,
         'currentroute' => 'std.edit_study',
       ]);
@@ -157,7 +155,7 @@ class Study {
       $root_url = \Drupal::request()->getBaseUrl();
       $encodedUri = rawurlencode(rawurlencode($element->uri));
       $output[$element->uri] = [
-        'element_uri' => t('<a target="_new" href="'.$root_url.REPGUI::DESCRIBE_PAGE.base64_encode($uri).'">'.$uri.'</a>'),
+        'element_uri' => Markup::create(Utils::describeAnchor((string) ($element->uri ?? ''), (string) $uri)),
         'element_short_name' => t($label),
         'element_name' => t($title),
         'element_n_roles' => $element->totalStudyRoles,
@@ -193,7 +191,35 @@ class Study {
       $label = $element->label ?? '';
       $title = $element->title ?? '';
       $pi = is_object($element->pi) ? $element->pi->name : ($element->pi ?? '');
-      $ins = is_object($element->institution) ? $element->institution->name : ($element->institution ?? '');
+      $ins = '';
+      $insUri = '';
+      if (isset($element->institution)) {
+        if (is_object($element->institution)) {
+          $ins = (string) ($element->institution->name ?? ($element->institution->label ?? ''));
+          $insUri = (string) ($element->institution->uri ?? ($element->institutionUri ?? ''));
+        }
+        elseif (is_string($element->institution)) {
+          $insUri = trim((string) $element->institution);
+        }
+      }
+      if ($insUri === '' && isset($element->institutionUri) && is_string($element->institutionUri)) {
+        $insUri = trim((string) $element->institutionUri);
+      }
+      if ($ins === '' && $insUri !== '') {
+        try {
+          $api = \Drupal::service('rep.api_connector');
+          $org = $api->parseObjectResponse($api->getUri($insUri), 'getUri');
+          if (is_object($org)) {
+            $ins = (string) ($org->name ?? ($org->label ?? $insUri));
+          }
+          else {
+            $ins = $insUri;
+          }
+        }
+        catch (\Throwable $e) {
+          $ins = $insUri;
+        }
+      }
       $desc = $element->comment ?? '';
 
       // Build the outer container for the card.
@@ -344,7 +370,7 @@ class Study {
         // }
 
         // View link.
-        $view_study_str = rtrim(strtr(base64_encode(Url::fromRoute('rep.describe_element', ['elementuri' => $studyUriEncoded])->toString()), '+/', '-_'), '=');
+        $view_study_str = rtrim(strtr(base64_encode(Utils::describeHref((string) ($element->uri ?? ''), [], FALSE)), '+/', '-_'), '=');
         $view_study = Url::fromRoute('rep.back_url', [
           'previousurl' => $safe_previousUrl_str,
           'currenturl' => $view_study_str,

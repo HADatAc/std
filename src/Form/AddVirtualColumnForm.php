@@ -44,6 +44,7 @@ class AddVirtualColumnForm extends FormBase {
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL, $fixstd = NULL) {
 
     $api = \Drupal::service('rep.api_connector');
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     // HANDLE STUDYURI AND STUDY, IF ANY
     if ($studyuri != NULL) {
@@ -54,7 +55,7 @@ class AddVirtualColumnForm extends FormBase {
         $this->setStudyUri($studyuri_decoded);
         $study = $api->parseObjectResponse($api->getUri($this->getStudyUri()),'getUri');
         if ($study == NULL) {
-          \Drupal::messenger()->addMessage(t("Failed to retrieve Study."));
+          \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
           self::backUrl();
           return;
         } else {
@@ -73,14 +74,14 @@ class AddVirtualColumnForm extends FormBase {
     if ($fixstd == 'T') {
       $form['virtualcolumn_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#disabled' => TRUE,
       ];
     } else {
       $form['virtualcolumn_study'] = [
         '#type' => 'textfield',
-        '#title' => $this->t('Study'),
+        '#title' => $this->t(ucfirst($preferred_study)),
         '#default_value' => $study,
         '#autocomplete_route_name' => 'std.study_autocomplete',
       ];
@@ -122,13 +123,14 @@ class AddVirtualColumnForm extends FormBase {
     $submitted_values = $form_state->cleanValues()->getValues();
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
       if(strlen($form_state->getValue('virtualcolumn_soc_reference')) < 1) {
         $form_state->setErrorByName('virtualcolumn_soc_reference', $this->t('Please enter a valid SOC Reference for Virtual Column'));
       }
       if(strlen($form_state->getValue('virtualcolumn_study')) < 1) {
-        $form_state->setErrorByName('virtualcolumn_study', $this->t('Please enter a valid study for the Virtual Column'));
+        $form_state->setErrorByName('virtualcolumn_study', $this->t('Please enter a valid '.$preferred_study.' for the Virtual Column'));
       }
     }
   }

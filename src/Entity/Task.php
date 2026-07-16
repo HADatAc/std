@@ -9,6 +9,7 @@ use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\Core\Url;
 use Drupal\Core\Link;
 use Drupal\Component\Utility\Html;
+use Drupal\Core\Render\Markup;
 
 class Task {
 
@@ -57,15 +58,89 @@ class Task {
     // 2) Normalize each item via the API so we have an array of plain arrays.
     $api    = \Drupal::service('rep.api_connector');
     $parsed = [];
-    foreach ($list as $item) {
-      $result = $api->parseObjectResponse($api->getUri($item), 'getUri');
-      if (is_array($result)) {
-        foreach ($result as $one) {
-          $parsed[] = is_object($one) ? (array) $one : $one;
+    $rows = [];
+
+    // Fast path: fetch the whole process task graph in ONE call (the hardened
+    // bulk endpoint) and index it by URI, instead of an N+1 getUri() per
+    // sub-task (which is what made the "Sub-Tasks" tab slow). Any URI the bulk
+    // result does not cover still falls back to a per-item getUri() below.
+    $taskMap = [];
+    $decodedProcess = base64_decode($processuri, TRUE);
+    if ($decodedProcess === FALSE || $decodedProcess === '') {
+      $decodedProcess = $processuri;
+    }
+    if (strpos((string) $decodedProcess, 'http') === 0 && \Drupal::hasService('ctt.hasco_client')) {
+      try {
+        foreach (\Drupal::service('ctt.hasco_client')->getTasksByProcess($decodedProcess) as $t) {
+          if (is_object($t)) {
+            $t = (array) $t;
+          }
+          $u = is_array($t) ? trim((string) ($t['uri'] ?? $t['hasURI'] ?? '')) : '';
+          if ($u === '') {
+            continue;
+          }
+          // The bulk node omits the resolved type label; derive it from typeUri.
+          if (empty($t['typeLabel']) && !empty($t['typeUri'])) {
+            $t['typeLabel'] = preg_replace('/^.*[#\/]/', '', (string) $t['typeUri']);
+          }
+          $taskMap[$u] = $t;
         }
       }
-      else {
-        $parsed[] = is_object($result) ? (array) $result : $result;
+      catch (\Throwable $e) {
+        $taskMap = [];
+      }
+    }
+
+    foreach ($list as $item) {
+      $item_uri = is_object($item)
+        ? ($item->uri ?? NULL)
+        : (is_array($item) ? ($item['uri'] ?? NULL) : $item);
+
+      if (!is_string($item_uri) || trim($item_uri) === '') {
+        continue;
+      }
+
+      // Prefer the pre-fetched bulk entry (no per-item API round-trip).
+      if (isset($taskMap[$item_uri])) {
+        $parsed[] = $taskMap[$item_uri];
+        continue;
+      }
+
+      $raw_result = $api->getUri($item_uri);
+
+      $body = NULL;
+      if (is_string($raw_result)) {
+        $decoded = json_decode($raw_result);
+        if (is_object($decoded) && !empty($decoded->isSuccessful)) {
+          $body = $decoded->body ?? NULL;
+        }
+      }
+      elseif (is_object($raw_result)) {
+        if (property_exists($raw_result, 'isSuccessful')) {
+          if (!empty($raw_result->isSuccessful)) {
+            $body = $raw_result->body ?? NULL;
+          }
+        }
+        else {
+          $body = $raw_result;
+        }
+      }
+      elseif (is_array($raw_result)) {
+        $body = $raw_result;
+      }
+
+      if (is_array($body)) {
+        foreach ($body as $one) {
+          if (is_object($one)) {
+            $parsed[] = (array) $one;
+          }
+          elseif (is_array($one)) {
+            $parsed[] = $one;
+          }
+        }
+      }
+      elseif (is_object($body)) {
+        $parsed[] = (array) $body;
       }
     }
 
@@ -95,7 +170,6 @@ class Task {
       }
       // --- a) Extract fields with safe defaults ---
       $uri_raw       = $element['uri'] ?? '';
-      $namespacedUri = Utils::namespaceUri($element['uri']);
       $label         = $element['label'] ?? '';
       $lang_code     = $element['hasLanguage'] ?? NULL;
       $taskType      = $element['typeLabel'] ?? '';
@@ -147,7 +221,7 @@ class Task {
 
       // --- b) Build the “Edit” link ---
       $edit_url = Url::fromRoute('std.edit_task', [
-        'processuri' => $processuri,
+        'workflowuri' => $processuri,
         'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
         'taskuri'    => base64_encode($uri_raw),
       ])->toString();
@@ -158,7 +232,7 @@ class Task {
 
       $encoded = base64_encode($uri_raw);
       $delete_url = Url::fromRoute('std.delete_subtask', [
-          'processuri' => $processuri,
+          'workflowuri' => $processuri,
           'state'      => $element['typeUri'] === VSTOI::ABSTRACT_TASK ? 'tasks':'init',
           'parenttaskuri' => base64_encode($element['hasSupertaskUri']),
           'taskuri'    => base64_encode($uri_raw)
@@ -185,12 +259,7 @@ class Task {
       // --- e) Assemble the full row render array ---
       $rows[] = [
         'data' => [
-          'element_uri'             => t(
-            '<a target="_new" href=":link">'.UTILS::namespaceUri($element['uri']) ?? ''.'</a>',
-            [
-              ':link'  => $root_url . REPGUI::DESCRIBE_PAGE . base64_encode($namespacedUri)
-            ]
-          ),
+          'element_uri'             => Markup::create(Utils::describeAnchor((string) ($element['uri'] ?? ''), (string) UTILS::namespaceUri($element['uri'] ?? ''))),
           'element_name'            => $label,
           'element_number'          => $delta + 1, // 1-based index
           'element_tasktype'        => $taskType,
@@ -219,7 +288,7 @@ class Task {
     return [
       'output'        => $rows,
       'disabled_rows' => array_fill_keys($disabled_rows, TRUE),
-      'total_count'   => count($parsed),
+      'total_count'   => count($rows),
     ];
   }
 

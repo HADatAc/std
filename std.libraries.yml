@@ -10,25 +10,45 @@ std_js_css:
     - core/jquery.once
     - core/drupalSettings
 json_table:
-  version: 1.x
+  version: 1.5
+  css:
+    theme:
+      css/json_table.css: {}
   js:
     js/json_table.js: {}
   dependencies:
     - core/jquery
+    - core/drupal
+    - core/once
+    - core/drupalSettings
+    - std/medical_viewer
 
-std_process:
+medical_viewer:
+  version: 1.3.0
+  css:
+    theme:
+      css/medical_viewer.css: {}
+  js:
+    js/vendor/dicomParser.min.js: {}
+    js/medical_viewer.js: {}
+  dependencies:
+    - core/drupal
+    - core/once
+    - core/drupalSettings
+
+std_workflow:
   version: 1.x
   js:
-    js/std_process.js: {}
+    js/std_workflow.js: {}
   dependencies:
     - core/jquery
     - core/drupal
     - core/drupal.dialog
 
-std_processstem:
+std_workflowstem:
   version: 1.x
   js:
-    js/std_processstem.js: {}
+    js/std_workflowstem.js: {}
   dependencies:
     - core/jquery
     - core/drupal
@@ -46,3 +66,15 @@ std_icons:
   css:
     theme:
       css/std_icons.css: {}
+
+study_variable_search:
+  version: 1.x
+  css:
+    theme:
+      css/study_variable_search.css: {}
+  js:
+    js/study_variable_search.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/once

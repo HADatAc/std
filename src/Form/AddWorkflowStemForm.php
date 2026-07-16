@@ -1,0 +1,559 @@
+<?php
+
+namespace Drupal\std\Form;
+
+use Drupal\Core\Form\FormBase;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Drupal\rep\Constant;
+use Drupal\rep\Utils;
+use Drupal\rep\Entity\Tables;
+use Drupal\rep\Vocabulary\VSTOI;
+use Drupal\file\Entity\File;
+use Drupal\Core\Render\Markup;
+
+class AddWorkflowStemForm extends FormBase {
+
+  protected $workflowstemUri;
+
+  public function setWorkflowStemUri() {
+    $this->workflowstemUri = Utils::uriGen('workflowstem');
+  }
+
+  public function getWorkflowStemUri() {
+    return $this->workflowstemUri;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getFormId() {
+    return 'add_workflowstem_form';
+  }
+
+  protected $sourceWorkflowStemUri;
+
+  protected $sourceWorkflowStem;
+
+  public function getSourceWorkflowStemUri() {
+    return $this->sourceWorkflowStemUri;
+  }
+
+  public function setSourceWorkflowStemUri($uri) {
+    return $this->sourceWorkflowStemUri = $uri;
+  }
+
+  public function getSourceWorkflowStem() {
+    return $this->sourceWorkflowStem;
+  }
+
+  public function setSourceWorkflowStem($obj) {
+    return $this->sourceWorkflowStem = $obj;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function buildForm(array $form, FormStateInterface $form_state, $sourceworkflowstemuri = NULL) {
+
+    // Check if the workflowstem URI already exists in the form state.
+    // If not, generate a new URI and store it in the form state.
+    if (!$form_state->has('workflowstem_uri')) {
+      $this->setWorkflowStemUri();
+      $form_state->set('workflowstem_uri', $this->getWorkflowStemUri());
+    }
+    else {
+      // Retrieve the persisted URI from form state.
+      $this->workflowstemUri = $form_state->get('workflowstem_uri');
+    }
+
+    // MODAL
+    $form['#attached']['library'][] = 'rep/rep_modal';
+    $form['#attached']['library'][] = 'core/drupal.dialog';
+    $form['#attached']['library'][] = 'std/std_workflowstem';
+
+    // Media viewer modal (images + PDFs).
+    $form['#attached']['library'][] = 'rep/pdfjs';
+    $form['#attached']['library'][] = 'rep/webdoc_modal';
+    $form['#attached']['drupalSettings']['webdoc_modal'] = [
+      'baseUrl' => \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBaseUrl(),
+    ];
+
+    // ESTABLISH API SERVICE
+    $api = \Drupal::service('rep.api_connector');
+
+    // HANDLE SOURCE WORKFLOW STEM,  IF ANY
+    $sourceuri = $sourceworkflowstemuri;
+    $this->setSourceWorkflowStemUri($sourceuri);
+
+    $tables = new Tables;
+    $languages = $tables->getLanguages();
+    $derivations = $tables->getGenerationActivities();
+
+    if ($sourceuri === 'DERIVED') unset($derivations[Constant::WGB_ORIGINAL]);
+
+    //SELECT ONE
+    if ($languages)
+      $languages = ['' => $this->t('Select language please')] + $languages;
+    if ($derivations)
+      $derivations = ['' => $this->t('Select derivation please')] + $derivations;
+
+    $sourceContent = '';
+    if ($this->getSourceWorkflowStem() != NULL) {
+      $sourceContent = Utils::fieldToAutocomplete($this->getSourceWorkflowStem()->uri,$this->getSourceWorkflowStem()->hasContent);
+    }
+
+    $form['workflowstem_type'] = [
+      'top' => [
+        '#type' => 'markup',
+        '#markup' => '<div class="pt-3 col border border-white">',
+      ],
+      'main' => [
+        '#type' => 'textfield',
+        '#title' => $sourceuri === 'EMPTY' ? $this->t('Parent Type') : $this->t('Derive From'),
+        '#name' => 'workflowstem_type',
+        '#default_value' => '',
+        '#id' => 'workflowstem_type',
+        '#parents' => ['workflowstem_type'],
+        '#attributes' => [
+          'class' => ['open-tree-modal'],
+          'data-dialog-type' => 'modal',
+          'data-dialog-options' => json_encode(['width' => 800]),
+          'data-url' => Url::fromRoute('rep.tree_form', [
+            'mode' => 'modal',
+            'elementtype' => 'workflowstem',
+          ], ['query' => ['field_id' => 'workflowstem_type']])->toString(),
+          'data-field-id' => 'workflowstem_type',
+          'data-elementtype' => 'workflowstem',
+          'autocomplete' => 'off',
+        ],
+      ],
+      'bottom' => [
+        '#type' => 'markup',
+        '#markup' => '</div>',
+      ],
+    ];
+    $form['workflowstem_content'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Name'),
+    ];
+    $form['workflowstem_language'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Language'),
+      '#options' => $languages,
+      '#default_value' => 'en',
+      '#attributes' => [
+        'id' => 'workflowstem_language'
+      ]
+    ];
+    $form['workflowstem_version_hidden'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Version'),
+      '#default_value' => '1',
+      '#disabled' => TRUE,
+    ];
+    $form['workflowstem_version'] = [
+      '#type' => 'hidden',
+      '#value' => '1',
+    ];
+    $form['workflowstem_description'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Description'),
+    ];
+
+    $form['workflowstem_was_generated_by'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Was Generated By'),
+      '#options' => $derivations,
+      '#default_value' => Constant::WGB_ORIGINAL,
+      '#disabled' => $sourceuri === 'EMPTY' ? true:false,
+      '#attributes' => [
+        'id' => 'workflowstem_was_generated_by'
+      ]
+    ];
+
+    // Add a hidden field to persist the workflowstem URI between form rebuilds.
+    $form['workflowstem_uri'] = [
+      '#type' => 'hidden',
+      '#value' => $this->workflowstemUri,
+    ];
+
+    // Add a select box to choose between URL and Upload.
+    $form['workflowstem_image_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Image Type'),
+      '#options' => [
+        '' => $this->t('Select Image Type'),
+        'url' => $this->t('URL'),
+        'upload' => $this->t('Upload'),
+      ],
+      '#default_value' => '',
+    ];
+
+    // The textfield for entering a URL.
+    // It is only visible when the select box value is 'url'.
+    $form['workflowstem_image_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Image'),
+      '#attributes' => [
+        'placeholder' => 'http://',
+      ],
+      '#states' => [
+        'visible' => [
+          ':input[name="workflowstem_image_type"]' => ['value' => 'url'],
+        ],
+      ],
+    ];
+
+    // Because File Upload Path (use the persisted workflowstem URI for file uploads)
+    $modUri = (explode(":/", utils::namespaceUri($this->workflowstemUri)))[1];
+    $form['workflowstem_image_upload_wrapper'] = [
+      '#type' => 'container',
+      '#states' => [
+        'visible' => [
+          ':input[name="workflowstem_image_type"]' => ['value' => 'upload'],
+        ],
+      ],
+    ];
+    $form['workflowstem_image_upload_wrapper']['workflowstem_image_upload'] = [
+      '#type' => 'managed_file',
+      '#title' => $this->t('Upload Image'),
+      '#upload_location' => 'private://resources/' . $modUri . '/image',
+      '#default_value' => $form_state->getValue('workflowstem_image_upload') ?: NULL,
+      '#upload_validators' => [
+        'file_validate_extensions' => ['png jpg jpeg'], // Adjust allowed extensions as needed.
+        'file_validate_size' => [2097152],
+      ],
+    ];
+
+    // Image preview (URL or uploaded file on rebuild).
+    $image_view_url = '';
+    $image_type = $form_state->getValue('workflowstem_image_type');
+    if ($image_type === 'url') {
+      $image_view_url = (string) $form_state->getValue('workflowstem_image_url');
+    }
+    elseif ($image_type === 'upload') {
+      $fids = $form_state->getValue('workflowstem_image_upload') ?: [];
+      if (!empty($fids)) {
+        $file = File::load(reset($fids));
+        if ($file) {
+          $image_view_url = \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri());
+        }
+      }
+    }
+    if ($image_view_url !== '') {
+      $form['workflowstem_image_preview'] = [
+        '#type' => 'markup',
+        '#markup' => Markup::create(
+          '<div class="mt-2">'
+          . '<div class="mb-2"><img src="' . $image_view_url . '" alt="" style="max-width: 180px; height: auto; border: 1px solid #ddd; padding: 2px;" /></div>'
+          . '<a href="#" class="view-media-button btn btn-primary" data-view-url="' . $image_view_url . '">' . $this->t('View Image') . '</a>'
+          . '</div>'
+        ),
+      ];
+    }
+
+    // Add a select box to choose between URL and Upload.
+    $form['workflowstem_webdocument_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Web Document Type'),
+      '#options' => [
+        '' => $this->t('Select Document Type'),
+        'url' => $this->t('URL'),
+        'upload' => $this->t('Upload'),
+      ],
+      '#default_value' => '',
+    ];
+
+    // The textfield for entering a URL.
+    // It is only visible when the select box value is 'url'.
+    $form['workflowstem_webdocument_url'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Web Document'),
+      '#attributes' => [
+        'placeholder' => 'http://',
+      ],
+      '#states' => [
+        'visible' => [
+          ':input[name="workflowstem_webdocument_type"]' => ['value' => 'url'],
+        ],
+      ],
+    ];
+
+    // Because File Upload Path (use the persisted workflowstem URI for file uploads)
+    $form['workflowstem_webdocument_upload_wrapper'] = [
+      '#type' => 'container',
+      '#states' => [
+        'visible' => [
+          ':input[name="workflowstem_webdocument_type"]' => ['value' => 'upload'],
+        ],
+      ],
+    ];
+    $form['workflowstem_webdocument_upload_wrapper']['workflowstem_webdocument_upload'] = [
+      '#type' => 'managed_file',
+      '#title' => $this->t('Upload Document'),
+      '#upload_location' => 'private://resources/' . $modUri . '/webdoc',
+      '#default_value' => $form_state->getValue('workflowstem_webdocument_upload') ?: NULL,
+      '#upload_validators' => [
+        'file_validate_extensions' => ['pdf doc docx txt xls xlsx'], // Adjust allowed extensions as needed.
+        'file_validate_size' => [2097152],
+      ],
+    ];
+
+    // Web document preview (URL or uploaded file on rebuild).
+    $webdoc_view_url = '';
+    $webdoc_type = $form_state->getValue('workflowstem_webdocument_type');
+    if ($webdoc_type === 'url') {
+      $webdoc_view_url = (string) $form_state->getValue('workflowstem_webdocument_url');
+    }
+    elseif ($webdoc_type === 'upload') {
+      $fids = $form_state->getValue('workflowstem_webdocument_upload') ?: [];
+      if (!empty($fids)) {
+        $file = File::load(reset($fids));
+        if ($file) {
+          $webdoc_view_url = \Drupal::service('file_url_generator')->generateAbsoluteString($file->getFileUri());
+        }
+      }
+    }
+    if ($webdoc_view_url !== '') {
+      $form['workflowstem_webdocument_preview'] = [
+        '#type' => 'markup',
+        '#markup' => Markup::create(
+          '<div class="mt-2">'
+          . '<a href="#" class="view-media-button btn btn-primary" data-view-url="' . $webdoc_view_url . '">' . $this->t('View Document') . '</a>'
+          . '</div>'
+        ),
+      ];
+    }
+
+    $form['save_submit'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Save'),
+      '#name' => 'save',
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'save-button'],
+      ],
+    ];
+    $form['cancel_submit'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Cancel'),
+      '#name' => 'back',
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'cancel-button'],
+        'id' => 'cancel_button'
+      ],
+    ];
+    $form['bottom_space'] = [
+      '#type' => 'item',
+      '#title' => t('<br><br>'),
+    ];
+
+    return $form;
+  }
+
+  public function validateForm(array &$form, FormStateInterface $form_state) {
+    $submitted_values = $form_state->cleanValues()->getValues();
+    $triggering_element = $form_state->getTriggeringElement();
+    $button_name = $triggering_element['#name'];
+
+    if ($button_name != 'back') {
+      if(strlen($form_state->getValue('workflowstem_content')) < 1) {
+        $form_state->setErrorByName('workflowstem_content', $this->t('Please enter a valid Name'));
+      }
+      if(strlen($form_state->getValue('workflowstem_language')) < 1) {
+        $form_state->setErrorByName('workflowstem_language', $this->t('Please enter a valid language'));
+      }
+      if(strlen($form_state->getValue('workflowstem_was_generated_by')) < 1) {
+        $form_state->setErrorByName('workflowstem_was_generated_by', $this->t('Please select a derivation'));
+      }
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function submitForm(array &$form, FormStateInterface $form_state) {
+    $submitted_values = $form_state->cleanValues()->getValues();
+    $triggering_element = $form_state->getTriggeringElement();
+    $button_name = $triggering_element['#name'];
+    $sourceuri = $this->getSourceWorkflowStemUri();
+
+    if ($button_name === 'back') {
+      self::backUrl();
+      return;
+    }
+
+    $api = \Drupal::service('rep.api_connector');
+
+    try {
+      $useremail = \Drupal::currentUser()->getEmail();
+      // $newWorkflowStemUri = Utils::uriGen('workflowstem');
+      $newWorkflowStemUri = $form_state->getValue('workflowstem_uri');
+
+      // Determine the chosen document type.
+      $doc_type = $form_state->getValue('workflowstem_webdocument_type');
+      $workflowstem_webdocument = '';
+
+      // If user selected URL, use the textfield value.
+      if ($doc_type === 'url') {
+        $workflowstem_webdocument = $form_state->getValue('workflowstem_webdocument_url');
+      }
+      // If user selected Upload, load the file entity and get its filename.
+      elseif ($doc_type === 'upload') {
+        // Get the file IDs from the managed_file element.
+        $fids = $form_state->getValue('workflowstem_webdocument_upload');
+        if (!empty($fids)) {
+          // Load the first file (file ID is returned, e.g. "374").
+          $file = File::load(reset($fids));
+          if ($file) {
+            // Mark the file as permanent and save it.
+            $file->setPermanent();
+            $file->save();
+            // Optionally register file usage to prevent cleanup.
+            \Drupal::service('file.usage')->add($file, 'std', 'workflowstem', 1);
+            // Now get the filename from the file entity.
+            $workflowstem_webdocument = $file->getFilename();
+          }
+        }
+      }
+
+      // Determine the chosen image type.
+      $image_type = $form_state->getValue('workflowstem_image_type');
+      $workflowstem_image = '';
+
+      // If user selected URL, use the textfield value.
+      if ($image_type === 'url') {
+        $workflowstem_image = $form_state->getValue('workflowstem_image_url');
+      }
+      // If user selected Upload, load the file entity and get its filename.
+      elseif ($image_type === 'upload') {
+        // Get the file IDs from the managed_file element.
+        $fids = $form_state->getValue('workflowstem_image_upload');
+        if (!empty($fids)) {
+          // Load the first file (file ID is returned, e.g. "374").
+          $file = File::load(reset($fids));
+          if ($file) {
+            // Mark the file as permanent and save it.
+            $file->setPermanent();
+            $file->save();
+            // Optionally register file usage to prevent cleanup.
+            \Drupal::service('file.usage')->add($file, 'std', 'workflowstem', 1);
+            // Now get the filename from the file entity.
+            $workflowstem_image = $file->getFilename();
+          }
+        }
+      }
+
+      // CREATE A NEW WORKFLOW
+      // #1 CENARIO - ADD WORKFLOW NO DERIVED FROM
+      if ($sourceuri === 'EMPTY') {
+        $workflowStemJson = '{"uri":"'.$newWorkflowStemUri.'",'.
+          '"superUri":"'.UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')).'",'.
+          '"label":"'.$form_state->getValue('workflowstem_content').'",'.
+          '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
+          '"hasStatus":"'.VSTOI::DRAFT.'",'.
+          '"hasContent":"'.$form_state->getValue('workflowstem_content').'",'.
+          '"hasLanguage":"'.$form_state->getValue('workflowstem_language').'",'.
+          '"hasVersion":"'.$form_state->getValue('workflowstem_version').'",'.
+          '"comment":"'.$form_state->getValue('workflowstem_description').'",'.
+          '"hasWebDocument":"' . $workflowstem_webdocument . '",' .
+          '"hasImageUri":"' . $workflowstem_image . '",' .
+          '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
+          '"hasSIRManagerEmail":"'.$useremail.'"}';
+
+        $rawresponse = $api->elementAdd('workflowstem', $workflowStemJson);
+        $obj = json_decode($rawresponse);
+        if (!$obj || empty($obj->isSuccessful) || !$obj->isSuccessful) {
+          $errorMsg = 'Unknown error.';
+          if ($obj && isset($obj->body)) {
+            $errorMsg = is_string($obj->body) ? $obj->body : json_encode($obj->body);
+          }
+          \Drupal::messenger()->addError(t('HASCOAPI error while adding Workflow Stem: ' . $errorMsg));
+          self::backUrl();
+          return;
+        }
+
+      } else {
+        // #2 CENARIO - ADD WORKFLOW THAT WAS DERIVED FROM
+        // DERIVED FROM VALUES
+        $parentResult = '';
+        $rawresponse = $api->getUri(UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')));
+        $obj = json_decode($rawresponse);
+        if ($obj->isSuccessful) {
+          $parentResult = $obj->body;
+        }
+
+        //dpm($parentResult);
+        /* NOTES:
+          IF Derivation is Specialization the element is a CHILD of the Derivation
+          IF Derivation is a Refinement the element keeps the same dependency has the previous version element
+          IF Translation, must have a differente Language but keeps the same dependency of the previous/new element
+        */
+        if ($parentResult !== '') {
+
+          $workflowStemJson = '{"uri":"'.$newWorkflowStemUri.'",'.
+            '"superUri":"'.($form_state->getValue('workflowstem_was_generated_by') === Constant::WGB_SPECIALIZATION ? UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')) : $parentResult->superUri).'",'.
+            '"label":"'.$form_state->getValue('workflowstem_content').'",'.
+            '"hascoTypeUri":"'.VSTOI::WORKFLOWSTEM.'",'.
+            '"hasStatus":"'.VSTOI::DRAFT.'",'.
+            '"hasContent":"'.$form_state->getValue('workflowstem_content').'",'.
+            '"hasLanguage":"'.$form_state->getValue('workflowstem_language').'",'.
+            '"hasVersion":"'.$form_state->getValue('workflowstem_version').'",'.
+            '"comment":"'.$form_state->getValue('workflowstem_description').'",'.
+            '"hasWebDocument":"' . $workflowstem_webdocument . '",' .
+            '"hasImageUri":"' . $workflowstem_image . '",' .
+            '"wasDerivedFrom":"'.UTILS::uriFromAutocomplete($form_state->getValue('workflowstem_type')).'",'.
+            '"wasGeneratedBy":"'.$form_state->getValue('workflowstem_was_generated_by').'",'.
+            '"hasSIRManagerEmail":"'.$useremail.'"}';
+
+          $rawresponse = $api->elementAdd('workflowstem', $workflowStemJson);
+          $obj = json_decode($rawresponse);
+          if (!$obj || empty($obj->isSuccessful) || !$obj->isSuccessful) {
+            $errorMsg = 'Unknown error.';
+            if ($obj && isset($obj->body)) {
+              $errorMsg = is_string($obj->body) ? $obj->body : json_encode($obj->body);
+            }
+            \Drupal::messenger()->addError(t('HASCOAPI error while adding Workflow Stem: ' . $errorMsg));
+            self::backUrl();
+            return;
+          }
+
+        } else {
+          \Drupal::messenger()->addError(t("An error occurred while getting Derived From element"));
+          self::backUrl();
+          return;
+        }
+      }
+
+      $verify = $api->parseObjectResponse($api->getUri($newWorkflowStemUri), 'getUri');
+      if ($verify === NULL) {
+        throw new \RuntimeException('Workflow Stem was not persisted after create call.');
+      }
+
+      \Drupal::messenger()->addMessage(t("Added a new Workflow Stem with URI: ".$newWorkflowStemUri));
+      self::backUrl();
+      return;
+
+    } catch(\Exception $e) {
+        \Drupal::messenger()->addError(t("An error occurred while adding the Workflow Stem: ".$e->getMessage()));
+        self::backUrl();
+        return;
+      }
+  }
+
+  function backUrl() {
+    $uid = \Drupal::currentUser()->id();
+    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.add_workflowstem');
+    if ($previousUrl) {
+      $response = new RedirectResponse($previousUrl);
+      $response->send();
+      return;
+    }
+  }
+
+}
+
+
+
+

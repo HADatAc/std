@@ -1,0 +1,10 @@
+std_test.medical_viewer_wrapper:
+  path: '/std-test/medical-viewer-wrapper/{filename}/{studyuri}/{token}'
+  defaults:
+    _controller: '\Drupal\std_test\Controller\MedicalViewerTestController::wrapper'
+    _title: 'Medical Viewer Wrapper'
+  requirements:
+    _permission: 'access content'
+    filename: '.+'
+    studyuri: '.+'
+    token: '.+'
