@@ -160,6 +160,11 @@ class STDSelectStudyForm extends FormBase
           $this->plural_class_name = $studyLabel . 's';
         }
         break;
+      // PROCESS-BASED STUDY
+      case "processbasedstudy":
+        $this->single_class_name = "Process-Based Study";
+        $this->plural_class_name = "Process-Based Studies";
+        break;
       // PROCESS STEM
       case "workflowstem":
         $this->single_class_name = $preferred_process . " Stem";
@@ -1360,6 +1365,9 @@ class STDSelectStudyForm extends FormBase
     if ($this->element_type == 'study') {
       Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_study');
       $url = Url::fromRoute('std.add_study');
+    } elseif ($this->element_type == 'processbasedstudy') {
+      Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_processbasedstudy');
+      $url = Url::fromRoute('std.add_processbasedstudy');
     } elseif ($this->element_type == 'workflowstem') {
       Utils::trackingStoreUrls($uid, $previousUrl, 'std.add_workflowstem');
       $url = Url::fromRoute('std.add_workflowstem');
@@ -1389,6 +1397,10 @@ class STDSelectStudyForm extends FormBase
       $url = Url::fromRoute('std.edit_study', [
         'studyuri' => base64_encode($uri),
         'items_loaded' => $items_loaded,
+      ]);
+    } elseif ($this->element_type == 'processbasedstudy') {
+      $url = Url::fromRoute('std.edit_processbasedstudy', [
+        'studyuri' => base64_encode($uri),
       ]);
     } elseif ($this->element_type == 'workflowstem') {
       $url = Url::fromRoute('std.edit_workflowstem', ['workflowstemuri' => base64_encode($uri)]);
