@@ -153,6 +153,17 @@ std.manage_processbasedstudies:
     _permission: 'access content'
     _role: 'authenticated'
 
+std.study_review_queue:
+  title: Review Auto-Generated Studies
+  description: Review and enrich auto-generated Process-Based Studies
+  route_name: std.study_review_queue
+  parent: std.manage_top_level
+  menu_name: main
+  weight: 21.7
+  requirements:
+    _permission: 'access content'
+    _role: 'authenticated'
+
 std.manage_workflowstems:
   title: Manage Workflow Stems
   description: Manage Workflow Stems

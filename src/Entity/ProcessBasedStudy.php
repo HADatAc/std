@@ -154,7 +154,26 @@ class ProcessBasedStudy extends Study {
       'manage_element' => $actions['manage_element'],
       'view' => $actions['view'],
     ];
-
+    // Add DSG Download button for ProcessBasedStudy
+    $dsg_download_str = base64_encode(Url::fromRoute('std.download_dsg', [
+      'studyuri' => $studyUriEncoded,
+    ])->toString());
+    
+    $download_dsg = Url::fromRoute('rep.back_url', [
+      'previousurl' => $safe_previousUrl_str,
+      'currenturl' => $dsg_download_str,
+      'currentroute' => 'std.download_dsg',
+    ]);
+    
+    $actions_render['download_dsg'] = [
+      '#type' => 'link',
+      '#title' => Markup::create('<i class="fa-solid fa-download"></i> Download DSG'),
+      '#url' => $download_dsg,
+      '#attributes' => [
+        'class' => ['btn', 'btn-success', 'btn-sm', 'mx-1'],
+        'title' => t('Download study design specification (DSG) for formal registration'),
+      ],
+    ];
     return [
       'element_uri' => $uri,
       'element_short_name' => $label,

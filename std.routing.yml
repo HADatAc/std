@@ -161,6 +161,28 @@ std.edit_processbasedstudy:
   options:
     no_cache: 'TRUE'
 
+# Study Review Queue
+
+std.study_review_queue:
+  path: 'std/review/processbasedstudies'
+  defaults:
+    _controller: '\Drupal\std\Controller\StudyReviewQueueController::reviewQueue'
+    _title: 'Studies Needing Review'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.download_dsg:
+  path: 'std/processbasedstudy/dsg/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\StudyReviewQueueController::downloadDSG'
+    _title: 'Download DSG'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+
 # Study Role CRUD options
 
 std.add_studyrole:

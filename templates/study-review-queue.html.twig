@@ -1,0 +1,96 @@
+{#
+/**
+ * @file
+ * Template for Study Review Queue
+ * 
+ * Available variables:
+ * - studies: Array of ProcessBasedStudy objects needing review
+ * - title: Page title
+ */
+#}
+
+<div class="study-review-queue">
+  <h2>{{ title }}</h2>
+  
+  {% if studies is empty %}
+    <div class="alert alert-success">
+      <i class="fa fa-check-circle"></i>
+      <strong>Great job!</strong> All Process-Based Studies have been reviewed and enriched.
+    </div>
+    <p>
+      <a href="{{ url('std.select_study', {elementtype: 'processbasedstudy', page: '1', pagesize: '9'}) }}" class="btn btn-primary">
+        View All Process-Based Studies
+      </a>
+    </p>
+  {% else %}
+    <div class="alert alert-warning">
+      <i class="fa fa-exclamation-triangle"></i>
+      <strong>Action Required:</strong> The following {{ studies|length }} studies were auto-generated and need metadata enrichment.
+    </div>
+    
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead class="thead-dark">
+          <tr>
+            <th>Study ID</th>
+            <th>Title</th>
+            <th>Workflow</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for study in studies %}
+            <tr>
+              <td>
+                <code>{{ study.studyID|default('N/A') }}</code>
+              </td>
+              <td>
+                {{ study.studyTitle|default(study.label)|default('Untitled') }}
+              </td>
+              <td>
+                {% if study.processUri %}
+                  <small class="text-muted">{{ study.processUri }}</small>
+                {% else %}
+                  <span class="text-muted">No process</span>
+                {% endif %}
+              </td>
+              <td>
+                {% set missing_fields = [] %}
+                {% if not study.specificAims or study.specificAims == 'Clinical simulation study' %}
+                  {% set missing_fields = missing_fields|merge(['Aims']) %}
+                {% endif %}
+                {% if not study.significance or study.significance == 'Clinical simulation study' %}
+                  {% set missing_fields = missing_fields|merge(['Significance']) %}
+                {% endif %}
+                {% if not study.institution %}
+                  {% set missing_fields = missing_fields|merge(['Institution']) %}
+                {% endif %}
+                
+                <span class="badge badge-warning">
+                  Missing: {{ missing_fields|join(', ') }}
+                </span>
+              </td>
+              <td>
+                <a href="{{ url('std.edit_processbasedstudy', {studyuri: study.uri|base64_encode}) }}" 
+                   class="btn btn-sm btn-primary">
+                  <i class="fa fa-edit"></i> Enrich Metadata
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="alert alert-info mt-3">
+      <h5><i class="fa fa-lightbulb"></i> Tips for Enriching Study Metadata:</h5>
+      <ul>
+        <li><strong>Specific Aims:</strong> Describe the research objectives and what you aim to accomplish</li>
+        <li><strong>Significance:</strong> Explain why this study is important and its potential impact</li>
+        <li><strong>Institution:</strong> Specify the organization conducting the study</li>
+        <li><strong>Dates:</strong> Set realistic start and end dates for the study timeline</li>
+      </ul>
+    </div>
+  {% endif %}
+</div>

@@ -28,6 +28,13 @@ function std_theme($existing, $type, $theme, $path)
                 )
             )
         ],
+        'study_review_queue' => [
+            'variables' => [
+                'studies' => [],
+                'title' => '',
+            ],
+            'template' => 'study-review-queue',
+        ],
     ];
 }
 
