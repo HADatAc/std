@@ -541,7 +541,18 @@ class AddWorkflowForm extends FormBase {
         throw new \RuntimeException('Workflow was not persisted after create call.');
       }
 
-      \Drupal::messenger()->addMessage($this->t("Workflow has been added successfully."));
+      // AUTO-CREATE ProcessBasedStudy from Workflow (Phase 2.4)
+      // This creates a study linked to the workflow with auto-generated metadata
+      $pbsCreated = \Drupal\std\Entity\ProcessBasedStudy::createFromWorkflow($newWorkflowUri, $useremail);
+      if ($pbsCreated !== NULL) {
+        \Drupal::messenger()->addMessage($this->t("Workflow has been added successfully. Process-Based Study @study has been automatically created.", [
+          '@study' => \Drupal\rep\Utils::namespaceUri($pbsCreated->uri),
+        ]));
+      } else {
+        // Workflow created but ProcessBasedStudy creation failed (non-fatal)
+        \Drupal::messenger()->addMessage($this->t("Workflow has been added successfully."));
+        \Drupal::messenger()->addWarning($this->t("Note: Automatic Process-Based Study creation failed. You can create it manually from the study management interface."));
+      }
 
       self::backUrl();
       return;

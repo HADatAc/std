@@ -167,30 +167,76 @@ class ProcessBasedStudy extends Study {
   }
 
   /**
-   * Create ProcessBasedStudy from Workflow via hascoapi
+   * Create ProcessBasedStudy from Workflow/Process URI
    * 
-   * @param string $wkfUri The workflow URI
+   * This method creates a ProcessBasedStudy by calling the backend API.
+   * The backend will auto-generate study metadata from the Process/Workflow.
+   * 
+   * @param string $processUri The Process/Workflow URI (e.g., pmsr:WKF-X/PROC/0001)
    * @param string $creator The creator's email
    * @return object|null The created study object or null on failure
    */
-  public static function createFromWorkflow($wkfUri, $creator) {
+  public static function createFromWorkflow($processUri, $creator) {
+    if (empty($processUri)) {
+      \Drupal::logger('std')->error('Cannot create ProcessBasedStudy: empty processUri');
+      return NULL;
+    }
+
     $api = \Drupal::service('rep.api_connector');
     
-    // Call hascoapi to generate ProcessBasedStudy
-    $response = $api->post('/api/processbasedstudy/create', [
-      'workflowUri' => $wkfUri,
-      'creator' => $creator,
-    ]);
+    // Generate study URI
+    $studyUri = Utils::uriGen('study');
     
-    if ($response && isset($response->uri)) {
-      return $response;
+    // Build minimal JSON payload - backend will auto-generate metadata
+    $studyData = [
+      'uri' => $studyUri,
+      'typeUri' => \Drupal\rep\Vocabulary\HASCO::PROCESS_BASED_STUDY,
+      'hascoTypeUri' => \Drupal\rep\Vocabulary\HASCO::PROCESS_BASED_STUDY,
+      'processUri' => $processUri,
+      'hasSIRManagerEmail' => $creator,
+      // Leave metadata fields empty for auto-generation
+      'studyID' => '',
+      'studyTitle' => '',
+      'specificAims' => '',
+      'significance' => '',
+      'institution' => '',
+      'principalInvestigator' => '',
+      'contactEmail' => '',
+      'startDate' => '',
+      'endDate' => '',
+    ];
+    
+    $studyJSON = json_encode($studyData);
+    
+    try {
+      // Use generic API to create ProcessBasedStudy
+      $addResponse = $api->elementAdd('processbasedstudy', $studyJSON);
+      $created = $api->parseObjectResponse($addResponse, 'elementAdd');
+      
+      if ($created === NULL) {
+        throw new \RuntimeException('API rejected ProcessBasedStudy creation');
+      }
+      
+      // Verify creation
+      $verify = $api->parseObjectResponse($api->getUri($studyUri), 'getUri');
+      if ($verify === NULL) {
+        throw new \RuntimeException('ProcessBasedStudy was not persisted');
+      }
+      
+      \Drupal::logger('std')->info('Created ProcessBasedStudy @study from Process @process', [
+        '@study' => $studyUri,
+        '@process' => $processUri,
+      ]);
+      
+      return $verify;
+      
+    } catch (\Exception $e) {
+      \Drupal::logger('std')->error('Failed to create ProcessBasedStudy from process @process: @error', [
+        '@process' => $processUri,
+        '@error' => $e->getMessage(),
+      ]);
+      return NULL;
     }
-    
-    \Drupal::logger('std')->error('Failed to create ProcessBasedStudy from workflow: @wkf', [
-      '@wkf' => $wkfUri,
-    ]);
-    
-    return NULL;
   }
 
   /**
