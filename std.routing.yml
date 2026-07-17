@@ -137,6 +137,30 @@ std.edit_study:
   options:
     no_cache: 'TRUE'
 
+# Process-Based Study CRUD options
+
+std.add_processbasedstudy:
+  path: 'std/manage/addprocessbasedstudy'
+  defaults:
+    _form: '\Drupal\std\Form\AddProcessBasedStudyForm'
+    _title: 'Add Process-Based Study'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
+std.edit_processbasedstudy:
+  path: 'std/manage/editprocessbasedstudy/{studyuri}'
+  defaults:
+    _form: '\Drupal\std\Form\EditProcessBasedStudyForm'
+    _title: 'Edit Process-Based Study'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
 # Study Role CRUD options
 
 std.add_studyrole:
