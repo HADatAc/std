@@ -138,6 +138,21 @@ std.manage_studies:
     _permission: 'access content'
     _role: 'authenticated'
 
+std.manage_processbasedstudies:
+  title: Manage Process-Based Studies
+  description: Manage Process-Based Studies (Workflow-linked Studies)
+  route_name: std.select_study
+  route_parameters:
+    elementtype: 'processbasedstudy'
+    page: '1'
+    pagesize: '9'
+  parent: std.manage_top_level
+  menu_name: main
+  weight: 21.5
+  requirements:
+    _permission: 'access content'
+    _role: 'authenticated'
+
 std.manage_workflowstems:
   title: Manage Workflow Stems
   description: Manage Workflow Stems
