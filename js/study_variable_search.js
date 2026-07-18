@@ -70,7 +70,7 @@
     return 'ontology' + camel.charAt(0).toUpperCase() + camel.slice(1) + 'Tags';
   };
 
-  const updateSelectedPreview = function (root, selectedVariableChecks, selectedOntologyChecks) {
+  const updateSelectedPreview = function (root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks) {
     const preview = root.querySelector('#std-selected-preview');
     if (!preview) {
       return;
@@ -92,6 +92,30 @@
         value: checkbox.value,
         ontology,
         label: `${checkbox.dataset.label || checkbox.value} (${ontology.toUpperCase()})`,
+      });
+    });
+
+    selectedOrganizationChecks.forEach((checkbox) => {
+      selectedItems.push({
+        type: 'organization',
+        value: checkbox.value,
+        label: checkbox.dataset.label || checkbox.value,
+      });
+    });
+
+    selectedPlatformChecks.forEach((checkbox) => {
+      selectedItems.push({
+        type: 'platform',
+        value: checkbox.value,
+        label: checkbox.dataset.label || checkbox.value,
+      });
+    });
+
+    selectedProcessChecks.forEach((checkbox) => {
+      selectedItems.push({
+        type: 'process',
+        value: checkbox.value,
+        label: checkbox.dataset.label || checkbox.value,
       });
     });
 
@@ -146,9 +170,16 @@
   const applyFilters = function (root) {
     const selectedVariableChecks = Array.from(root.querySelectorAll('.study-variable-checkbox:checked'));
     const selectedOntologyChecks = Array.from(root.querySelectorAll('.std-ontology-checkbox:checked'));
+    const selectedOrganizationChecks = Array.from(root.querySelectorAll('.std-organization-checkbox:checked'));
+    const selectedPlatformChecks = Array.from(root.querySelectorAll('.std-platform-checkbox:checked'));
+    const selectedProcessChecks = Array.from(root.querySelectorAll('.std-process-checkbox:checked'));
 
     const selected = selectedVariableChecks.map((el) => el.value);
     const selectedSources = new Set(selectedVariableChecks.map((el) => el.dataset.source || '').filter(Boolean));
+    const selectedOrganizations = selectedOrganizationChecks.map((el) => el.value);
+    const selectedPlatforms = selectedPlatformChecks.map((el) => el.value);
+    const selectedProcesses = selectedProcessChecks.map((el) => el.value);
+    
     const selectedOntologyByType = {};
     selectedOntologyChecks.forEach((checkbox) => {
       const ontology = normalizeOntologyKey(checkbox.dataset.ontology || '');
@@ -162,6 +193,14 @@
 
       selectedOntologyByType[ontology].push(checkbox.value);
     });
+
+    // Determine if any filters are selected (moved outside forEach loop)
+    const hasVariableFilter = selected.length > 0;
+    const hasOntologyFilter = Object.keys(selectedOntologyByType).length > 0;
+    const hasOrganizationFilter = selectedOrganizations.length > 0;
+    const hasPlatformFilter = selectedPlatforms.length > 0;
+    const hasProcessFilter = selectedProcesses.length > 0;
+    const hasAnyFilter = hasVariableFilter || hasOntologyFilter || hasOrganizationFilter || hasPlatformFilter || hasProcessFilter;
 
     const logicInput = root.querySelector('input[name="std-search-logic"]:checked');
     const logic = logicInput ? logicInput.value : 'or';
@@ -177,9 +216,11 @@
     cards.forEach((card) => {
       const tags = splitTags(card.dataset.tags);
 
-      // Studies are shown only when at least one variable is selected.
-      let visible = false;
-      if (selected.length > 0) {
+      // Start with visible=true if any filter is selected, false if no filters
+      let visible = hasAnyFilter;
+
+      // Apply variable filter (only if variables are selected)
+      if (visible && hasVariableFilter) {
         if (logic === 'and') {
           visible = selected.every((tag) => tags.includes(tag));
         }
@@ -188,12 +229,10 @@
         }
       }
 
-      if (visible) {
+      // Apply ontology filters (only if ontology terms are selected)
+      if (visible && hasOntologyFilter) {
+        let matchesOntology = false;
         Object.keys(selectedOntologyByType).forEach((ontology) => {
-          if (!visible) {
-            return;
-          }
-
           const selectedTerms = selectedOntologyByType[ontology];
           if (!Array.isArray(selectedTerms) || selectedTerms.length === 0) {
             return;
@@ -201,8 +240,29 @@
 
           const datasetKey = getOntologyDatasetKey(ontology);
           const cardOntologyTags = splitTags(datasetKey ? card.dataset[datasetKey] : '');
-          visible = selectedTerms.some((term) => cardOntologyTags.includes(term));
+          if (selectedTerms.some((term) => cardOntologyTags.includes(term))) {
+            matchesOntology = true;
+          }
         });
+        visible = visible && matchesOntology;
+      }
+
+      // Apply organization filter
+      if (visible && hasOrganizationFilter) {
+        const cardOrganization = card.dataset.organizationSlug || '';
+        visible = selectedOrganizations.includes(cardOrganization);
+      }
+
+      // Apply platform filter
+      if (visible && hasPlatformFilter) {
+        const cardPlatform = card.dataset.platformSlug || '';
+        visible = selectedPlatforms.includes(cardPlatform);
+      }
+
+      // Apply process filter (hierarchical via ProcessStem)
+      if (visible && hasProcessFilter) {
+        const cardProcessStem = card.dataset.processStemSlug || '';
+        visible = selectedProcesses.includes(cardProcessStem);
       }
 
       if (visible) {
@@ -248,8 +308,8 @@
     }
 
     if (emptyState) {
-      if (selected.length === 0) {
-        emptyState.textContent = 'Select at least one variable to display studies.';
+      if (!hasAnyFilter) {
+        emptyState.textContent = 'Select at least one filter to display studies.';
         emptyState.style.display = '';
       }
       else if (visibleCount === 0) {
@@ -262,7 +322,7 @@
     }
 
     if (rankingIndicator) {
-      if (selected.length > 0 && visibleCount > 0) {
+      if (hasAnyFilter && visibleCount > 0) {
         rankingIndicator.textContent = 'Sorted by relevance';
       }
       else {
@@ -270,7 +330,7 @@
       }
     }
 
-    updateSelectedPreview(root, selectedVariableChecks, selectedOntologyChecks);
+    updateSelectedPreview(root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks);
   };
 
   Drupal.behaviors.stdStudyVariableSearch = {
@@ -278,6 +338,9 @@
       once('std-study-variable-search', '#std-study-variable-search', context).forEach(function (root) {
         const checkboxes = root.querySelectorAll('.study-variable-checkbox');
         const ontologyCheckboxes = root.querySelectorAll('.std-ontology-checkbox');
+        const organizationCheckboxes = root.querySelectorAll('.std-organization-checkbox');
+        const platformCheckboxes = root.querySelectorAll('.std-platform-checkbox');
+        const processCheckboxes = root.querySelectorAll('.std-process-checkbox');
         const radios = root.querySelectorAll('input[name="std-search-logic"]');
         const clearButton = root.querySelector('#std-search-clear');
         const preview = root.querySelector('#std-selected-preview');
@@ -289,6 +352,24 @@
         });
 
         ontologyCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener('change', function () {
+            applyFilters(root);
+          });
+        });
+
+        organizationCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener('change', function () {
+            applyFilters(root);
+          });
+        });
+
+        platformCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener('change', function () {
+            applyFilters(root);
+          });
+        });
+
+        processCheckboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
             applyFilters(root);
           });
@@ -306,6 +387,15 @@
               checkbox.checked = false;
             });
             ontologyCheckboxes.forEach((checkbox) => {
+              checkbox.checked = false;
+            });
+            organizationCheckboxes.forEach((checkbox) => {
+              checkbox.checked = false;
+            });
+            platformCheckboxes.forEach((checkbox) => {
+              checkbox.checked = false;
+            });
+            processCheckboxes.forEach((checkbox) => {
               checkbox.checked = false;
             });
             const orRadio = root.querySelector('input[name="std-search-logic"][value="or"]');
@@ -344,9 +434,113 @@
                 }
               });
             }
+            else if (targetType === 'organization') {
+              organizationCheckboxes.forEach((checkbox) => {
+                if (checkbox.value === value) {
+                  checkbox.checked = false;
+                }
+              });
+            }
+            else if (targetType === 'platform') {
+              platformCheckboxes.forEach((checkbox) => {
+                if (checkbox.value === value) {
+                  checkbox.checked = false;
+                }
+              });
+            }
+            else if (targetType === 'process') {
+              processCheckboxes.forEach((checkbox) => {
+                if (checkbox.value === value) {
+                  checkbox.checked = false;
+                }
+              });
+            }
 
             applyFilters(root);
           });
+        }
+
+        // Monitor hidden fields for ontology term selections from tree modal
+        once('std-ontology-field-watch', '.std-ontology-selection-field', root).forEach((field) => {
+          const ontology = field.getAttribute('data-ontology') || '';
+          
+          // Listen for change events (triggered when tree modal selects a node)
+          field.addEventListener('change', () => {
+            const value = field.value;
+            if (!value) return;
+            
+            // Parse the selection value (format: "Label [URI]")
+            const match = value.match(/^(.+?)\s*\[(.+?)\]$/);
+            if (!match) return;
+            
+            const label = match[1].trim();
+            const uri = match[2].trim();
+            
+            if (!label || !uri) return;
+            
+            // Find the corresponding details element (next sibling)
+            const detailsElement = field.nextElementSibling;
+            if (!detailsElement || !detailsElement.matches('details.std-ontology-section')) {
+              console.warn('Could not find details element for ontology:', ontology);
+              return;
+            }
+            
+            const sectionBody = detailsElement.querySelector('.std-search-section-body');
+            if (sectionBody) {
+              addOntologyTerm(sectionBody, ontology, label, uri);
+              field.value = ''; // Clear the field value
+            }
+          });
+        });
+
+        // Helper function to add ontology term to the section
+        function addOntologyTerm(sectionBody, ontology, label, uri) {
+          const slug = 'ont-' + ontology + '-' + uri.replace(/[^a-zA-Z0-9]/g, '_');
+          
+          // Check if term already exists
+          const exists = sectionBody.querySelector(`input[value="${slug}"]`);
+          if (exists) {
+            exists.checked = true;
+            applyFilters(root);
+            return;
+          }
+          
+          // Create new checkbox for the term
+          const labelElement = document.createElement('label');
+          labelElement.className = 'std-search-checkbox';
+          labelElement.innerHTML = `
+            <input type="checkbox" class="std-ontology-checkbox" 
+              data-ontology="${ontology}" 
+              data-label="${label}" 
+              data-uri="${uri}" 
+              value="${slug}" checked>
+            <span>${label}</span>
+            <small class="std-ontology-uri">${uri}</small>
+          `;
+          sectionBody.appendChild(labelElement);
+          
+          // Update the count in the summary
+          const summary = sectionBody.closest('details')?.querySelector('.std-search-section-title');
+          if (summary) {
+            const currentText = summary.textContent || '';
+            const match = currentText.match(/^(.+?)\s*\((\d+)\)$/);
+            if (match) {
+              const title = match[1];
+              const count = parseInt(match[2], 10) + 1;
+              summary.textContent = `${title} (${count})`;
+            }
+          }
+          
+          // Attach change handler to the new checkbox
+          const newCheckbox = labelElement.querySelector('.std-ontology-checkbox');
+          if (newCheckbox) {
+            newCheckbox.addEventListener('change', () => {
+              applyFilters(root);
+            });
+          }
+          
+          // Trigger filter update
+          applyFilters(root);
         }
 
         applyFilters(root);
