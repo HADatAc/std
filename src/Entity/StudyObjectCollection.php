@@ -20,6 +20,7 @@ class StudyObjectCollection {
       'soc_label' => t('Label'),
       'soc_grounding_label' => t('Grounding Label'),
       'soc_num_objects' => t('# Objects'),
+      'soc_operations' => t('Operations'),
     ];
 
   }
@@ -57,6 +58,9 @@ class StudyObjectCollection {
       if ($element->virtualColumn != NULL && $element->virtualColumn->groundingLabel != NULL) {
         $groundingLabel = $element->virtualColumn->groundingLabel;
       }
+      $numObjects = isset($element->numOfObjects) ? $element->numOfObjects : '-1';
+      $encodedSocUri = base64_encode($element->uri);
+      $viewUrl = $root_url . '/std/selectbysoc/' . $encodedSocUri . '/studyobject/1/12';
       $output[$element->uri] = [
           'soc_uri' => t('<a href="'.$root_url.REPGUI::DESCRIBE_PAGE.
                         base64_encode($element->uri).'">'.Utils::namespaceUri($element->uri).'</a>'),
@@ -64,7 +68,8 @@ class StudyObjectCollection {
           'soc_reference' => $socreference,
           'soc_label' => $element->label,
           'soc_grounding_label' => $groundingLabel,
-          'soc_num_objects' => $element->numOfObjects,
+          'soc_num_objects' => $numObjects,
+          'soc_operations' => t('<a href="'.$viewUrl.'" class="btn btn-sm btn-secondary">View</a>'),
       ];
     }
     return $output;

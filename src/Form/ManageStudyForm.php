@@ -89,6 +89,15 @@ class ManageStudyForm extends FormBase
 
     $config = $this->config(static::CONFIGNAME);
     $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+    
+    // Determine back button label and URL based on where user came from
+    // Use non-destructive peek to avoid deleting the tracking record
+    $uid = \Drupal::currentUser()->id();
+    $refererUrl = Utils::trackingPeekPreviousUrl($uid, 'std.manage_study_elements');
+    $backButtonLabel = 'Back to Manage Studies'; // Default
+    if ($refererUrl && strpos($refererUrl, '/std/search/studies') !== false) {
+      $backButtonLabel = 'Back to Study Search';
+    }
 
     //Libraries
     $form['#attached']['library'][] = 'std/json_table';
@@ -478,12 +487,318 @@ class ManageStudyForm extends FormBase
       ];
     }
 
-    $uid = \Drupal::currentUser()->id();
+    // Note: Do NOT call trackingStoreUrls here - it would overwrite the tracking
+    // set by rep.back_url when navigating to this page from Study Search
 
-    $previousUrl = Url::fromRoute('std.manage_study_elements', [
-      'studyuri' => base64_encode($this->getStudy()->uri),
-    ])->toString();
-    Utils::trackingStoreUrls($uid, $previousUrl, 'std.manage_study_elements');
+    // ROW 2A - DESCRIPTION SECTION (Study properties and ProcessBasedStudy properties if applicable)
+    $form['row2a'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['accordion', 'mt-3'], 'id' => 'accordionDescription'],
+    ];
+
+    $form['row2a']['item'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['accordion-item', 'card'],
+        'id'    => 'description-card',
+      ],
+    ];
+
+    $form['row2a']['item']['header'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['accordion-header', 'justify-content-between', 'align-items-center'],
+        'id'    => 'headingDescription',
+      ],
+      'button' => [
+        '#type' => 'html_tag',
+        '#tag' => 'button',
+        '#value' => $this->t('<h3 class="mb-0">Description</h3>'),
+        '#attributes' => [
+          'class' => ['accordion-button', 'collapsed'],
+          'type' => 'button',
+          'data-bs-toggle' => 'collapse',
+          'data-bs-target' => '#collapseDescription',
+          'aria-expanded' => 'false',
+          'aria-controls' => 'collapseDescription',
+        ],
+      ],
+    ];
+
+    $form['row2a']['item']['collapse'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'id' => 'collapseDescription',
+        'class' => ['accordion-collapse','collapse', 'hide'],
+        'aria-labelledby' => 'headingDescription',
+        'data-bs-parent' => '#accordionDescription',
+      ],
+    ];
+
+    $form['row2a']['item']['collapse']['body'] = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['accordion-body','p-3']],
+    ];
+
+    // Build description content with study properties
+    $descriptionContent = '<div class="study-description">';
+    $descriptionContent .= '<h4>Study Properties</h4>';
+    $descriptionContent .= '<dl class="row">';
+    
+    // Common study properties
+    if (isset($this->getStudy()->uri)) {
+      $descriptionContent .= '<dt class="col-sm-3">URI:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->uri) . '</dd>';
+    }
+    if (isset($this->getStudy()->label)) {
+      $descriptionContent .= '<dt class="col-sm-3">Label:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->label) . '</dd>';
+    }
+    if (isset($this->getStudy()->title)) {
+      $descriptionContent .= '<dt class="col-sm-3">Title:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->title) . '</dd>';
+    }
+    if (isset($this->getStudy()->comment)) {
+      $descriptionContent .= '<dt class="col-sm-3">Comment:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->comment) . '</dd>';
+    }
+    if (isset($this->getStudy()->externalSource)) {
+      $descriptionContent .= '<dt class="col-sm-3">External Source:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->externalSource) . '</dd>';
+    }
+    if (isset($this->getStudy()->studyDesignTypeLabel)) {
+      $descriptionContent .= '<dt class="col-sm-3">Study Design Type:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->studyDesignTypeLabel) . '</dd>';
+    }
+    if (isset($this->getStudy()->hasSIRManagerEmail)) {
+      $descriptionContent .= '<dt class="col-sm-3">Manager Email:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->hasSIRManagerEmail) . '</dd>';
+    }
+    
+    $descriptionContent .= '</dl>';
+    
+    // Check if this is a ProcessBasedStudy and add its specific properties
+    $isProcessBasedStudy = false;
+    $processUri = '';
+    if (isset($this->getStudy()->hascoTypeUri) && 
+        $this->getStudy()->hascoTypeUri === 'http://hadatac.org/ont/hasco/ProcessBasedStudy') {
+      $isProcessBasedStudy = true;
+      $descriptionContent .= '<h4 class="mt-4">Process-Based Study Properties</h4>';
+      $descriptionContent .= '<dl class="row">';
+      
+      if (isset($this->getStudy()->hasProcess) || isset($this->getStudy()->hasProcessUri) || isset($this->getStudy()->processUri)) {
+        $processUri = $this->getStudy()->processUri ?? $this->getStudy()->hasProcess ?? $this->getStudy()->hasProcessUri ?? '';
+        if (is_object($processUri)) {
+          $processUri = $processUri->uri ?? '';
+        }
+        $processUri = (string) $processUri;
+        $descriptionContent .= '<dt class="col-sm-3">Process:</dt><dd class="col-sm-9">' . htmlspecialchars($processUri) . '</dd>';
+      }
+      if (isset($this->getStudy()->processLabel)) {
+        $descriptionContent .= '<dt class="col-sm-3">Process Label:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->processLabel) . '</dd>';
+      }
+      
+      $descriptionContent .= '</dl>';
+    }
+    
+    $descriptionContent .= '</div>';
+
+    $form['row2a']['item']['collapse']['body']['content'] = [
+      '#type'   => 'markup',
+      '#markup' => Markup::create($descriptionContent),
+    ];
+
+    // If this is a ProcessBasedStudy, add Workflow Canvas section
+    if ($isProcessBasedStudy) {
+      if (!empty($processUri)) {
+        // Check if the workflow exists in HASCOAPI
+        $workflowExists = true;
+        $workflowProbeError = '';
+        if (\Drupal::hasService('ctt.hasco_client')) {
+          try {
+            $probe = \Drupal::service('ctt.hasco_client')->getByUri($processUri);
+            if (!is_array($probe) || !empty($probe['error'])) {
+              $workflowExists = false;
+              $workflowProbeError = is_array($probe) ? (string) ($probe['error'] ?? '') : '';
+            }
+          }
+          catch (\Throwable $e) {
+            $workflowExists = false;
+            $workflowProbeError = $e->getMessage();
+          }
+        }
+
+      // Attach workflow preview library
+      $form['#attached']['library'][] = 'rep/workflow_preview';
+
+      // Create inner collapsible for Workflow Canvas
+      $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['mt-4']],
+      ];
+
+      $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['workflow-canvas-block'],
+        ],
+      ];
+
+      if ($workflowExists) {
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['#attributes']['data-workflow-preview-block'] = '1';
+      }
+
+      $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_header'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['workflow-canvas-header'],
+        ],
+      ];
+
+      $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_header']['title'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'h4',
+        '#value' => $this->t('Workflow Canvas'),
+        '#attributes' => [
+          'class' => ['workflow-canvas-title'],
+        ],
+      ];
+
+      $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_header']['actions'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => ['workflow-canvas-actions'],
+        ],
+      ];
+
+      if ($workflowExists) {
+        $collapseTitle = (string) $this->t('Collapse workflow canvas');
+        $fullscreenTitle = (string) $this->t('Enter fullscreen');
+
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_header']['actions']['collapse'] = [
+          '#type' => 'html_tag',
+          '#tag' => 'button',
+          '#value' => Markup::create('<i class="fa fa-chevron-up" aria-hidden="true"></i><span class="workflow-preview-sr">' . $this->t('Collapse workflow canvas') . '</span>'),
+          '#attributes' => [
+            'type' => 'button',
+            'class' => ['workflow-preview-collapse-btn', 'workflow-preview-icon-btn'],
+            'data-workflow-preview-collapse' => '1',
+            'aria-expanded' => 'true',
+            'aria-controls' => 'collapseAreas',
+            'title' => $collapseTitle,
+          ],
+        ];
+
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_header']['actions']['fullscreen'] = [
+          '#type' => 'html_tag',
+          '#tag' => 'button',
+          '#value' => Markup::create('<i class="fa fa-expand" aria-hidden="true"></i><span class="workflow-preview-sr">' . $this->t('Enter fullscreen') . '</span>'),
+          '#attributes' => [
+            'type' => 'button',
+            'class' => ['workflow-preview-fullscreen-btn', 'workflow-preview-icon-btn'],
+            'data-workflow-preview-fullscreen' => '1',
+            'aria-pressed' => 'false',
+            'title' => $fullscreenTitle,
+          ],
+        ];
+      }
+
+      $editorPreviewUrl = Url::fromUserInput('/ctt/editor', [
+        'query' => [
+          'processUri' => $processUri,
+          'execution' => '1',
+        ],
+      ])->toString();
+
+      $openStableLabel = (string) $this->t('Open stable editor');
+      $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_header']['actions']['open_stable_editor'] = [
+        '#type' => 'link',
+        '#title' => Markup::create('<i class="fa fa-external-link" aria-hidden="true"></i><span class="workflow-preview-sr">' . $this->t('Open stable editor') . '</span>'),
+        '#url' => Url::fromUserInput('/ctt/editor', [
+          'query' => [
+            'processUri' => $processUri,
+            'execution' => '1',
+          ],
+        ]),
+        '#attributes' => [
+          'class' => ['workflow-preview-open-editor-btn', 'workflow-preview-icon-btn'],
+          'title' => $openStableLabel,
+        ],
+      ];
+
+      if (!$workflowExists) {
+        $warningMessage = (string) $this->t('This workflow URI is not available in HASCOAPI right now, so embedded canvas cannot be rendered.');
+        if ($workflowProbeError !== '') {
+          $warningMessage .= ' ' . (string) $this->t('Backend detail: @detail', ['@detail' => $workflowProbeError]);
+        }
+
+        $createModeUrl = Url::fromUserInput('/ctt/editor', [
+          'query' => [
+            'processUri' => $processUri,
+            'execution' => '0',
+          ],
+        ])->toString();
+
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_unavailable'] = [
+          '#type' => 'markup',
+          '#markup' => '<div class="alert alert-warning workflow-preview-unavailable" role="alert">'
+            . '<h4 class="alert-heading" style="margin-top:0;">' . $this->t('Workflow canvas unavailable') . '</h4>'
+            . '<p>' . $warningMessage . '</p>'
+            . '<p><small>URI: ' . Html::escape($processUri) . '</small></p>'
+            . '<div class="workflow-preview-unavailable-actions">'
+            . '<a class="workflow-preview-open-editor-btn" href="' . Html::escape($editorPreviewUrl) . '">' . $this->t('Open stable editor') . '</a> '
+            . '<a class="workflow-preview-open-editor-btn workflow-preview-open-editor-btn-secondary" href="' . Html::escape($createModeUrl) . '">' . $this->t('Open editor in create mode') . '</a>'
+            . '</div>'
+            . '</div>',
+        ];
+      }
+      else {
+        // Attach CTT editor library
+        $form['#attached']['library'][] = 'ctt/ctt-editor-init';
+
+        $currentUser = \Drupal::currentUser();
+        $drupalBaseUrl = \Drupal::request()->getSchemeAndHttpHost() . \Drupal::request()->getBasePath() . '/';
+
+        $existingCttSettings = $form['#attached']['drupalSettings']['ctt'] ?? [];
+        $form['#attached']['drupalSettings']['ctt'] = array_replace_recursive($existingCttSettings, [
+          'drupalBaseUrl' => $drupalBaseUrl,
+          'apiBaseUrl' => $drupalBaseUrl . 'workflow/api',
+          'hascoApiUrl' => $drupalBaseUrl . 'workflow',
+          'csrfToken' => \Drupal::csrfToken()->get('rest'),
+          'processUri' => $processUri,
+          'currentUser' => [
+            'id' => (string) $currentUser->id(),
+            'name' => $currentUser->getDisplayName(),
+            'email' => (string) $currentUser->getEmail(),
+          ],
+          'execution' => [
+            'mode' => 'execution',
+            'daUri' => NULL,
+            'dataFileUri' => NULL,
+            'studyUri' => $this->getStudy()->uri,
+            'processUri' => $processUri,
+            'readOnlyPreview' => true,
+          ],
+          'readOnlyPreview' => true,
+        ]);
+
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_body'] = [
+          '#type' => 'container',
+          '#attributes' => [
+            'class' => ['workflow-canvas-body'],
+          ],
+        ];
+
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_body']['workflow_canvas'] = [
+          '#type' => 'container',
+          '#attributes' => [
+            'id' => 'ctt-workflow-app',
+            'class' => ['ctt-workflow-preview-app'],
+            'data-ctt-min-height' => '520',
+            'data-workflow-preview-editor-url' => $editorPreviewUrl,
+          ],
+        ];
+
+        $form['row2a']['item']['collapse']['body']['workflow_canvas_wrapper']['workflow_canvas_block']['workflow_canvas_body']['workflow_canvas']['loading'] = [
+          '#type' => 'markup',
+          '#markup' => '<div class="ctt-loading-indicator"><div class="ctt-loading-content"><div class="ajax-progress ajax-progress-throbber"><div class="throbber">&nbsp;</div></div><p class="ctt-loading-text">' . $this->t('Loading workflow canvas...') . '</p></div></div>',
+        ];
+      }
+      }
+    }
 
     // ROW 2 as a Bootstrap 5 Accordion, preserving your AJAX logic
     $form['row2'] = [
@@ -521,7 +836,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type'       => 'html_tag',
         '#tag'        => 'button',
-        '#value'      => '<h3 id="total_elements_count" class="mb-0">' . $cards[1]['value'] . '</h3>' .
+        '#value'      => '<h3 id="total_elements_count" class="mb-0">Data Contents</h3>' .
           ($isOwner ?
             '&nbsp;<div class="info-card text-center w-80">(You can drag and drop files directly onto this card)</div>' :
             '') .
@@ -1098,13 +1413,11 @@ class ManageStudyForm extends FormBase
 
     $form['back_link'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Back to Manage Studies'),
-      '#url' => Url::fromUri('internal:/'),
+      '#value' => $this->t($backButtonLabel),
       '#name' => 'back',
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'back-button'],
         'style' => 'min-width: 260px; white-space: nowrap;',
-        'onclick' => 'window.history.back(); return false;',
       ],
     ];
 
@@ -1162,7 +1475,24 @@ class ManageStudyForm extends FormBase
     }
 
     if ($button_name === 'back') {
-      self::backUrl();
+      // Get tracked previous URL
+      $uid = \Drupal::currentUser()->id();
+      $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.manage_study_elements');
+      
+      if ($previousUrl) {
+        // Use RedirectResponse and exit to ensure redirect happens
+        $response = new RedirectResponse($previousUrl);
+        $response->send();
+        exit(); // Critical: exit to prevent further processing
+      }
+      
+      // Default fallback: redirect to studies list
+      $form_state->setRedirect('std.select_study', [
+        'elementtype' => 'study',
+        'page' => '1',
+        'pagesize' => '12',
+      ]);
+      return;
     }
   }
 
@@ -1514,7 +1844,7 @@ class ManageStudyForm extends FormBase
   function backUrl()
   {
     $uid = \Drupal::currentUser()->id();
-    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.list_element');
+    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.manage_study_elements');
     if ($previousUrl) {
       $response = new RedirectResponse($previousUrl);
       $response->send();

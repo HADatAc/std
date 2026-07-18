@@ -515,8 +515,12 @@ class EditStudyForm extends FormBase {
       $api->elementDel('study',$this->getStudy()->uri);
       $message = $api->elementAdd('study',$studyJson);
 
-      if ($message != null)
+      if ($message != null) {
         \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been updated successfully."));
+        
+        // Invalidate study search cache for this study
+        \Drupal\std\Service\StudyVariableSearchService::invalidateCache($this->getStudy()->uri);
+      }
 
       self::backUrl();
       return;

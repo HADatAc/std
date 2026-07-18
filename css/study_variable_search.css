@@ -220,6 +220,66 @@
   flex-wrap: wrap;
 }
 
+/* ProcessBasedStudy badges */
+.std-study-card .badge {
+  font-size: 0.75rem;
+  padding: 0.25em 0.6em;
+  font-weight: 600;
+}
+
+.std-study-card .badge.bg-primary {
+  background-color: #0d6efd !important;
+  color: #fff;
+}
+
+.std-study-card .badge.bg-secondary {
+  background-color: #6c757d !important;
+  color: #fff;
+}
+
+/* ProcessBasedStudy metadata section */
+.std-study-metadata {
+  padding: 10px 0;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 12px;
+}
+
+.std-study-metadata p {
+  margin-bottom: 6px;
+  font-size: 0.88rem;
+  color: #4b5563;
+}
+
+.std-study-metadata strong {
+  font-weight: 600;
+  color: #1f2937;
+  margin-right: 4px;
+}
+
+/* Hierarchical modal button style */
+.std-filter-section-title .btn-link {
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  text-decoration: none;
+  color: #0d6efd;
+}
+
+.std-filter-section-title .btn-link:hover {
+  color: #0a58ca;
+}
+
+/* Edit button style */
+.std-study-actions .btn-secondary {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: #fff;
+}
+
+.std-study-actions .btn-secondary:hover {
+  background-color: #5c636a;
+  border-color: #565e64;
+}
+
 @media (max-width: 991px) {
   .std-search-sidebar {
     max-height: none;

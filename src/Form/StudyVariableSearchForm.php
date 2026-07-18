@@ -34,8 +34,10 @@ class StudyVariableSearchForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $form['#attached']['library'][] = 'std/study_variable_search';
+    $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['drupalSettings']['stdStudySearch'] = [
       'weights' => StudySearchRanking::defaultWeights(),
+      'totalStudies' => 0, // Will be updated after loading studies
     ];
 
     /** @var \Drupal\std\Service\StudyVariableSearchService $searchService */
@@ -81,9 +83,77 @@ class StudyVariableSearchForm extends FormBase {
       ? $context['errors']
       : [];
 
+    // Update total studies count in drupalSettings
+    $totalStudies = count($studyCards);
+    $form['#attached']['drupalSettings']['stdStudySearch']['totalStudies'] = $totalStudies;
+
+    // Extract new filter data for ProcessBasedStudy
+    $organizations = is_array($context['organizations'] ?? NULL)
+      ? $context['organizations']
+      : [];
+    $processFilters = is_array($context['process_filters'] ?? NULL)
+      ? $context['process_filters']
+      : [];
+
+    // Aggregate processFilters by ProcessStem (not by individual Process)
+    // ProcessStems are hierarchical, Processes are not
+    $processStemAggregated = [];
+    foreach ($processFilters as $processData) {
+      $stemSlug = $processData['stem_slug'] ?? '';
+      $stemLabel = $processData['stem_label'] ?? '';
+      
+      if ($stemSlug === '' || $stemLabel === '') {
+        continue;
+      }
+      
+      if (!isset($processStemAggregated[$stemSlug])) {
+        $processStemAggregated[$stemSlug] = [
+          'label' => $stemLabel,
+          'slug' => $stemSlug,
+          'count' => 0,
+        ];
+      }
+      
+      $processStemAggregated[$stemSlug]['count'] += $processData['count'] ?? 0;
+    }
+
+    $platformFilters = is_array($context['platform_filters'] ?? NULL)
+      ? $context['platform_filters']
+      : [];
+
     $form['#attached']['drupalSettings']['stdStudySearch']['ontologyKeys'] = array_values(array_map('strval', array_keys($ontologyDefinitions)));
 
     $sidebarHtml = '';
+
+    // Render new filter sections for ProcessBasedStudy
+    if (!empty($organizations)) {
+      $sidebarHtml .= $this->renderFilterSection(
+        'Organizations',
+        $organizations,
+        'organization',
+        FALSE
+      );
+    }
+
+    if (!empty($platformFilters)) {
+      $sidebarHtml .= $this->renderFilterSection(
+        'Platforms',
+        $platformFilters,
+        'platform',
+        TRUE
+      );
+    }
+
+    if (!empty($processStemAggregated)) {
+      $sidebarHtml .= $this->renderFilterSection(
+        'Clinical Processes',
+        array_values($processStemAggregated),
+        'process',
+        TRUE
+      );
+    }
+
+    // Render existing variable filter sections
     foreach (self::SOURCE_TITLES as $sourceKey => $sourceTitle) {
       $sidebarHtml .= $this->renderSourceSection(
         $sourceTitle,
@@ -113,7 +183,7 @@ class StudyVariableSearchForm extends FormBase {
         '<section id="std-study-variable-search" class="std-study-search">'
           . $errorBanner
           . '<header class="std-search-header">'
-          . '<p class="text-muted mb-3">Use the hierarchical variable browser to select filters and rank related studies by relevance.</p>'
+          . '<p class="text-muted mb-3">Use the hierarchical variable browser or other filters (Organizations, Platforms, etc.) to select and rank related studies by relevance.</p>'
           . '<div class="std-filter-topbar">'
           . '<div class="std-logic-toggle" role="radiogroup" aria-label="Filter logic">'
           . '<label><input type="radio" name="std-search-logic" value="and"> AND</label>'
@@ -131,10 +201,10 @@ class StudyVariableSearchForm extends FormBase {
           . '<div class="col-12 col-lg-8">'
           . '<div id="std-selected-preview" class="std-selected-preview mb-2" aria-live="polite"></div>'
           . '<div class="std-results-header mb-2">'
-          . '<strong id="std-visible-results">0</strong> studies visible'
+          . '<strong id="std-visible-results">0</strong> of <strong id="std-total-studies">' . $totalStudies . '</strong> studies visible'
           . '<span class="text-muted ms-2" id="std-ranking-indicator"></span>'
           . '</div>'
-          . '<p id="std-study-empty-state" class="text-muted mb-3">Select at least one variable to display studies.</p>'
+          . '<p id="std-study-empty-state" class="text-muted mb-3">Select at least one filter to display studies.</p>'
           . '<div id="std-study-cards" class="std-study-grid">'
           . $cardsHtml
           . '</div>'
@@ -242,9 +312,33 @@ class StudyVariableSearchForm extends FormBase {
       ];
     }
 
-    $html = '<details class="std-search-section std-search-source-section std-search-ontology-section mt-4">';
+    // Hidden field to receive selected term URI
+    $fieldId = 'std-ontology-' . $ontology . '-selection';
+    
+    // Add Browse button using the tree modal system
+    $treeUrl = \Drupal\Core\Url::fromRoute('rep.tree_form', [
+      'mode' => 'modal',
+      'elementtype' => $ontology,
+      'silent' => 'false',
+      'prefix' => 'false',
+    ], ['query' => ['field_id' => $fieldId]])->toString();
+    
+    $html = '<input type="hidden" id="' . Html::escape($fieldId) . '" name="' . Html::escape($fieldId) . '" value="" data-ontology="' . Html::escape($ontology) . '" class="std-ontology-selection-field" />';
+    
+    $html .= '<details class="std-search-section std-search-source-section std-search-ontology-section mt-4" data-ontology="' . Html::escape($ontology) . '">';
     $html .= '<summary class="std-search-section-summary">';
     $html .= '<span class="std-search-section-title">' . Html::escape($title) . ' (' . count($terms) . ')</span>';
+    
+    $html .= '<button type="button" class="btn btn-sm btn-outline-secondary open-tree-modal std-ontology-browse-btn" '
+      . 'data-ontology="' . Html::escape($ontology) . '" '
+      . 'data-url="' . Html::escape($treeUrl) . '" '
+      . 'data-field-id="' . Html::escape($fieldId) . '" '
+      . 'data-elementtype="' . Html::escape($ontology) . '" '
+      . 'data-dialog-type="modal" '
+      . 'title="Browse ' . Html::escape($title) . '">'
+      . '<i class="bi bi-folder2-open"></i> Browse'
+      . '</button>';
+    
     $html .= '</summary>';
 
     if (empty($terms)) {
@@ -296,6 +390,11 @@ class StudyVariableSearchForm extends FormBase {
       }
 
       $cardsHtml .= '<article class="std-study-card"'
+        . ' data-study-type="' . Html::escape($card['study_type'] ?? 'study') . '"'
+        . ' data-organization-slug="' . Html::escape($card['organization_slug'] ?? '') . '"'
+        . ' data-platform-slug="' . Html::escape($card['platform_slug'] ?? '') . '"'
+        . ' data-process-stem-slug="' . Html::escape($card['process_stem_slug'] ?? '') . '"'
+        . ' data-process-label="' . Html::escape($card['process_label'] ?? '') . '"'
         . ' data-tags="' . Html::escape($this->joinTags($tags)) . '"'
         . ' data-simulator-tags="' . Html::escape($this->joinTags(is_array($sourceTags['simulator'] ?? NULL) ? $sourceTags['simulator'] : [])) . '"'
         . ' data-instrument-tags="' . Html::escape($this->joinTags(is_array($sourceTags['instrument'] ?? NULL) ? $sourceTags['instrument'] : [])) . '"'
@@ -306,6 +405,17 @@ class StudyVariableSearchForm extends FormBase {
         . '>';
 
       $cardsHtml .= '<div class="std-study-card-header">';
+      
+      // Add study type badge for ProcessBasedStudy
+      $studyType = $card['study_type'] ?? 'study';
+      if ($studyType === 'processbasedstudy') {
+        $cardsHtml .= '<span class="badge bg-primary me-2">ProcessBasedStudy</span>';
+      }
+      $studyId = trim((string) ($card['study_id'] ?? ''));
+      if ($studyId !== '') {
+        $cardsHtml .= '<span class="badge bg-secondary me-2">' . Html::escape($studyId) . '</span>';
+      }
+      
       $cardsHtml .= '<h4>' . Html::escape((string) ($card['label'] ?? '')) . '</h4>';
       $cardsHtml .= '<p class="std-study-uri mb-2">' . Html::escape((string) ($card['uri'] ?? '')) . '</p>';
       $cardsHtml .= '</div>';
@@ -313,6 +423,43 @@ class StudyVariableSearchForm extends FormBase {
       $description = trim((string) ($card['description'] ?? ''));
       if ($description !== '') {
         $cardsHtml .= '<p class="std-study-description">' . Html::escape($description) . '</p>';
+      }
+
+      // Add ProcessBasedStudy metadata
+      if ($studyType === 'processbasedstudy') {
+        $cardsHtml .= '<div class="std-study-metadata mt-2">';
+        
+        $organization = trim((string) ($card['organization'] ?? ''));
+        if ($organization !== '') {
+          $cardsHtml .= '<p class="mb-1"><strong>Organization:</strong> ' . Html::escape($organization) . '</p>';
+        }
+        
+        $platformLabel = trim((string) ($card['platform_label'] ?? ''));
+        if ($platformLabel !== '') {
+          $cardsHtml .= '<p class="mb-1"><strong>Platform:</strong> ' . Html::escape($platformLabel) . '</p>';
+        }
+        
+        $processLabel = trim((string) ($card['process_label'] ?? ''));
+        if ($processLabel !== '') {
+          $cardsHtml .= '<p class="mb-1"><strong>Process:</strong> ' . Html::escape($processLabel) . '</p>';
+        }
+        
+        $pi = trim((string) ($card['principal_investigator'] ?? ''));
+        if ($pi !== '') {
+          $cardsHtml .= '<p class="mb-1"><strong>PI:</strong> ' . Html::escape($pi) . '</p>';
+        }
+        
+        $startDate = trim((string) ($card['start_date'] ?? ''));
+        if ($startDate !== '') {
+          $cardsHtml .= '<p class="mb-1"><strong>Start Date:</strong> ' . Html::escape($startDate) . '</p>';
+        }
+        
+        $uploadSize = trim((string) ($card['upload_size'] ?? ''));
+        if ($uploadSize !== '') {
+          $cardsHtml .= '<p class="mb-1"><strong>Upload Size:</strong> ' . Html::escape($uploadSize) . '</p>';
+        }
+        
+        $cardsHtml .= '</div>';
       }
 
       $cardsHtml .= '<div class="std-study-meta">'
@@ -340,6 +487,7 @@ class StudyVariableSearchForm extends FormBase {
 
       $cardsHtml .= '<div class="std-study-actions mt-3">'
         . '<a class="btn btn-sm btn-primary" href="' . Html::escape((string) ($card['manage_url'] ?? '#')) . '">Manage Study</a>'
+        . ' <a class="btn btn-sm btn-secondary" href="' . Html::escape((string) ($card['edit_url'] ?? '#')) . '">Edit</a>'
         . '</div>';
       $cardsHtml .= '</article>';
     }
@@ -378,6 +526,58 @@ class StudyVariableSearchForm extends FormBase {
     }
     $html .= '</ul>';
     $html .= '</div>';
+    return $html;
+  }
+
+  /**
+   * Render a filter section (organization, platform, process).
+   *
+   * @param string $title
+   *   Section title.
+   * @param array $items
+   *   Filter items with label, slug, count.
+   * @param string $type
+   *   Filter type (organization, platform, process).
+   * @param bool $hierarchical
+   *   Whether this filter should have hierarchical modal button.
+   *
+   * @return string
+   *   Rendered HTML.
+   */
+  private function renderFilterSection(string $title, array $items, string $type, bool $hierarchical = FALSE): string {
+    $html = '<details class="std-search-section std-search-source-section mt-4">';
+    $html .= '<summary class="std-search-section-summary">';
+    $html .= '<span class="std-search-section-title">' . Html::escape($title) . ' (' . count($items) . ')';
+    if ($hierarchical) {
+      $html .= ' <button type="button" class="btn btn-sm btn-secondary open-tree-modal" data-elementtype="' . Html::escape($type) . '" data-mode="modal">🔍</button>';
+    }
+    $html .= '</span>';
+    $html .= '</summary>';
+
+    if (empty($items)) {
+      $html .= '</details>';
+      return $html;
+    }
+
+    $html .= '<div class="std-search-section-body">';
+
+    foreach ($items as $item) {
+      $slug = $item['slug'] ?? '';
+      $label = $item['label'] ?? '';
+      $count = $item['count'] ?? 0;
+
+      if ($slug === '' || $label === '') {
+        continue;
+      }
+
+      $html .= '<label class="std-search-checkbox">'
+        . '<input type="checkbox" class="std-' . Html::escape($type) . '-checkbox" data-label="' . Html::escape($label) . '" value="' . Html::escape($slug) . '">'
+        . '<span>' . Html::escape($label) . ' (' . (int) $count . ')</span>'
+        . '</label>';
+    }
+
+    $html .= '</div>';
+    $html .= '</details>';
     return $html;
   }
 

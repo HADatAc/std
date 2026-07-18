@@ -14,3 +14,9 @@ services:
   std.study_variable_search:
     class: Drupal\std\Service\StudyVariableSearchService
     arguments: ['@rep.api_connector', '@file_system']
+  cache.std_study_search:
+    class: Drupal\Core\Cache\CacheBackendInterface
+    tags:
+      - { name: cache.bin, default_backend: cache.backend.database }
+    factory: cache_factory:get
+    arguments: [std_study_search]

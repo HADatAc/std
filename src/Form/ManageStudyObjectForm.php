@@ -87,13 +87,26 @@ class ManageStudyObjectForm extends FormBase {
       $this->setStudyObjectCollection($soc);
     }
 
+    // GET STUDY TO CHECK OWNERSHIP
+    $study = NULL;
+    $isOwner = false;
+    if ($soc != NULL && isset($soc->isMemberOf) && isset($soc->isMemberOf->uri)) {
+      $study = $api->parseObjectResponse($api->getUri($soc->isMemberOf->uri), 'getUri');
+      if ($study != NULL && isset($study->hasSIRManagerEmail)) {
+        $isOwner = (strcasecmp(trim((string) $study->hasSIRManagerEmail), trim((string) $this->manager_email)) === 0);
+      }
+    }
+
     // kint($soc);
 
     // GET TOTAL NUMBER OF ELEMENTS AND TOTAL NUMBER OF PAGES
+    // Use wildcard '_' for non-owners to show all objects (read-only)
+    $queryManagerEmail = $isOwner ? $this->manager_email : '_';
+    
     $this->element_type = $elementtype;
     $this->setListSize(-1);
     if ($this->element_type != NULL) {
-      $this->setListSize(ListManagerEmailPageBySOC::total($this->getStudyObjectCollection()->uri, $this->element_type, $this->manager_email));
+      $this->setListSize(ListManagerEmailPageBySOC::total($this->getStudyObjectCollection()->uri, $this->element_type, $queryManagerEmail));
     }
     if (gettype($this->list_size) == 'string') {
       $total_pages = "0";
@@ -120,7 +133,8 @@ class ManageStudyObjectForm extends FormBase {
     }
 
     // RETRIEVE ELEMENTS
-    $this->setList(ListManagerEmailPageBySOC::exec($this->getStudyObjectCollection()->uri, $this->element_type, $this->manager_email, $page, $pagesize));
+    // Use same manager email filter as for total count
+    $this->setList(ListManagerEmailPageBySOC::exec($this->getStudyObjectCollection()->uri, $this->element_type, $queryManagerEmail, $page, $pagesize));
 
     //dpm($this->element_type);
     //dpm($this->getList());
@@ -140,11 +154,22 @@ class ManageStudyObjectForm extends FormBase {
       '#type' => 'item',
       '#title' => t('<h4>'.ucfirst($preferred_study).' Object Collection: <font color="DarkGreen">' . $this->getStudyObjectCollection()->label . '</font></h4>'),
     ];
-    $form['subtitle'] = [
-      '#type' => 'item',
-      '#title' => t('<h4>Managed by: <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
-    ];
-    if ($this->getStudyObjectCollection() != NULL) {
+    
+    // Show different subtitle based on ownership
+    if ($isOwner) {
+      $form['subtitle'] = [
+        '#type' => 'item',
+        '#title' => t('<h4>Managed by: <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
+      ];
+    } else {
+      $form['subtitle'] = [
+        '#type' => 'item',
+        '#title' => t('<h4>All '.ucfirst($preferred_study).' Objects in this collection (Read-Only)</h4>'),
+      ];
+    }
+    
+    // OWNER-ONLY BUTTONS (Add, Edit, Delete)
+    if ($isOwner && $this->getStudyObjectCollection() != NULL) {
       $form['add_so'] = [
         '#type' => 'submit',
         '#value' => $this->t("Add ".ucfirst($preferred_study)." Object"),
@@ -153,24 +178,24 @@ class ManageStudyObjectForm extends FormBase {
           'class' => ['btn', 'btn-primary', 'add-element-button'],
         ],
       ];
+      $form['edit_so'] = [
+        '#type' => 'submit',
+        '#value' => $this->t("Edit ".ucfirst($preferred_study)." Object"),
+        '#name' => 'edit_so',
+        '#attributes' => [
+          'class' => ['btn', 'btn-primary', 'edit-element-button'],
+        ],
+      ];
+      $form['delete_so'] = [
+        '#type' => 'submit',
+        '#value' => $this->t('Delete Selected '.ucfirst($preferred_study).' Objects'),
+        '#name' => 'delete_sos',
+        '#attributes' => [
+          'onclick' => 'if(!confirm("Really Delete?")){return false;}',
+          'class' => ['btn', 'btn-primary', 'delete-button'],
+        ],
+      ];
     }
-    $form['edit_so'] = [
-      '#type' => 'submit',
-      '#value' => $this->t("Edit ".ucfirst($preferred_study)." Object"),
-      '#name' => 'edit_so',
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'edit-element-button'],
-      ],
-    ];
-    $form['delete_so'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Delete Selected '.ucfirst($preferred_study).' Objects'),
-      '#name' => 'delete_sos',
-      '#attributes' => [
-        'onclick' => 'if(!confirm("Really Delete?")){return false;}',
-        'class' => ['btn', 'btn-primary', 'delete-button'],
-      ],
-    ];
 
     $form['so_table'] = [
       '#type' => 'tableselect',
@@ -298,7 +323,25 @@ class ManageStudyObjectForm extends FormBase {
     if ($previousUrl) {
       $response = new RedirectResponse($previousUrl);
       $response->send();
-      return;
+      exit();
+    }
+    
+    // Fallback: if no tracking exists, go back to SOC list for the study
+    if ($this->getStudyObjectCollection() != NULL && 
+        $this->getStudyObjectCollection()->isMemberOf != NULL && 
+        $this->getStudyObjectCollection()->isMemberOf->uri != NULL) {
+      $studyUri = $this->getStudyObjectCollection()->isMemberOf->uri;
+      $encodedStudyUri = base64_encode($studyUri);
+      $url = Url::fromRoute('std.select_element_bystudy', [
+        'studyuri' => $encodedStudyUri,
+        'elementtype' => 'studyobjectcollection',
+        'mode' => 'table',
+        'page' => '1',
+        'pagesize' => '12',
+      ]);
+      $response = new RedirectResponse($url->toString());
+      $response->send();
+      exit();
     }
   }
 

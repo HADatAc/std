@@ -240,6 +240,9 @@ class AddStudyObjectCollectionForm extends FormBase {
       $message = $api->parseObjectResponse($api->elementAdd('studyobjectcollection',$studyObjectCollectionJSON),'elementAdd');
       if ($message != null) {
         \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Object Collection has been added successfully."));
+        
+        // Invalidate study search cache for this study since SOCs changed
+        \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
       } else {
         \Drupal::messenger()->addError(t(ucfirst($preferred_study)." Object Collection failed to be added."));
       }

@@ -256,6 +256,10 @@ class EditProcessBasedStudyForm extends FormBase {
       }
 
       \Drupal::messenger()->addMessage($this->t('Process-Based Study has been updated successfully.'));
+      
+      // Invalidate study search cache for this study
+      \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
+      
       self::backUrl();
       return;
 

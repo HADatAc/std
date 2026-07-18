@@ -199,6 +199,10 @@ class EditStudyObjectCollectionForm extends FormBase {
       $api->elementAdd('studyobjectcollection',$studyObjectCollectionJSON);
 
       \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Object Collection has been updated successfully."));
+      
+      // Invalidate study search cache for this study since SOC changed
+      \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
+      
       self::backUrl();
       return;
 

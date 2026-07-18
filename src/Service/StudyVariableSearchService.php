@@ -44,6 +44,7 @@ final class StudyVariableSearchService {
     $ontologyDefinitions = $this->getOntologyDefinitions();
     $ontologyKeys = array_keys($ontologyDefinitions);
 
+    // Load all Study entities (includes ProcessBasedStudy via hascoType)
     $studies = $this->normalizeItems($this->loadElementsByType('study', $errors));
     $workflowPool = $this->normalizeItems($this->loadElementsByType('workflow', $errors));
     $codebookPool = $this->normalizeItems($this->loadElementsByType('codebook', $errors));
@@ -53,6 +54,11 @@ final class StudyVariableSearchService {
     $workflowPool = $this->applyVisibilityFilter($workflowPool, $userEmail, $isAdmin, $isAuthenticated);
     $codebookPool = $this->applyVisibilityFilter($codebookPool, $userEmail, $isAdmin, $isAuthenticated);
     $semanticVariablePool = $this->applyVisibilityFilter($semanticVariablePool, $userEmail, $isAdmin, $isAuthenticated);
+
+    // Extract metadata for new filters
+    $organizations = $this->extractOrganizations($studies);
+    $processMetadataMap = $this->extractProcessMetadata($studies, $errors);
+    $platformMetadataMap = $this->extractPlatformMetadata($studies, $errors);
 
     $variablesBySource = [
       'simulator' => [],
@@ -79,7 +85,7 @@ final class StudyVariableSearchService {
         : $this->extractCodebookFields($studyUri, $study, $codebookPool, $errors);
       $associatedWorkflows = $this->findAssociatedWorkflowsForStudy($workflowPool, $studyUri);
       $workflowVariablesBySource = $this->extractWorkflowVariablesBySource($associatedWorkflows);
-      $socVariablesBySource = $this->extractSocVariablesBySource($studyUri, $errors);
+      $socVariablesBySource = $this->extractSocVariablesBySourceCached($studyUri, $errors);
       $sourceVariablesByStudy = $this->mergeSourceVariableBuckets(
         $workflowVariablesBySource,
         $socVariablesBySource,
@@ -123,13 +129,62 @@ final class StudyVariableSearchService {
       $hasImages = $this->studyHasMedicalImages($studyUri) ? 1 : 0;
       $completenessScore = round(($hasData + $hasWorkflow + $hasImages) / 3, 4);
 
+      // Determine study type and extract ProcessBasedStudy metadata
+      $processUri = trim((string) ($study->processUri ?? ''));
+      $studyType = !empty($processUri) && $processUri !== 'None' ? 'processbasedstudy' : 'study';
+
+      // Get process metadata if available (including ProcessStem for filtering)
+      $processLabel = '';
+      $processSlug = '';
+      $processStemLabel = '';
+      $processStemSlug = '';
+      if (!empty($processUri) && $processUri !== 'None' && isset($processMetadataMap[$processUri])) {
+        $processLabel = $processMetadataMap[$processUri]['label'] ?? '';
+        $processSlug = $processMetadataMap[$processUri]['slug'] ?? '';
+        $processStemLabel = $processMetadataMap[$processUri]['stem_label'] ?? '';
+        $processStemSlug = $processMetadataMap[$processUri]['stem_slug'] ?? '';
+      }
+
+      // Get organization (handle both string and object)
+      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
+      if (is_object($institutionValue)) {
+        $organization = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
+      } else {
+        $organization = trim((string) ($institutionValue ?? ''));
+      }
+
+      // Get platform metadata if available
+      $platformLabel = '';
+      $platformSlug = '';
+      if (!empty($organization) && $organization !== 'None' && isset($platformMetadataMap[$organization])) {
+        $platformLabel = $platformMetadataMap[$organization]['label'] ?? '';
+        $platformSlug = $platformMetadataMap[$organization]['slug'] ?? '';
+      }
+
       $studyCards[] = [
-        'label' => trim((string) ($study->label ?? $study->title ?? $studyUri)),
+        'label' => trim((string) ($study->label ?? $study->title ?? $study->studyTitle ?? $study->hasStudyTitle ?? $studyUri)),
         'uri' => $studyUri,
+        'study_type' => $studyType,
+        'study_id' => trim((string) ($study->studyID ?? $study->hasStudyID ?? '')),
         'description' => trim((string) ($study->comment ?? '')),
-        'manage_url' => Url::fromRoute('std.manage_study_elements', [
-          'studyuri' => base64_encode($studyUri),
-        ])->toString(),
+        'organization' => $organization,
+        'organization_slug' => $this->slugify($organization),
+        'platform_label' => $platformLabel,
+        'platform_slug' => $platformSlug,
+        'process_uri' => $processUri,
+        'process_label' => $processLabel,
+        'process_slug' => $processSlug,
+        'process_stem_label' => $processStemLabel,
+        'process_stem_slug' => $processStemSlug,
+        'principal_investigator' => is_object($piValue = $study->principalInvestigator ?? $study->hasPrincipalInvestigator ?? null) 
+          ? trim((string) ($piValue->label ?? $piValue->uri ?? '')) 
+          : trim((string) ($piValue ?? '')),
+        'start_date' => trim((string) ($study->startDate ?? $study->hasStartDate ?? '')),
+        'upload_size' => trim((string) ($study->uploadSize ?? $study->hasUploadSize ?? '')),
+        'manage_url' => $this->buildManageStudyUrlWithTracking($studyUri),
+        'edit_url' => $studyType === 'processbasedstudy'
+          ? Url::fromRoute('std.editprocessbasedstudy', ['processbasedstudyuri' => base64_encode($studyUri)])->toString()
+          : Url::fromRoute('std.edit_study', ['studyuri' => base64_encode($studyUri)])->toString(),
         'codebook_count' => count($studyTagsBySource['questionnaire']),
         'component_count' => count($studyTagsBySource['component']),
         'simulator_count' => count($studyTagsBySource['simulator']),
@@ -162,6 +217,9 @@ final class StudyVariableSearchService {
       'variables_by_source' => $variablesBySource,
       'ontology_definitions' => $ontologyTitles,
       'ontology_filters' => $ontologyFilters,
+      'organizations' => $organizations,
+      'process_filters' => array_values($processMetadataMap),
+      'platform_filters' => array_values($platformMetadataMap),
       'study_cards' => $studyCards,
       'errors' => array_values(array_unique($errors)),
     ];
@@ -523,6 +581,30 @@ final class StudyVariableSearchService {
     }
 
     return $bySource;
+  }
+
+  /**
+   * Cached wrapper for extractSocVariablesBySource to avoid expensive API calls on every page load.
+   * Cache is per-study and persists across cache rebuilds (drush cr) for performance.
+   * Only invalidated when study or SOC data changes.
+   */
+  private function extractSocVariablesBySourceCached(string $studyUri, array &$errors): array {
+    $cacheKey = 'std_study_soc_vars:' . md5($studyUri);
+    $cacheBin = \Drupal::service('cache.std_study_search');
+    $cache = $cacheBin->get($cacheKey);
+    
+    if ($cache && !empty($cache->data)) {
+      return $cache->data;
+    }
+    
+    // Cache miss - extract SOC variables (expensive: 1 + N API calls)
+    $result = $this->extractSocVariablesBySource($studyUri, $errors);
+    
+    // Cache permanently with study-specific tag for selective invalidation
+    // This cache persists across 'drush cr' for better performance
+    $cacheBin->set($cacheKey, $result, \Drupal\Core\Cache\CacheBackendInterface::CACHE_PERMANENT, ['std_study_soc_vars', 'std_study:' . md5($studyUri)]);
+    
+    return $result;
   }
 
   private function extractSocVariablesBySource(string $studyUri, array &$errors): array {
@@ -1035,6 +1117,295 @@ final class StudyVariableSearchService {
     }
 
     return $normalized;
+  }
+
+  /**
+   * Build manage study URL with back-tracking support.
+   */
+  private function buildManageStudyUrlWithTracking(string $studyUri): string {
+    // Get current request URI as the previous URL
+    $previousUrl = base64_encode(\Drupal::request()->getRequestUri());
+    
+    // Build the manage study elements URL
+    $manageStudyUrl = Url::fromRoute('std.manage_study_elements', [
+      'studyuri' => base64_encode($studyUri),
+    ])->toString();
+    $currentUrl = base64_encode($manageStudyUrl);
+    
+    // Use rep.back_url to track the previous URL
+    return Url::fromRoute('rep.back_url', [
+      'previousurl' => $previousUrl,
+      'currenturl' => $currentUrl,
+      'currentroute' => 'std.manage_study_elements',
+    ])->toString();
+  }
+
+  /**
+   * Invalidate the study search cache.
+   * Call this when studies, SOCs, workflows, or related data changes.
+   * 
+   * @param string|null $studyUri Optional study URI to invalidate cache for specific study only
+   */
+  public static function invalidateCache(?string $studyUri = NULL): void {
+    $cacheBin = \Drupal::service('cache.std_study_search');
+    
+    if ($studyUri !== NULL) {
+      // Invalidate cache for specific study only
+      $cacheBin->invalidateTags(['std_study:' . md5($studyUri)]);
+    } else {
+      // Invalidate all study caches (use sparingly - only when global changes occur)
+      $cacheBin->invalidateTags(['std_study_soc_vars']);
+    }
+  }
+
+  /**
+   * Extract unique organizations from studies.
+   * 
+   * Organizations are schema:Organization instances (or subclasses).
+   * Organization names MUST be preserved exactly as provided (no normalization).
+   *
+   * @param array $studies
+   *   Array of study objects.
+   *
+   * @return array
+   *   Array of unique organization data with counts.
+   */
+  private function extractOrganizations(array $studies): array {
+    $organizations = [];
+    
+    foreach ($studies as $study) {
+      if (!is_object($study)) {
+        continue;
+      }
+      
+      // Handle institution field (can be string or object)
+      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
+      if (is_object($institutionValue)) {
+        $institution = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
+      } else {
+        $institution = trim((string) ($institutionValue ?? ''));
+      }
+      
+      if ($institution === '' || $institution === 'None') {
+        continue;
+      }
+      
+      $slug = $this->slugify($institution);
+      
+      if (!isset($organizations[$slug])) {
+        $organizations[$slug] = [
+          'label' => $institution,
+          'slug' => $slug,
+          'count' => 0,
+          'type' => 'schema:Organization',
+        ];
+      }
+      
+      $organizations[$slug]['count']++;
+    }
+    
+    uasort($organizations, fn($a, $b) => strcasecmp($a['label'], $b['label']));
+    
+    return array_values($organizations);
+  }
+
+  /**
+   * Extract process metadata for ProcessBasedStudy entities.
+   * 
+   * Architecture: ProcessBasedStudy → processUri → Process → hasStem → ProcessStem (hierarchical)
+   * Processes are NOT hierarchical; ProcessStems ARE hierarchical.
+   *
+   * @param array $studies
+   *   Array of study objects.
+   * @param array &$errors
+   *   Error collection array.
+   *
+   * @return array
+   *   Map of process URI to process metadata (including ProcessStem data).
+   */
+  private function extractProcessMetadata(array $studies, array &$errors): array {
+    $processMap = [];
+    
+    foreach ($studies as $study) {
+      if (!is_object($study)) {
+        continue;
+      }
+      
+      $processUri = trim((string) ($study->processUri ?? ''));
+      if ($processUri === '' || $processUri === 'None') {
+        continue;
+      }
+      
+      if (isset($processMap[$processUri])) {
+        continue;
+      }
+      
+      try {
+        $response = $this->apiConnector->getUri($processUri);
+        $process = $this->apiConnector->parseObjectResponse($response, 'getUri');
+        
+        if (is_object($process)) {
+          $processLabel = trim((string) ($process->label ?? $process->rdfsLabel ?? ''));
+          if ($processLabel === '') {
+            $processLabel = 'Unnamed Process';
+          }
+          
+          $processStemUri = trim((string) ($process->hasStem ?? ''));
+          $processStemLabel = '';
+          $processStemSlug = '';
+          
+          if ($processStemUri !== '') {
+            try {
+              $stemResponse = $this->apiConnector->getUri($processStemUri);
+              $processStem = $this->apiConnector->parseObjectResponse($stemResponse, 'getUri');
+              
+              if (is_object($processStem)) {
+                $processStemLabel = trim((string) ($processStem->label ?? $processStem->rdfsLabel ?? ''));
+                $processStemSlug = $this->slugify($processStemLabel);
+              }
+            }
+            catch (\Throwable $stemError) {
+              $errors[] = sprintf('Failed to load ProcessStem: %s', $processStemUri);
+            }
+          }
+          
+          $processMap[$processUri] = [
+            'uri' => $processUri,
+            'label' => $processLabel,
+            'slug' => $this->slugify($processLabel),
+            'stem_uri' => $processStemUri,
+            'stem_label' => $processStemLabel,
+            'stem_slug' => $processStemSlug,
+            'count' => 0,
+          ];
+        }
+      }
+      catch (\Throwable $e) {
+        $errors[] = sprintf('Failed to load Process metadata: %s', $processUri);
+      }
+    }
+    
+    foreach ($studies as $study) {
+      if (!is_object($study)) {
+        continue;
+      }
+      
+      $processUri = trim((string) ($study->processUri ?? ''));
+      if ($processUri !== '' && $processUri !== 'None' && isset($processMap[$processUri])) {
+        $processMap[$processUri]['count']++;
+      }
+    }
+    
+    return $processMap;
+  }
+
+  /**
+   * Extract platform metadata from studies.
+   *
+   * @param array $studies
+   *   Array of study objects.
+   * @param array &$errors
+   *   Error collection array.
+   *
+   * @return array
+   *   Map of platform reference to platform metadata.
+   */
+  private function extractPlatformMetadata(array $studies, array &$errors): array {
+    $platformMap = [];
+    $platformRefs = [];
+    
+    foreach ($studies as $study) {
+      if (!is_object($study)) {
+        continue;
+      }
+      
+      // Handle institution field (can be string or object)
+      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
+      if (is_object($institutionValue)) {
+        $platformRef = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
+      } else {
+        $platformRef = trim((string) ($institutionValue ?? ''));
+      }
+      
+      if ($platformRef === '' || $platformRef === 'None') {
+        continue;
+      }
+      
+      $platformRefs[$platformRef] = true;
+    }
+    
+    foreach (array_keys($platformRefs) as $platformRef) {
+      try {
+        $platforms = $this->apiConnector->parseObjectResponse(
+          $this->apiConnector->listByKeyword('platform', $platformRef, 50, 0),
+          'listByKeyword'
+        );
+        
+        if (is_array($platforms) && !empty($platforms)) {
+          foreach ($platforms as $platform) {
+            if (!is_object($platform)) {
+              continue;
+            }
+            
+            $platformLabel = trim((string) ($platform->label ?? $platform->rdfsLabel ?? ''));
+            if ($platformLabel === '') {
+              continue;
+            }
+            
+            $platformUri = trim((string) ($platform->uri ?? ''));
+            $slug = $this->slugify($platformLabel);
+            
+            if (!isset($platformMap[$platformRef])) {
+              $platformMap[$platformRef] = [
+                'uri' => $platformUri,
+                'label' => $platformLabel,
+                'slug' => $slug,
+                'count' => 0,
+              ];
+              break;
+            }
+          }
+        }
+        
+        if (!isset($platformMap[$platformRef])) {
+          $platformMap[$platformRef] = [
+            'uri' => '',
+            'label' => $platformRef,
+            'slug' => $this->slugify($platformRef),
+            'count' => 0,
+          ];
+        }
+      }
+      catch (\Throwable $e) {
+        $errors[] = sprintf('Failed to load Platform metadata: %s', $platformRef);
+        $platformMap[$platformRef] = [
+          'uri' => '',
+          'label' => $platformRef,
+          'slug' => $this->slugify($platformRef),
+          'count' => 0,
+        ];
+      }
+    }
+    
+    foreach ($studies as $study) {
+      if (!is_object($study)) {
+        continue;
+      }
+      
+      // Handle institution field (can be string or object)
+      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
+      if (is_object($institutionValue)) {
+        $platformRef = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
+      } else {
+        $platformRef = trim((string) ($institutionValue ?? ''));
+      }
+      
+      if ($platformRef !== '' && $platformRef !== 'None' && isset($platformMap[$platformRef])) {
+        $platformMap[$platformRef]['count']++;
+      }
+    }
+    
+    return $platformMap;
   }
 
 }

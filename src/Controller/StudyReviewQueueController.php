@@ -6,6 +6,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Link;
 use Drupal\Core\Url;
 use Drupal\rep\Utils;
+use GuzzleHttp\Exception\RequestException;
 
 /**
  * Controller for Study Review Queue
@@ -20,29 +21,108 @@ class StudyReviewQueueController extends ControllerBase {
    * Display study review queue
    */
   public function reviewQueue() {
-    $api = \Drupal::service('rep.api_connector');
+    // Get hascoapi base URL from settings
+    $config = \Drupal::config('rep.settings');
+    $hascoapi_url = $config->get('hascoapi_url') ?: 'http://localhost:9001';
     
-    // Get all ProcessBasedStudies
-    $response = $api->parseObjectResponse(
-      $api->apiCall('/hascoapi/api/processbasedstudy/elements/100/0', 'GET'),
-      'getElements'
-    );
+    // Make direct HTTP request to hascoapi
+    $client = \Drupal::httpClient();
+    $response = NULL;
+    $studyObjects = [];
     
-    if ($response === NULL) {
+    try {
+      $result = $client->get($hascoapi_url . '/hascoapi/api/processbasedstudy/elements/100/0');
+      $body = (string) $result->getBody();
+      $json = json_decode($body);
+      
+      if ($json && isset($json->isSuccessful) && $json->isSuccessful && isset($json->body)) {
+        $studyObjects = is_array($json->body) ? $json->body : [];
+      }
+    } catch (RequestException $e) {
+      \Drupal::logger('std')->error('Failed to fetch ProcessBasedStudy list: @message', ['@message' => $e->getMessage()]);
+    }
+    
+    // Handle API error
+    if ($studyObjects === NULL) {
       \Drupal::messenger()->addWarning($this->t('Unable to load Process-Based Studies for review.'));
       return [
         '#markup' => $this->t('Error loading studies.'),
       ];
     }
     
+    // Handle empty database
+    if (empty($studyObjects)) {
+      \Drupal::messenger()->addMessage($this->t('No Process-Based Studies found. Create studies by uploading workflow files or manually adding them.'));
+      return [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['study-review-queue-empty']],
+        'message' => [
+          '#type' => 'markup',
+          '#markup' => '<div class="empty-state">' .
+            '<h2>' . $this->t('No Studies to Review') . '</h2>' .
+            '<p>' . $this->t('Process-Based Studies will appear here once they are created.') . '</p>' .
+            '<p>' . $this->t('To create studies:') . '</p>' .
+            '<ul>' .
+            '<li>' . $this->t('Upload a Workflow (WKF) file to automatically generate studies') . '</li>' .
+            '<li>' . $this->t('Or manually add a Process-Based Study') . '</li>' .
+            '</ul>' .
+            '</div>',
+        ],
+        'actions' => [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['empty-state-actions']],
+          'add_workflow' => [
+            '#type' => 'link',
+            '#title' => $this->t('Upload Workflow'),
+            '#url' => Url::fromRoute('std.add_workflow', ['state' => 'upload']),
+            '#attributes' => ['class' => ['button', 'button--primary']],
+          ],
+          'add_study' => [
+            '#type' => 'link',
+            '#title' => $this->t('Add Process-Based Study'),
+            '#url' => Url::fromRoute('std.add_processbasedstudy'),
+            '#attributes' => ['class' => ['button']],
+          ],
+        ],
+      ];
+    }
+    
     // Filter for auto-generated studies (those with empty or default metadata)
     $needsReview = [];
-    if (is_array($response)) {
-      foreach ($response as $study) {
-        if ($this->needsMetadataEnrichment($study)) {
-          $needsReview[] = $study;
-        }
+    foreach ($studyObjects as $study) {
+      if ($this->needsMetadataEnrichment($study)) {
+        $needsReview[] = $study;
       }
+    }
+    
+    // Handle case where all studies have complete metadata
+    if (empty($needsReview)) {
+      \Drupal::messenger()->addMessage($this->t('All Process-Based Studies have complete metadata. Great job!'));
+      return [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['study-review-queue-complete']],
+        'message' => [
+          '#type' => 'markup',
+          '#markup' => '<div class="complete-state">' .
+            '<h2>' . $this->t('Review Queue Empty') . '</h2>' .
+            '<p>' . $this->t('All @count Process-Based Studies have complete metadata.', ['@count' => count($studyObjects)]) . '</p>' .
+            '</div>',
+        ],
+        'actions' => [
+          '#type' => 'container',
+          '#attributes' => ['class' => ['complete-state-actions']],
+          'view_studies' => [
+            '#type' => 'link',
+            '#title' => $this->t('View All Studies'),
+            '#url' => Url::fromRoute('std.select_study', [
+              'elementtype' => 'processbasedstudy',
+              'page' => '1',
+              'pagesize' => '12',
+            ]),
+            '#attributes' => ['class' => ['button', 'button--primary']],
+          ],
+        ],
+      ];
     }
     
     return [

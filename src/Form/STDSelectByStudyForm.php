@@ -101,6 +101,8 @@ class STDSelectByStudyForm extends FormBase {
     if ($study == NULL) {
       \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
       self::backUrl();
+      // Return empty form to prevent rendering with NULL study data
+      return $form;
     } else {
       $this->setStudy($study);
     }
@@ -109,7 +111,12 @@ class STDSelectByStudyForm extends FormBase {
     $this->element_type = $elementtype;
     $this->setListSize(-1);
     if ($this->element_type != NULL) {
-      $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $this->manager_email));
+      // For SOCs and other study elements, use wildcard '_' to show all items regardless of manager
+      // Only filter by manager email for study-level operations
+      $queryManagerEmail = ($elementtype == 'studyobjectcollection' || $elementtype == 'studyobject' || $elementtype == 'virtualcolumn') 
+        ? '_' 
+        : $this->manager_email;
+      $this->setListSize(ListManagerEmailPageByStudy::total($this->getStudy()->uri, $this->element_type, $queryManagerEmail));
     }
     if (gettype($this->list_size) == 'string') {
       $total_pages = "0";
@@ -136,7 +143,11 @@ class STDSelectByStudyForm extends FormBase {
     }
 
     // RETRIEVE ELEMENTS
-    $this->setList(ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $this->manager_email, $page, $pagesize));
+    // Use same manager email filter as for total count
+    $queryManagerEmail = ($elementtype == 'studyobjectcollection' || $elementtype == 'studyobject' || $elementtype == 'virtualcolumn') 
+      ? '_' 
+      : $this->manager_email;
+    $this->setList(ListManagerEmailPageByStudy::exec($this->getStudy()->uri, $this->element_type, $queryManagerEmail, $page, $pagesize));
 
     //dpm($this->element_type);
     //dpm($this->getList());
@@ -207,13 +218,26 @@ class STDSelectByStudyForm extends FormBase {
       '#type' => 'item',
       '#title' => $this->t('<h4>' . $this->plural_class_name . ' belonging to '.$preferred_study.' <font color="DarkGreen">' . $this->getStudy()->label . ' (' . $this->getStudy()->title . ')</font></h4>'),
     ];
-    $form['page_subtitle'] = [
-      '#type' => 'item',
-      '#title' => $this->t('<h4>' . $this->plural_class_name . ' maintained by <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
-    ];
+    
+    // Show different subtitle based on whether we're filtering by manager email
+    $showingAllItems = ($elementtype == 'studyobjectcollection' || $elementtype == 'studyobject' || $elementtype == 'virtualcolumn');
+    if ($showingAllItems) {
+      $form['page_subtitle'] = [
+        '#type' => 'item',
+        '#title' => $this->t('<h4>All ' . $this->plural_class_name . ' in this '.$preferred_study.'</h4>'),
+      ];
+    } else {
+      $form['page_subtitle'] = [
+        '#type' => 'item',
+        '#title' => $this->t('<h4>' . $this->plural_class_name . ' maintained by <font color="DarkGreen">' . $this->manager_name . ' (' . $this->manager_email . ')</font></h4>'),
+      ];
+    }
 
-    // ONLY SHOW ACTION BUTTONS IF THE LOGGED USER IS THE OWNER OF THE STUDY
-    if ($this->manager_email === $this->getStudy()->hasSIRManagerEmail) {
+    // CHECK IF LOGGED USER IS THE OWNER OF THE STUDY
+    $isStudyOwner = ($this->manager_email === $this->getStudy()->hasSIRManagerEmail);
+    
+    // SHOW OWNER-ONLY ACTION BUTTONS (Add, Edit, Delete, Manage)
+    if ($isStudyOwner) {
       $form['add_element'] = [
         '#type' => 'submit',
         '#value' => $this->t('Add new ' . $this->single_class_name),
@@ -275,6 +299,8 @@ class STDSelectByStudyForm extends FormBase {
         ];
       }
     }
+    
+    // Note: View buttons are now in the table Operations column, no top button needed
 
     if ($this->element_type == 'da' && $this->getMode() == 'card') {
 
@@ -374,6 +400,7 @@ class STDSelectByStudyForm extends FormBase {
     // BACK TO MAIN PAGE
     if ($button_name === 'back') {
       self::backUrl();
+      return;
     }
 
     // ADD ELEMENT
@@ -539,7 +566,7 @@ class STDSelectByStudyForm extends FormBase {
       }
     }
 
-    // MANAGE STUDY OBJECTS
+    // MANAGE STUDY OBJECTS (Owner only - can edit)
     if ($button_name === 'manage_studyobject') {
       if (sizeof($rows) < 1) {
         \Drupal::messenger()->addWarning(t("Select the exact " . $this->single_class_name . "'s objects to be managed."));
@@ -557,6 +584,8 @@ class STDSelectByStudyForm extends FormBase {
         $form_state->setRedirectUrl($url);
       }
     }
+
+    // Note: View functionality is now handled by direct links in the Operations column
 
     // INGEST STR
     if (($button_name === 'ingest_mt') && ($this->element_type == 'str')) {
