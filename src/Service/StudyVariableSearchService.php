@@ -1159,6 +1159,28 @@ final class StudyVariableSearchService {
   }
 
   /**
+   * Completely clear the persistent study search cache.
+   * 
+   * This method explicitly clears ALL cached study search data, including data
+   * that normally persists across 'drush cr' operations. Use this only when
+   * you need to force a complete cache rebuild (e.g., after major data imports,
+   * structural changes, or troubleshooting).
+   * 
+   * For selective cache invalidation, use invalidateCache() instead.
+   */
+  public static function clearAllCache(): void {
+    $cacheBin = \Drupal::service('cache.std_study_search');
+    
+    // Check if this is our persistent backend that has clearPersistentCache()
+    if (method_exists($cacheBin, 'clearPersistentCache')) {
+      $cacheBin->clearPersistentCache();
+    } else {
+      // Fallback to standard deleteAll if not using persistent backend
+      $cacheBin->deleteAll();
+    }
+  }
+
+  /**
    * Extract unique organizations from studies.
    * 
    * Organizations are schema:Organization instances (or subclasses).

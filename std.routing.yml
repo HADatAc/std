@@ -707,3 +707,15 @@ std.review_workflowstem:
     _role: 'content_editor'
   options:
     no_cache: 'TRUE'
+
+# CACHE MANAGEMENT
+
+std.clear_persistent_cache:
+  path: '/admin/std/clear-persistent-cache'
+  defaults:
+    _form: '\Drupal\std\Form\ClearPersistentCacheForm'
+    _title: 'Clear Study Search Persistent Cache'
+  requirements:
+    _permission: 'administer site configuration'
+  options:
+    no_cache: 'TRUE'

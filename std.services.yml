@@ -14,9 +14,16 @@ services:
   std.study_variable_search:
     class: Drupal\std\Service\StudyVariableSearchService
     arguments: ['@rep.api_connector', '@file_system']
+  
+  # Persistent cache factory that survives 'drush cr'
+  cache.backend.std_persistent:
+    class: Drupal\std\Cache\PersistentCacheBackendFactory
+    arguments: ['@database', '@cache_tags.invalidator.checksum']
+  
+  # Study search cache bin using persistent backend
   cache.std_study_search:
     class: Drupal\Core\Cache\CacheBackendInterface
     tags:
-      - { name: cache.bin, default_backend: cache.backend.database }
-    factory: cache_factory:get
+      - { name: cache.bin }
+    factory: cache.backend.std_persistent:get
     arguments: [std_study_search]
