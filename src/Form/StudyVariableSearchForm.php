@@ -70,7 +70,7 @@ class StudyVariableSearchForm extends FormBase {
     if (empty($ontologyDefinitions)) {
       $ontologyDefinitions = [
         'uberon' => 'Anatomical Category (UBERON)',
-        'ncit' => 'Procedure Type (NCIT)',
+        'workflowstem' => 'Procedure Type (NCIT-PMSR)',
       ];
     }
     $ontologyFilters = is_array($context['ontology_filters'] ?? NULL)

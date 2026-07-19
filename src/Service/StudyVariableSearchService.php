@@ -981,11 +981,11 @@ final class StudyVariableSearchService {
         'uri_template' => 'UBERON:%s',
         'uri_keywords' => ['uberon'],
       ],
-      'ncit' => [
-        'title' => 'Procedure Type (NCIT)',
-        'token_regexes' => ['/\bNCIT[:_ ]?C?\d{2,}\b/i'],
+      'workflowstem' => [
+        'title' => 'Procedure Type (NCIT-PMSR)',
+        'token_regexes' => ['/\bNCIT[:_ ]?C?\d{2,}\b/i', '/\bC\d{4,}\b/i'],
         'uri_template' => 'NCIT:C%s',
-        'uri_keywords' => ['ncit'],
+        'uri_keywords' => ['ncit', 'pmsr', 'procedure'],
       ],
     ];
 

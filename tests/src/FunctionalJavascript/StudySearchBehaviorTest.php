@@ -76,7 +76,7 @@ final class StudySearchBehaviorTest extends WebDriverTestBase {
           'uri_keywords' => ['uberon'],
         ],
         'ncit' => [
-          'title' => 'Procedure Type (NCIT)',
+          'title' => 'Procedure Type (NCIT-PMSR)',
           'token_regexes' => ['/\bNCIT[:_ ]?C?\d{2,}\b/i'],
           'uri_template' => 'NCIT:C%s',
           'uri_keywords' => ['ncit'],
