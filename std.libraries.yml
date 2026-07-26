@@ -68,7 +68,7 @@ std_icons:
       css/std_icons.css: {}
 
 study_variable_search:
-  version: 1.x
+  version: 1.2.1
   css:
     theme:
       css/study_variable_search.css: {}
@@ -76,5 +76,16 @@ study_variable_search:
     js/study_variable_search.js: {}
   dependencies:
     - core/jquery
+    - core/drupal
+    - core/once
+
+manage_study_fix:
+  version: 1.0
+  css:
+    theme:
+      css/manage_study_fix.css: {}
+  js:
+    js/manage_study_fix.js: {}
+  dependencies:
     - core/drupal
     - core/once

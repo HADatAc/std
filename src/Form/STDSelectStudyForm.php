@@ -660,17 +660,26 @@ class STDSelectStudyForm extends FormBase
         $insUri = trim((string) $element->institutionUri);
       }
       if ($ins === '' && $insUri !== '') {
-        try {
-          $api = \Drupal::service('rep.api_connector');
-          $org = $api->parseObjectResponse($api->getUri($insUri), 'getUri');
-          if (is_object($org)) {
-            $ins = (string) ($org->name ?? ($org->label ?? $insUri));
+        $normalizedInsUri = strtolower(trim($insUri));
+        $isResolvableInsUri = preg_match('/^https?:\/\//i', $insUri) === 1
+          && !in_array($normalizedInsUri, ['unknown', 'none', 'null', 'n/a'], TRUE);
+
+        if ($isResolvableInsUri) {
+          try {
+            $api = \Drupal::service('rep.api_connector');
+            $org = $api->parseObjectResponse($api->getUri($insUri), 'getUri');
+            if (is_object($org)) {
+              $ins = (string) ($org->name ?? ($org->label ?? $insUri));
+            }
+            else {
+              $ins = $insUri;
+            }
           }
-          else {
+          catch (\Throwable $e) {
             $ins = $insUri;
           }
         }
-        catch (\Throwable $e) {
+        else {
           $ins = $insUri;
         }
       }

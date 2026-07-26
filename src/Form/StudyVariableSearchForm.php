@@ -33,11 +33,24 @@ class StudyVariableSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
+    $session = \Drupal::request()->getSession();
+    $usageCount = (int) $session->get('std.study_search.usage_count', 0);
+    $isInitialUsage = ($usageCount === 0);
+    $session->set('std.study_search.usage_count', $usageCount + 1);
+
+    $configuredMaxInitialStudies = \Drupal::config('std.settings')->get('study_search_max_initial_studies');
+    $maxInitialStudies = (is_numeric($configuredMaxInitialStudies) && (int) $configuredMaxInitialStudies > 0)
+      ? (int) $configuredMaxInitialStudies
+      : 20;
+
     $form['#attached']['library'][] = 'std/study_variable_search';
     $form['#attached']['library'][] = 'rep/rep_modal';
     $form['#attached']['drupalSettings']['stdStudySearch'] = [
       'weights' => StudySearchRanking::defaultWeights(),
       'totalStudies' => 0, // Will be updated after loading studies
+      'isInitialUsage' => $isInitialUsage,
+      'usageCount' => $usageCount,
+      'maxInitialStudies' => $maxInitialStudies,
     ];
 
     /** @var \Drupal\std\Service\StudyVariableSearchService $searchService */

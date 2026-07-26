@@ -44,9 +44,9 @@ final class StudyVariableSearchService {
     $ontologyDefinitions = $this->getOntologyDefinitions();
     $ontologyKeys = array_keys($ontologyDefinitions);
 
-    // Load all Study entities (includes ProcessBasedStudy via hascoType)
-    $studies = $this->normalizeItems($this->loadElementsByType('study', $errors));
     $workflowPool = $this->normalizeItems($this->loadElementsByType('workflow', $errors));
+    // Load all Study entities (plus ProcessBasedStudy via dedicated endpoint).
+    $studies = $this->normalizeItems($this->loadElementsByType('study', $errors));
     $codebookPool = $this->normalizeItems($this->loadElementsByType('codebook', $errors));
     $semanticVariablePool = $this->normalizeItems($this->loadElementsByType('semanticvariable', $errors));
 
@@ -183,7 +183,7 @@ final class StudyVariableSearchService {
         'upload_size' => trim((string) ($study->uploadSize ?? $study->hasUploadSize ?? '')),
         'manage_url' => $this->buildManageStudyUrlWithTracking($studyUri),
         'edit_url' => $studyType === 'processbasedstudy'
-          ? Url::fromRoute('std.editprocessbasedstudy', ['processbasedstudyuri' => base64_encode($studyUri)])->toString()
+          ? Url::fromRoute('std.edit_processbasedstudy', ['studyuri' => base64_encode($studyUri)])->toString()
           : Url::fromRoute('std.edit_study', ['studyuri' => base64_encode($studyUri)])->toString(),
         'codebook_count' => count($studyTagsBySource['questionnaire']),
         'component_count' => count($studyTagsBySource['component']),
@@ -226,6 +226,57 @@ final class StudyVariableSearchService {
   }
 
   private function loadElementsByType(string $elementType, array &$errors): array {
+    // Study Search must include workflow-derived studies as well.
+    if ($elementType === 'study') {
+      $studies = [];
+
+      try {
+        $response = $this->apiConnector->listByKeyword('study', '_', 9999, 0);
+        $items = $this->apiConnector->parseObjectResponse($response, 'listByKeyword');
+        if (is_array($items)) {
+          $studies = $items;
+        }
+      }
+      catch (\Throwable $e) {
+        $errors[] = 'Unable to load study data from HASCOAPI.';
+      }
+
+      // ProcessBasedStudy list endpoint can be sparse in some deployments,
+      // while keyword search reliably returns entries.
+      try {
+        $endpoint = '/hascoapi/api/processbasedstudy/search/_/9999/0';
+        $apiUrl = rtrim((string) $this->apiConnector->getApiUrl(), '/');
+        $raw = $this->apiConnector->perform_http_request('GET', $apiUrl . $endpoint, $this->apiConnector->getHeader());
+        $pbsItems = $this->apiConnector->parseObjectResponse($raw, 'processbasedstudy_search');
+        if (is_array($pbsItems)) {
+          // Merge by URI, preferring explicit ProcessBasedStudy entries.
+          $indexed = [];
+          foreach ($studies as $item) {
+            if (is_object($item) && !empty($item->uri)) {
+              $indexed[(string) $item->uri] = $item;
+            }
+            else {
+              $indexed[] = $item;
+            }
+          }
+          foreach ($pbsItems as $item) {
+            if (is_object($item) && !empty($item->uri)) {
+              $indexed[(string) $item->uri] = $item;
+            }
+            else {
+              $indexed[] = $item;
+            }
+          }
+          return array_values($indexed);
+        }
+      }
+      catch (\Throwable $e) {
+        $errors[] = 'Unable to load process-based study data from HASCOAPI.';
+      }
+
+      return $studies;
+    }
+
     try {
       $response = $this->apiConnector->listByKeyword($elementType, '_', 9999, 0);
       $items = $this->apiConnector->parseObjectResponse($response, 'listByKeyword');

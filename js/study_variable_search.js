@@ -35,6 +35,18 @@
     };
   };
 
+  const getInitialUsageConfig = function () {
+    const settings = (typeof drupalSettings !== 'undefined' && drupalSettings.stdStudySearch)
+      ? drupalSettings.stdStudySearch
+      : {};
+
+    const maxInitial = Number.parseInt(settings.maxInitialStudies, 10);
+    return {
+      isInitialUsage: settings.isInitialUsage === true,
+      maxInitialStudies: Number.isFinite(maxInitial) && maxInitial > 0 ? maxInitial : 20,
+    };
+  };
+
   const splitTags = function (raw) {
     return String(raw || '')
       .split('|')
@@ -210,14 +222,14 @@
     const weights = getWeights();
 
     const cards = Array.from(root.querySelectorAll('.std-study-card'));
-    const visibleCards = [];
+    const matchedCards = [];
     let visibleCount = 0;
 
     cards.forEach((card) => {
       const tags = splitTags(card.dataset.tags);
 
-      // Start with visible=true if any filter is selected, false if no filters
-      let visible = hasAnyFilter;
+      // Default behavior: show all studies when no filters are selected.
+      let visible = true;
 
       // Apply variable filter (only if variables are selected)
       if (visible && hasVariableFilter) {
@@ -269,22 +281,12 @@
         const ranking = computeRanking(card, selected, selectedSources, weights);
         card.dataset.rankScore = ranking.score.toFixed(6);
         card.dataset.matchedCount = String(ranking.matchedCount);
-        visibleCards.push(card);
-      }
-
-      card.style.display = visible ? '' : 'none';
-      if (visible) {
-        visibleCount += 1;
+        matchedCards.push(card);
       }
     });
 
-    const counter = root.querySelector('#std-visible-results');
-    if (counter) {
-      counter.textContent = String(visibleCount);
-    }
-
-    if (cardsContainer && visibleCards.length > 1) {
-      visibleCards.sort((a, b) => {
+    if (cardsContainer && matchedCards.length > 1) {
+      matchedCards.sort((a, b) => {
         const scoreA = Number(a.dataset.rankScore || 0);
         const scoreB = Number(b.dataset.rankScore || 0);
         if (scoreA !== scoreB) {
@@ -302,18 +304,62 @@
         return titleA.localeCompare(titleB);
       });
 
-      visibleCards.forEach((card) => {
+      matchedCards.forEach((card) => {
         cardsContainer.appendChild(card);
       });
     }
 
+    const isInitialUsage = root.dataset.stdInitialUsage === '1';
+    const maxInitialStudies = Number.parseInt(root.dataset.stdInitialMax || '20', 10) || 20;
+    const totalMatched = matchedCards.length;
+    let revealLimit = Number.parseInt(root.dataset.stdRevealLimit || String(maxInitialStudies), 10) || maxInitialStudies;
+
+    if (!isInitialUsage) {
+      revealLimit = Number.MAX_SAFE_INTEGER;
+    }
+
+    if (isInitialUsage && revealLimit < maxInitialStudies) {
+      revealLimit = maxInitialStudies;
+    }
+
+    cards.forEach((card) => {
+      card.style.display = 'none';
+    });
+
+    matchedCards.forEach((card, index) => {
+      const show = index < revealLimit;
+      card.style.display = show ? '' : 'none';
+      if (show) {
+        visibleCount += 1;
+      }
+    });
+
+    root.dataset.stdRevealLimit = String(revealLimit);
+
+    const counter = root.querySelector('#std-visible-results');
+    if (counter) {
+      counter.textContent = String(visibleCount);
+    }
+
     if (emptyState) {
       if (!hasAnyFilter) {
-        emptyState.textContent = 'Select at least one filter to display studies.';
+        if (visibleCount === 0) {
+          emptyState.textContent = 'No studies are available in the current context.';
+        }
+        else if (isInitialUsage && totalMatched > visibleCount) {
+          emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} studies. Scroll down to load more.`;
+        }
+        else {
+          emptyState.textContent = 'Showing all studies. Select filters to narrow results.';
+        }
         emptyState.style.display = '';
       }
       else if (visibleCount === 0) {
         emptyState.textContent = 'No studies match the selected filters.';
+        emptyState.style.display = '';
+      }
+      else if (isInitialUsage && totalMatched > visibleCount) {
+        emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} matching studies. Scroll down to load more.`;
         emptyState.style.display = '';
       }
       else {
@@ -336,6 +382,11 @@
   Drupal.behaviors.stdStudyVariableSearch = {
     attach: function (context) {
       once('std-study-variable-search', '#std-study-variable-search', context).forEach(function (root) {
+        const usageConfig = getInitialUsageConfig();
+        root.dataset.stdInitialUsage = usageConfig.isInitialUsage ? '1' : '0';
+        root.dataset.stdInitialMax = String(usageConfig.maxInitialStudies);
+        root.dataset.stdRevealLimit = String(usageConfig.maxInitialStudies);
+
         const checkboxes = root.querySelectorAll('.study-variable-checkbox');
         const ontologyCheckboxes = root.querySelectorAll('.std-ontology-checkbox');
         const organizationCheckboxes = root.querySelectorAll('.std-organization-checkbox');
@@ -402,8 +453,28 @@
             if (orRadio) {
               orRadio.checked = true;
             }
+            if (root.dataset.stdInitialUsage === '1') {
+              root.dataset.stdRevealLimit = root.dataset.stdInitialMax || '20';
+            }
             applyFilters(root);
           });
+        }
+
+        if (root.dataset.stdInitialUsage === '1') {
+          const onScroll = function () {
+            const viewportBottom = window.innerHeight + window.scrollY;
+            const docHeight = document.documentElement.scrollHeight;
+            if (viewportBottom < docHeight - 200) {
+              return;
+            }
+
+            const step = Number.parseInt(root.dataset.stdInitialMax || '20', 10) || 20;
+            const currentLimit = Number.parseInt(root.dataset.stdRevealLimit || String(step), 10) || step;
+            root.dataset.stdRevealLimit = String(currentLimit + step);
+            applyFilters(root);
+          };
+
+          window.addEventListener('scroll', onScroll, { passive: true });
         }
 
         if (preview) {

@@ -107,14 +107,20 @@ class EditStudyForm extends FormBase {
     }
 
     if ($institutionUri !== '' && $institutionLabel === '') {
-      try {
-        $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
-        if (is_object($institutionObj)) {
-          $institutionLabel = (string) ($institutionObj->name ?? ($institutionObj->label ?? ''));
+      $normalizedInstitutionUri = strtolower(trim($institutionUri));
+      $isResolvableInstitutionUri = preg_match('/^https?:\/\//i', $institutionUri) === 1
+        && !in_array($normalizedInstitutionUri, ['unknown', 'none', 'null', 'n/a'], TRUE);
+
+      if ($isResolvableInstitutionUri) {
+        try {
+          $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
+          if (is_object($institutionObj)) {
+            $institutionLabel = (string) ($institutionObj->name ?? ($institutionObj->label ?? ''));
+          }
         }
-      }
-      catch (\Throwable $e) {
-        $institutionLabel = '';
+        catch (\Throwable $e) {
+          $institutionLabel = '';
+        }
       }
     }
 

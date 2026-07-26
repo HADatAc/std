@@ -1,0 +1,38 @@
+.manage-study-form .accordion-collapse,
+.manage-study-form .accordion-collapse .accordion-body {
+  visibility: visible !important;
+}
+
+.manage-study-form .accordion-collapse:not(.show):not(.collapsing) {
+  display: none;
+}
+
+.manage-study-form #collapseDescription .study-description {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.manage-study-form #collapseDescription .description-subsection {
+  padding: 0 0 14px 0;
+  border-bottom: 2px solid #d7dee7;
+}
+
+.manage-study-form #collapseDescription .description-subsection:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.manage-study-form #collapseDescription .description-subsection-title {
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 3px solid #8fa3ba;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.manage-study-form #collapseDescription .workflow_canvas_wrapper {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 3px solid #d0d9e5;
+}

@@ -87,6 +87,9 @@ class ManageStudyForm extends FormBase
   public function buildForm(array $form, FormStateInterface $form_state, $studyuri = NULL)
   {
 
+    $form['#attributes']['class'][] = 'manage-study-form';
+    $form['#attached']['library'][] = 'std/manage_study_fix';
+
     $config = $this->config(static::CONFIGNAME);
     $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
     
@@ -199,7 +202,6 @@ class ManageStudyForm extends FormBase
     }
     catch (\Throwable $e) {
       // Keep zero if the backend is unavailable.
-      $totalPRCs = 0;
       $associatedWorkflows = [];
     }
 
@@ -293,10 +295,34 @@ class ManageStudyForm extends FormBase
     $piName = ' ';
     if (
       isset($this->getStudy()->pi) &&
-      $this->getStudy()->pi != NULL &&
-      $this->getStudy()->pi->name != NULL
+      $this->getStudy()->pi != NULL
     ) {
-      $piName = $this->getStudy()->pi->name;
+      if (is_object($this->getStudy()->pi)) {
+        $piName = (string) ($this->getStudy()->pi->name ?? ($this->getStudy()->pi->label ?? ' '));
+      }
+      elseif (is_string($this->getStudy()->pi) && trim($this->getStudy()->pi) !== '') {
+        $piName = trim((string) $this->getStudy()->pi);
+      }
+    }
+    if ((trim($piName) === '' || $piName === ' ') && isset($this->getStudy()->principalInvestigator)) {
+      $piFallback = trim((string) $this->getStudy()->principalInvestigator);
+      if ($piFallback !== '') {
+        $piName = $piFallback;
+      }
+    }
+    if ((trim($piName) === '' || $piName === ' ') && isset($this->getStudy()->hasSIRManagerEmail)) {
+      $managerEmailFallback = trim((string) $this->getStudy()->hasSIRManagerEmail);
+      if ($managerEmailFallback !== '') {
+        $piName = $managerEmailFallback;
+      }
+    }
+
+    $piUri = '';
+    if (isset($this->getStudy()->piUri) && is_string($this->getStudy()->piUri)) {
+      $piUri = trim((string) $this->getStudy()->piUri);
+    }
+    if ($piUri === '' && isset($this->getStudy()->pi) && is_object($this->getStudy()->pi) && isset($this->getStudy()->pi->uri)) {
+      $piUri = trim((string) $this->getStudy()->pi->uri);
     }
 
     $institutionName = ' ';
@@ -315,19 +341,55 @@ class ManageStudyForm extends FormBase
       $institutionUri = trim((string) $this->getStudy()->institutionUri);
     }
 
+    if ((trim($institutionName) === '' || $institutionName === ' ') && isset($this->getStudy()->institutionName)) {
+      $institutionNameFallback = trim((string) $this->getStudy()->institutionName);
+      if ($institutionNameFallback !== '') {
+        $institutionName = $institutionNameFallback;
+      }
+    }
+
     if ((trim($institutionName) === '' || $institutionName === ' ') && $institutionUri !== '') {
-      try {
-        $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
-        if (is_object($institutionObj)) {
-          $institutionName = (string) ($institutionObj->name ?? ($institutionObj->label ?? $institutionUri));
+      $normalizedInstitutionUri = strtolower(trim($institutionUri));
+      $isResolvableInstitutionUri = preg_match('/^https?:\/\//i', $institutionUri) === 1
+        && !in_array($normalizedInstitutionUri, ['unknown', 'none', 'null', 'n/a'], TRUE);
+
+      if ($isResolvableInstitutionUri) {
+        try {
+          $institutionObj = $api->parseObjectResponse($api->getUri($institutionUri), 'getUri');
+          if (is_object($institutionObj)) {
+            $institutionName = (string) ($institutionObj->name ?? ($institutionObj->label ?? $institutionUri));
+          }
+          else {
+            $institutionName = $institutionUri;
+          }
         }
-        else {
+        catch (\Throwable $e) {
           $institutionName = $institutionUri;
         }
       }
-      catch (\Throwable $e) {
+      else {
         $institutionName = $institutionUri;
       }
+    }
+
+    $piDisplayHtml = Html::escape(trim((string) $piName));
+    if ($piDisplayHtml === '') {
+      $piDisplayHtml = '&nbsp;';
+    }
+    if ($piUri !== '' && preg_match('/^https?:\/\//i', $piUri) === 1) {
+      $piHref = Url::fromRoute('rep.describe_element', ['elementuri' => base64_encode($piUri)])->toString();
+      $piLinkText = trim((string) $piName) !== '' ? trim((string) $piName) : $piUri;
+      $piDisplayHtml = '<a href="' . Html::escape($piHref) . '">' . Html::escape($piLinkText) . '</a>';
+    }
+
+    $institutionDisplayHtml = Html::escape(trim((string) $institutionName));
+    if ($institutionDisplayHtml === '') {
+      $institutionDisplayHtml = '&nbsp;';
+    }
+    if ($institutionUri !== '' && preg_match('/^https?:\/\//i', $institutionUri) === 1) {
+      $institutionHref = Url::fromRoute('rep.describe_element', ['elementuri' => base64_encode($institutionUri)])->toString();
+      $institutionLinkText = trim((string) $institutionName) !== '' ? trim((string) $institutionName) : $institutionUri;
+      $institutionDisplayHtml = '<a href="' . Html::escape($institutionHref) . '">' . Html::escape($institutionLinkText) . '</a>';
     }
 
     $title = ' ';
@@ -372,8 +434,8 @@ class ManageStudyForm extends FormBase
           <dl class="row">
             <dt class="col-sm-1">' . $this->t('URI')        . ':</dt><dd class="col-sm-11">' . $this->getStudy()->uri     . '</dd>
             <dt class="col-sm-1">' . $this->t('Name')       . ':</dt><dd class="col-sm-11">' . $title                       . '</dd>
-            <dt class="col-sm-1">' . $this->t('PI')         . ':</dt><dd class="col-sm-11">' . $piName                      . '</dd>
-            <dt class="col-sm-1">' . $this->t('Institution'). ':</dt><dd class="col-sm-11">' . $institutionName             . '</dd>
+            <dt class="col-sm-1">' . $this->t('PI')         . ':</dt><dd class="col-sm-11">' . $piDisplayHtml               . '</dd>
+            <dt class="col-sm-1">' . $this->t('Institution'). ':</dt><dd class="col-sm-11">' . $institutionDisplayHtml      . '</dd>
             <dt class="col-sm-1">' . $this->t('Description'). ':</dt><dd class="col-sm-11">' . $this->getStudy()->comment   . '</dd>
           </dl>
         </div></div>
@@ -381,7 +443,6 @@ class ManageStudyForm extends FormBase
     ];
 
     // ROW AREA INTERESTS
-    $form['#attached']['library'][] = 'core/drupal.collapse';
 
     $form['row3'] = [
       '#type' => 'container',
@@ -421,7 +482,7 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => [
         'id' => 'collapseAreas',
-        'class' => ['accordion-collapse','collapse', 'hide'],
+        'class' => ['accordion-collapse','collapse'],
         'aria-labelledby' => 'headingAreas',
         'data-bs-parent' => '#accordionAreas',
       ],
@@ -529,7 +590,7 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => [
         'id' => 'collapseDescription',
-        'class' => ['accordion-collapse','collapse', 'hide'],
+        'class' => ['accordion-collapse','collapse'],
         'aria-labelledby' => 'headingDescription',
         'data-bs-parent' => '#accordionDescription',
       ],
@@ -542,7 +603,8 @@ class ManageStudyForm extends FormBase
 
     // Build description content with study properties
     $descriptionContent = '<div class="study-description">';
-    $descriptionContent .= '<h4>Study Properties</h4>';
+    $descriptionContent .= '<section class="description-subsection description-subsection--properties">';
+    $descriptionContent .= '<h4 class="description-subsection-title">Study Properties</h4>';
     $descriptionContent .= '<dl class="row">';
     
     // Common study properties
@@ -569,6 +631,7 @@ class ManageStudyForm extends FormBase
     }
     
     $descriptionContent .= '</dl>';
+    $descriptionContent .= '</section>';
     
     // Check if this is a ProcessBasedStudy and add its specific properties
     $isProcessBasedStudy = false;
@@ -576,7 +639,8 @@ class ManageStudyForm extends FormBase
     if (isset($this->getStudy()->hascoTypeUri) && 
         $this->getStudy()->hascoTypeUri === 'http://hadatac.org/ont/hasco/ProcessBasedStudy') {
       $isProcessBasedStudy = true;
-      $descriptionContent .= '<h4 class="mt-4">Process-Based Study Properties</h4>';
+      $descriptionContent .= '<section class="description-subsection description-subsection--process">';
+      $descriptionContent .= '<h4 class="description-subsection-title">Process-Based Study Properties</h4>';
       $descriptionContent .= '<dl class="row">';
       
       if (isset($this->getStudy()->hasProcess) || isset($this->getStudy()->hasProcessUri) || isset($this->getStudy()->processUri)) {
@@ -592,6 +656,7 @@ class ManageStudyForm extends FormBase
       }
       
       $descriptionContent .= '</dl>';
+      $descriptionContent .= '</section>';
     }
     
     $descriptionContent .= '</div>';
@@ -677,7 +742,7 @@ class ManageStudyForm extends FormBase
             'class' => ['workflow-preview-collapse-btn', 'workflow-preview-icon-btn'],
             'data-workflow-preview-collapse' => '1',
             'aria-expanded' => 'true',
-            'aria-controls' => 'collapseAreas',
+            'aria-controls' => 'ctt-workflow-app',
             'title' => $collapseTitle,
           ],
         ];
@@ -856,7 +921,7 @@ class ManageStudyForm extends FormBase
     $form['row2']['accordion']['item']['collapse'] = [
       '#type' => 'container',
       '#attributes' => [
-        'class'           => ['accordion-collapse', 'collapse', 'hide'], // `show` = start expanded
+        'class'           => ['accordion-collapse', 'collapse'], // `show` = start expanded
         'id'              => 'collapseDropCard',
         'aria-labelledby' => 'headingDropCard',
         'data-bs-parent'  => '#accordionRow2',
@@ -1188,7 +1253,7 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => [
         'id' => 'collapseWorkflow',
-        'class' => ['accordion-collapse','collapse', 'hide'],
+        'class' => ['accordion-collapse','collapse'],
         'aria-labelledby' => 'headingWorkflow',
         'data-bs-parent' => '#accordionWorkflow',
       ],

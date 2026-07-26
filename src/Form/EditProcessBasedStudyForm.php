@@ -74,6 +74,27 @@ class EditProcessBasedStudyForm extends FormBase {
       '#description' => $this->t('The associated Process/Workflow cannot be changed after creation.'),
     ];
 
+    $processUri = trim((string) ($this->study->processUri ?? ''));
+    if ($processUri !== '') {
+      $processDetailsUrl = Url::fromRoute('rep.describe_element', [
+        'elementuri' => rawurlencode(base64_encode($processUri)),
+      ])->toString();
+
+      $taskModelUrl = Url::fromUri('internal:/ctt/editor', [
+        'query' => [
+          'processUri' => $processUri,
+          'execution' => '1',
+        ],
+      ])->toString();
+
+      $form['procedure_links'] = [
+        '#type' => 'item',
+        '#title' => $this->t('Procedure / Task Model'),
+        '#markup' => '<a href="' . $processDetailsUrl . '">' . $this->t('Open Procedure Details') . '</a>' .
+          ' | <a href="' . $taskModelUrl . '">' . $this->t('Open Task Model Canvas') . '</a>',
+      ];
+    }
+
     // EDITABLE: Study metadata fields
     $form['study_metadata'] = [
       '#type' => 'fieldset',
