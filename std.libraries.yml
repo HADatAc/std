@@ -89,3 +89,4 @@ manage_study_fix:
   dependencies:
     - core/drupal
     - core/once
+    - core/drupalSettings

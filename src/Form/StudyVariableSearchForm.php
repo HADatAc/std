@@ -162,7 +162,8 @@ class StudyVariableSearchForm extends FormBase {
         'Clinical Processes',
         array_values($processStemAggregated),
         'process',
-        TRUE
+        TRUE,
+        'workflowstem'
       );
     }
 
@@ -177,6 +178,10 @@ class StudyVariableSearchForm extends FormBase {
     foreach ($ontologyDefinitions as $ontology => $ontologyTitle) {
       $ontologyKey = trim((string) $ontology);
       if ($ontologyKey === '') {
+        continue;
+      }
+
+      if ($ontologyKey === 'workflowstem') {
         continue;
       }
 
@@ -557,12 +562,34 @@ class StudyVariableSearchForm extends FormBase {
    * @return string
    *   Rendered HTML.
    */
-  private function renderFilterSection(string $title, array $items, string $type, bool $hierarchical = FALSE): string {
-    $html = '<details class="std-search-section std-search-source-section mt-4">';
+  private function renderFilterSection(string $title, array $items, string $type, bool $hierarchical = FALSE, ?string $browseElementtype = NULL): string {
+    $fieldId = 'std-filter-' . $type . '-selection';
+    $treeUrl = '';
+    if ($hierarchical) {
+      $treeElementtype = trim((string) ($browseElementtype ?? $type));
+      if ($treeElementtype === '') {
+        $treeElementtype = $type;
+      }
+
+      $treeUrl = \Drupal\Core\Url::fromRoute('rep.tree_form', [
+        'mode' => 'modal',
+        'elementtype' => $treeElementtype,
+        'silent' => 'false',
+        'prefix' => 'false',
+      ], ['query' => ['field_id' => $fieldId]])->toString();
+    }
+
+    $html = '<input type="hidden" id="' . Html::escape($fieldId) . '" name="' . Html::escape($fieldId) . '" value="" class="std-filter-selection-field" />';
+    $html .= '<details class="std-search-section std-search-source-section mt-4">';
     $html .= '<summary class="std-search-section-summary">';
     $html .= '<span class="std-search-section-title">' . Html::escape($title) . ' (' . count($items) . ')';
     if ($hierarchical) {
-      $html .= ' <button type="button" class="btn btn-sm btn-secondary open-tree-modal" data-elementtype="' . Html::escape($type) . '" data-mode="modal">🔍</button>';
+      $html .= ' <button type="button" class="btn btn-sm btn-secondary open-tree-modal" '
+        . 'data-elementtype="' . Html::escape($treeElementtype) . '" '
+        . 'data-dialog-type="modal" '
+        . 'data-url="' . Html::escape($treeUrl) . '" '
+        . 'data-field-id="' . Html::escape($fieldId) . '" '
+        . 'title="Browse ' . Html::escape($title) . '">🔍</button>';
     }
     $html .= '</span>';
     $html .= '</summary>';

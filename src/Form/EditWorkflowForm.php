@@ -254,27 +254,6 @@ class EditWorkflowForm extends FormBase {
       '#required' => true
     ];
 
-    // Educational (INACSL) properties — scenario-wide, semicolon-separated. Optional.
-    // Defaults come from the current Process so a save preserves them (the save
-    // does elementDel+elementAdd, so any field omitted here is dropped).
-    $form['workflow_learning_objectives'] = [
-      '#type' => 'textarea',
-      '#title' => $this->t('Learning Objectives'),
-      '#default_value' => $this->getProcess()->hasLearningObjectives ?? '',
-      '#description' => $this->t('Measurable learning outcomes, semicolon-separated (INACSL Criterion 3). Recommended for educational/simulation workflows.'),
-    ];
-    $form['workflow_critical_actions'] = [
-      '#type' => 'textarea',
-      '#title' => $this->t('Critical Actions'),
-      '#default_value' => $this->getProcess()->hasCriticalActions ?? '',
-      '#description' => $this->t('Essential performance criteria for assessment, semicolon-separated (INACSL Criterion 5/10).'),
-    ];
-    $form['workflow_debriefing_focus'] = [
-      '#type' => 'textarea',
-      '#title' => $this->t('Debriefing Focus'),
-      '#default_value' => $this->getProcess()->hasDebriefingFocus ?? '',
-      '#description' => $this->t('Structured reflection topics/questions, semicolon-separated (INACSL Criterion 9).'),
-    ];
     // $form['process_toptask'] = [
     //   '#type' => 'textfield',
     //   '#title' => $this->t('Top Task'),
@@ -758,9 +737,6 @@ class EditWorkflowForm extends FormBase {
           . '"hasImageUri":"",'
           . '"hasTopTaskUri":"'. $this->getProcess()->hasTopTaskUri .'",'
           . '"hasSIRManagerEmail":"' . $useremail .'",'
-          . '"hasLearningObjectives":' . json_encode((string) $form_state->getValue('workflow_learning_objectives')) . ','
-          . '"hasCriticalActions":' . json_encode((string) $form_state->getValue('workflow_critical_actions')) . ','
-          . '"hasDebriefingFocus":' . json_encode((string) $form_state->getValue('workflow_debriefing_focus')) . ','
           . '"hasReviewNote":"'.($this->getProcess()->hasSatus !== null ? $this->getProcess()->hasReviewNote : '').'",'
           . '"hasEditorEmail":"'.($this->getProcess()->hasSatus !== null ? $this->getProcess()->hasEditorEmail : '').'"}';
 
@@ -776,9 +752,6 @@ class EditWorkflowForm extends FormBase {
           '"hascoTypeUri":"'.VSTOI::WORKFLOW.'",'.
           '"hasStatus":"'.VSTOI::DRAFT.'",'.
           '"hasSIRManagerEmail":"'.$useremail.'",'.
-          '"hasLearningObjectives":'.json_encode((string) $form_state->getValue('workflow_learning_objectives')).','.
-          '"hasCriticalActions":'.json_encode((string) $form_state->getValue('workflow_critical_actions')).','.
-          '"hasDebriefingFocus":'.json_encode((string) $form_state->getValue('workflow_debriefing_focus')).','.
           '"hasLanguage":"' . $form_state->getValue('workflow_language') . '",'.
           '"label":"'.$form_state->getValue('workflow_name').'",'.
           '"hasVersion":"'.$form_state->getValue('workflow_version').'",'.

@@ -218,11 +218,15 @@ class ProcessBasedStudy extends Study {
       'studyTitle' => '',
       'specificAims' => '',
       'significance' => '',
+      'institutionName' => '',
       'institution' => '',
       'principalInvestigator' => '',
       'contactEmail' => '',
       'startDate' => '',
       'endDate' => '',
+      'hasLearningObjectives' => '',
+      'hasCriticalActions' => '',
+      'hasDebriefingFocus' => '',
     ];
     
     $studyJSON = json_encode($studyData);

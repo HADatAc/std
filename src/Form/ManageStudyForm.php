@@ -92,6 +92,10 @@ class ManageStudyForm extends FormBase
 
     $config = $this->config(static::CONFIGNAME);
     $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+    $preferredStudyLabel = ucfirst(trim((string) $preferred_study));
+    if ($preferredStudyLabel === '') {
+      $preferredStudyLabel = 'Study';
+    }
     
     // Determine back button label and URL based on where user came from
     // Use non-destructive peek to avoid deleting the tracking record
@@ -134,8 +138,20 @@ class ManageStudyForm extends FormBase
       $this->setStudy($study);
     }
 
-    $isOwner = isset($this->getStudy()->hasSIRManagerEmail)
-      && strcasecmp(trim((string) $this->getStudy()->hasSIRManagerEmail), trim((string) $useremail)) === 0;
+    $isProcessBasedStudyType = isset($this->getStudy()->hascoTypeUri)
+      && $this->getStudy()->hascoTypeUri === 'http://hadatac.org/ont/hasco/ProcessBasedStudy';
+
+    $piMbox = '';
+    if (isset($this->getStudy()->pi) && is_object($this->getStudy()->pi)) {
+      $piMbox = strtolower(trim((string) ($this->getStudy()->pi->mbox ?? '')));
+    }
+
+    $ownerCandidates = [
+      strtolower(trim((string) ($this->getStudy()->hasSIRManagerEmail ?? ''))),
+      strtolower(trim((string) ($this->getStudy()->contactEmail ?? ''))),
+      $piMbox,
+    ];
+    $isOwner = in_array(strtolower(trim((string) $useremail)), $ownerCandidates, TRUE) && trim((string) $useremail) !== '';
     $canAccessCttEditor = \Drupal::currentUser()->hasPermission('access ctt editor');
     $canSubmitCttWorkflow = \Drupal::currentUser()->hasPermission('submit ctt workflow');
 
@@ -181,6 +197,11 @@ class ManageStudyForm extends FormBase
       'isOwner'         => $isOwner,
       'canDeleteFiles'  => $isOwner,
 
+    ];
+
+    $form['#attached']['drupalSettings']['stdManageStudy'] = [
+      'isOwner' => $isOwner,
+      'modeLabel' => $isOwner ? 'Edit Mode' : 'View Mode',
     ];
 
     // get totals for current study
@@ -442,6 +463,51 @@ class ManageStudyForm extends FormBase
       '),
     ];
 
+    $currentStudyUri = trim((string) ($this->getStudy()->uri ?? ''));
+    $currentProcessUri = '';
+    if ($isProcessBasedStudyType) {
+      $currentProcessUri = (string) ($this->getStudy()->processUri ?? $this->getStudy()->hasProcess ?? $this->getStudy()->hasProcessUri ?? '');
+      if (is_object($currentProcessUri)) {
+        $currentProcessUri = (string) ($currentProcessUri->uri ?? '');
+      }
+      $currentProcessUri = trim($currentProcessUri);
+    }
+
+    if ($isProcessBasedStudyType || $isOwner) {
+      $form['row1_actions'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['d-flex', 'gap-2', 'mb-3', 'flex-wrap']],
+      ];
+
+      if ($isProcessBasedStudyType) {
+        $createQuery = [];
+        if ($currentProcessUri !== '') {
+          $createQuery['process_uri'] = $currentProcessUri;
+        }
+        $createStudyUrl = Url::fromRoute('std.add_processbasedstudy', [], [
+          'query' => $createQuery,
+        ]);
+        $form['row1_actions']['create_study_with_process'] = [
+          '#type' => 'link',
+          '#title' => $this->t('Create @study with this Process', ['@study' => $preferredStudyLabel]),
+          '#url' => $createStudyUrl,
+          '#attributes' => ['class' => ['btn', 'btn-outline-primary']],
+        ];
+      }
+
+      if ($isOwner && $currentStudyUri !== '') {
+        $encodedStudyUri = base64_encode($currentStudyUri);
+        $editRoute = $isProcessBasedStudyType ? 'std.edit_processbasedstudy' : 'std.edit_study';
+        $editStudyUrl = Url::fromRoute($editRoute, ['studyuri' => $encodedStudyUri]);
+        $form['row1_actions']['edit_study'] = [
+          '#type' => 'link',
+          '#title' => $this->t('Edit @study', ['@study' => $preferredStudyLabel]),
+          '#url' => $editStudyUrl,
+          '#attributes' => ['class' => ['btn', 'btn-primary']],
+        ];
+      }
+    }
+
     // ROW AREA INTERESTS
 
     $form['row3'] = [
@@ -634,11 +700,13 @@ class ManageStudyForm extends FormBase
     $descriptionContent .= '</section>';
     
     // Check if this is a ProcessBasedStudy and add its specific properties
-    $isProcessBasedStudy = false;
+    $isProcessBasedStudy = $isProcessBasedStudyType;
     $processUri = '';
-    if (isset($this->getStudy()->hascoTypeUri) && 
-        $this->getStudy()->hascoTypeUri === 'http://hadatac.org/ont/hasco/ProcessBasedStudy') {
-      $isProcessBasedStudy = true;
+    $processTypeLabel = '';
+    $processTypeUri = '';
+    $processTypeBrowseHref = '';
+    $processTypeUriResolved = false;
+    if ($isProcessBasedStudy) {
       $descriptionContent .= '<section class="description-subsection description-subsection--process">';
       $descriptionContent .= '<h4 class="description-subsection-title">Process-Based Study Properties</h4>';
       $descriptionContent .= '<dl class="row">';
@@ -649,11 +717,84 @@ class ManageStudyForm extends FormBase
           $processUri = $processUri->uri ?? '';
         }
         $processUri = (string) $processUri;
+
+        // Process Type = associated WorkflowStem value (from Process.wasDerivedFrom).
+        if ($processUri !== '') {
+          try {
+            $processObj = $api->parseObjectResponse($api->getUri($processUri), 'getUri');
+            if (is_object($processObj)) {
+              $stemRef = $processObj->wasDerivedFrom ?? '';
+              if (is_object($stemRef)) {
+                $processTypeUri = (string) ($stemRef->uri ?? '');
+                $processTypeLabel = (string) ($stemRef->label ?? '');
+              }
+              elseif (is_string($stemRef)) {
+                $processTypeUri = trim($stemRef);
+              }
+
+              if ($processTypeUri !== '') {
+                $stemObj = $api->parseObjectResponse($api->getUri($processTypeUri), 'getUri');
+                if (is_object($stemObj)) {
+                  $processTypeUriResolved = true;
+                  $processTypeLabel = trim((string) ($stemObj->label ?? ($stemObj->title ?? ($stemObj->name ?? ''))));
+                }
+              }
+            }
+          }
+          catch (\Throwable $e) {
+            // Keep graceful fallback if process/process-stem lookup fails.
+          }
+        }
+      }
+      if ($processTypeLabel !== '' || $processTypeUri !== '') {
+        $processTypeDisplay = $processTypeLabel !== '' ? $processTypeLabel : $processTypeUri;
+        $browseQuery = [];
+        if ($processTypeUri !== '' && $processTypeUriResolved) {
+          $browseQuery['search_value'] = $processTypeUri;
+        }
+        $processTypeBrowseHref = Url::fromRoute('rep.browse_tree', [
+          'mode' => 'browse',
+          'elementtype' => 'workflowstem',
+        ], [
+          'query' => $browseQuery,
+        ])->toString();
+
+        $processTypeMarkup = htmlspecialchars($processTypeDisplay);
+        if ($processTypeBrowseHref !== '') {
+          $processTypeMarkup .= ' <a href="' . Html::escape($processTypeBrowseHref) . '" class="btn btn-sm btn-outline-primary ms-2 rep-nav-guard">Browse</a>';
+        }
+
+        $descriptionContent .= '<dt class="col-sm-3">Process Type:</dt><dd class="col-sm-9">' . $processTypeMarkup . '</dd>';
+      }
+      else {
+        $descriptionContent .= '<dt class="col-sm-3">Process Type:</dt><dd class="col-sm-9"><span class="text-muted"><em>Not provided</em></span></dd>';
+      }
+
+      if ($processUri !== '') {
         $descriptionContent .= '<dt class="col-sm-3">Process:</dt><dd class="col-sm-9">' . htmlspecialchars($processUri) . '</dd>';
       }
+
       if (isset($this->getStudy()->processLabel)) {
         $descriptionContent .= '<dt class="col-sm-3">Process Label:</dt><dd class="col-sm-9">' . htmlspecialchars($this->getStudy()->processLabel) . '</dd>';
       }
+
+      $learningObjectives = trim((string) ($this->getStudy()->hasLearningObjectives ?? ''));
+      $learningObjectivesDisplay = $learningObjectives !== ''
+        ? htmlspecialchars($learningObjectives)
+        : '<span class="text-muted"><em>Not provided</em></span>';
+      $descriptionContent .= '<dt class="col-sm-3">Learning Objectives:</dt><dd class="col-sm-9">' . $learningObjectivesDisplay . '</dd>';
+
+      $criticalActions = trim((string) ($this->getStudy()->hasCriticalActions ?? ''));
+      $criticalActionsDisplay = $criticalActions !== ''
+        ? htmlspecialchars($criticalActions)
+        : '<span class="text-muted"><em>Not provided</em></span>';
+      $descriptionContent .= '<dt class="col-sm-3">Critical Actions:</dt><dd class="col-sm-9">' . $criticalActionsDisplay . '</dd>';
+
+      $debriefingFocus = trim((string) ($this->getStudy()->hasDebriefingFocus ?? ''));
+      $debriefingFocusDisplay = $debriefingFocus !== ''
+        ? htmlspecialchars($debriefingFocus)
+        : '<span class="text-muted"><em>Not provided</em></span>';
+      $descriptionContent .= '<dt class="col-sm-3">Debriefing Focus:</dt><dd class="col-sm-9">' . $debriefingFocusDisplay . '</dd>';
       
       $descriptionContent .= '</dl>';
       $descriptionContent .= '</section>';

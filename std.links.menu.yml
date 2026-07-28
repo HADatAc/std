@@ -1,6 +1,6 @@
 std.top_level:
-  title: Study Elements
-  description: Manage Study Elements
+  title: Study Management via Forms
+  description: Manage Study via forms
   route_name: rep.home
   menu_name: main
   weight: 30
@@ -19,13 +19,12 @@ std.search_option:
    #_permission: 'access content'
 
 std.search_studies_variables:
-  title: Search Study
+  title: Study Search
   description: Search studies by variables and components
   route_name: std.search_studies_variables
-  parent: std.top_level
   menu_name: main
   enabled: 1
-  weight: 0
+  weight: 21
   requirements:
     _permission: 'access content'
 

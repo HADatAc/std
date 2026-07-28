@@ -36,3 +36,56 @@
   padding-top: 14px;
   border-top: 3px solid #d0d9e5;
 }
+
+.std-manage-mode-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.std-manage-mode-edit {
+  background: #198754;
+  color: #fff;
+}
+
+.std-manage-mode-view {
+  background: #6c757d;
+  color: #fff;
+}
+
+body.std-manage-study-mode-edit h1.page-title::after,
+body.std-manage-study-mode-edit .page-title::after,
+body.std-manage-study-mode-edit main h1::after {
+  content: 'Edit Mode';
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  font-weight: 600;
+  vertical-align: middle;
+  background: #198754;
+  color: #fff;
+}
+
+body.std-manage-study-mode-view h1.page-title::after,
+body.std-manage-study-mode-view .page-title::after,
+body.std-manage-study-mode-view main h1::after {
+  content: 'View Mode';
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  font-weight: 600;
+  vertical-align: middle;
+  background: #6c757d;
+  color: #fff;
+}

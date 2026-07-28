@@ -82,10 +82,23 @@ class EditStudyForm extends FormBase {
       '#title' => $this->t('Long Name'),
       '#default_value' => $this->getStudy()->title,
     ];
+    $piDefault = '';
+    if (isset($this->getStudy()->pi)) {
+      if (is_object($this->getStudy()->pi)) {
+        $piDefault = (string) ($this->getStudy()->pi->name ?? ($this->getStudy()->pi->label ?? ''));
+      }
+      elseif (is_string($this->getStudy()->pi)) {
+        $piDefault = trim((string) $this->getStudy()->pi);
+      }
+    }
+    if ($piDefault === '' && isset($this->getStudy()->principalInvestigator)) {
+      $piDefault = trim((string) $this->getStudy()->principalInvestigator);
+    }
+
     $form['study_pi'] = [
       '#type' => 'textfield',
       '#title' => $this->t('PI'),
-      '#default_value' => $this->getStudy()->pi,
+      '#default_value' => $piDefault,
     ];
 
     $institutionDefault = '';
@@ -394,10 +407,11 @@ class EditStudyForm extends FormBase {
         'class' => ['btn', 'btn-primary', 'save-button'],
       ],
     ];
-    $form['cancel_submit'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Cancel'),
-      '#name' => 'back',
+    $cancelUrl = $this->resolveBackUrl();
+    $form['cancel_link'] = [
+      '#type' => 'link',
+      '#title' => $this->t('Cancel'),
+      '#url' => Url::fromUserInput($cancelUrl),
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'cancel-button'],
       ],
@@ -425,6 +439,37 @@ class EditStudyForm extends FormBase {
         $form_state->setErrorByName('study_name', $this->t('Please enter a name for the '.ucfirst($preferred_study)));
       }
     }
+  }
+
+  /**
+   * Resolve non-destructive back URL for cancel links.
+   */
+  private function resolveBackUrl(): string {
+    $uid = \Drupal::currentUser()->id();
+    $previousUrl = Utils::trackingPeekPreviousUrl($uid, 'std.edit_study');
+
+    if ($previousUrl && strpos($previousUrl, '/load-more-data') !== false) {
+      parse_str(parse_url($previousUrl, PHP_URL_QUERY), $params);
+      $page = isset($params['page']) ? $params['page'] : 1;
+      $element_type = isset($params['element_type']) ? $params['element_type'] : 'study';
+      $pagesize = 9;
+
+      return Url::fromRoute('std.select_study', [
+        'elementtype' => $element_type,
+        'page' => $page,
+        'pagesize' => $pagesize,
+      ])->toString();
+    }
+
+    if (is_string($previousUrl) && str_starts_with($previousUrl, '/')) {
+      return $previousUrl;
+    }
+
+    return Url::fromRoute('std.select_study', [
+      'elementtype' => 'study',
+      'page' => 1,
+      'pagesize' => 9,
+    ])->toString();
   }
 
   /**

@@ -43,6 +43,8 @@ class AddProcessBasedStudyForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
 
+    $prefilledProcessUri = trim((string) \Drupal::request()->query->get('process_uri', \Drupal::request()->query->get('processUri', '')));
+
     // Check if the study URI already exists in the form state.
     // If not, generate a new URI and store it in the form state.
     if (!$form_state->has('study_uri')) {
@@ -77,6 +79,7 @@ class AddProcessBasedStudyForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Workflow/Process URI'),
       '#required' => TRUE,
+      '#default_value' => $prefilledProcessUri,
       '#description' => $this->t('Enter the URI of the Process/Workflow (e.g., http://localhost/kb/pmsr/WKF-X/PROC/0001). The Study ID will be derived from the Workflow ID.'),
       '#maxlength' => 512,
     ];
@@ -149,6 +152,27 @@ class AddProcessBasedStudyForm extends FormBase {
       '#type' => 'date',
       '#title' => $this->t('End Date'),
       '#description' => $this->t('Study end date (ISO 8601 format: YYYY-MM-DD).'),
+    ];
+
+    $form['study_metadata']['learning_objectives'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Learning Objectives'),
+      '#description' => $this->t('Measurable learning outcomes, semicolon-separated (INACSL Criterion 3).'),
+      '#rows' => 3,
+    ];
+
+    $form['study_metadata']['critical_actions'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Critical Actions'),
+      '#description' => $this->t('Essential performance criteria for assessment, semicolon-separated (INACSL Criterion 5/10).'),
+      '#rows' => 3,
+    ];
+
+    $form['study_metadata']['debriefing_focus'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Debriefing Focus'),
+      '#description' => $this->t('Structured reflection topics/questions, semicolon-separated (INACSL Criterion 9).'),
+      '#rows' => 3,
     ];
 
     // Submit buttons
@@ -238,11 +262,15 @@ class AddProcessBasedStudyForm extends FormBase {
         'studyTitle' => trim($form_state->getValue('study_title')),
         'specificAims' => trim($form_state->getValue('specific_aims')),
         'significance' => trim($form_state->getValue('significance')),
+        'institutionName' => trim($form_state->getValue('institution')),
         'institution' => trim($form_state->getValue('institution')),
         'principalInvestigator' => trim($form_state->getValue('principal_investigator')),
         'contactEmail' => trim($form_state->getValue('contact_email')),
         'startDate' => $form_state->getValue('start_date') ?: '',
         'endDate' => $form_state->getValue('end_date') ?: '',
+        'hasLearningObjectives' => trim($form_state->getValue('learning_objectives')),
+        'hasCriticalActions' => trim($form_state->getValue('critical_actions')),
+        'hasDebriefingFocus' => trim($form_state->getValue('debriefing_focus')),
         'hasSIRManagerEmail' => $useremail,
       ];
 

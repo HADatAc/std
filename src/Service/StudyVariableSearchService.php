@@ -136,13 +136,37 @@ final class StudyVariableSearchService {
       // Get process metadata if available (including ProcessStem for filtering)
       $processLabel = '';
       $processSlug = '';
+      $processStemUri = '';
       $processStemLabel = '';
       $processStemSlug = '';
       if (!empty($processUri) && $processUri !== 'None' && isset($processMetadataMap[$processUri])) {
         $processLabel = $processMetadataMap[$processUri]['label'] ?? '';
         $processSlug = $processMetadataMap[$processUri]['slug'] ?? '';
+        $processStemUri = $processMetadataMap[$processUri]['stem_uri'] ?? '';
         $processStemLabel = $processMetadataMap[$processUri]['stem_label'] ?? '';
         $processStemSlug = $processMetadataMap[$processUri]['stem_slug'] ?? '';
+      }
+
+      // Ensure the Procedure Type (NCIT-PMSR) facet is fed from study process data,
+      // even when no ontology token is present in variable labels.
+      if (isset($ontologyDefinitions['workflowstem'])) {
+        $stemFacetSlug = '';
+        if ($processStemUri !== '') {
+          $stemFacetSlug = $this->slugify($processStemUri);
+        }
+        elseif ($processStemSlug !== '') {
+          $stemFacetSlug = $processStemSlug;
+        }
+
+        if ($stemFacetSlug !== '') {
+          $stemFacetLabel = $processStemLabel !== '' ? $processStemLabel : ($processLabel !== '' ? $processLabel : $stemFacetSlug);
+          $ontologyFilters['workflowstem'][$stemFacetSlug] = [
+            'slug' => $stemFacetSlug,
+            'uri' => $processStemUri,
+            'label' => $stemFacetLabel,
+          ];
+          $studyOntologyTags['workflowstem'][$stemFacetSlug] = $stemFacetSlug;
+        }
       }
 
       // Get organization (handle both string and object)
@@ -174,6 +198,7 @@ final class StudyVariableSearchService {
         'process_uri' => $processUri,
         'process_label' => $processLabel,
         'process_slug' => $processSlug,
+        'process_stem_uri' => $processStemUri,
         'process_stem_label' => $processStemLabel,
         'process_stem_slug' => $processStemSlug,
         'principal_investigator' => is_object($piValue = $study->principalInvestigator ?? $study->hasPrincipalInvestigator ?? null) 
@@ -1323,7 +1348,20 @@ final class StudyVariableSearchService {
             $processLabel = 'Unnamed Process';
           }
           
-          $processStemUri = trim((string) ($process->hasStem ?? ''));
+          $processStemUri = '';
+          $stemCandidates = [
+            $process->hasStem ?? NULL,
+            $process->hasProcessStem ?? NULL,
+            $process->processStem ?? NULL,
+            $process->wasDerivedFrom ?? NULL,
+          ];
+          foreach ($stemCandidates as $stemCandidate) {
+            $candidateUri = $this->extractUriString($stemCandidate);
+            if ($candidateUri !== '') {
+              $processStemUri = $candidateUri;
+              break;
+            }
+          }
           $processStemLabel = '';
           $processStemSlug = '';
           
@@ -1334,12 +1372,18 @@ final class StudyVariableSearchService {
               
               if (is_object($processStem)) {
                 $processStemLabel = trim((string) ($processStem->label ?? $processStem->rdfsLabel ?? ''));
-                $processStemSlug = $this->slugify($processStemLabel);
+                if ($processStemLabel !== '') {
+                  $processStemSlug = $this->slugify($processStemLabel);
+                }
               }
             }
             catch (\Throwable $stemError) {
               $errors[] = sprintf('Failed to load ProcessStem: %s', $processStemUri);
             }
+          }
+
+          if ($processStemSlug === '' && $processStemUri !== '') {
+            $processStemSlug = $this->slugify($processStemUri);
           }
           
           $processMap[$processUri] = [
@@ -1370,6 +1414,44 @@ final class StudyVariableSearchService {
     }
     
     return $processMap;
+  }
+
+  /**
+   * Resolve a URI-like string from scalar/object/array API values.
+   */
+  private function extractUriString($value): string {
+    if (is_string($value)) {
+      return trim($value);
+    }
+
+    if (is_object($value)) {
+      foreach (['uri', 'hasUri', 'value', 'id'] as $field) {
+        if (isset($value->{$field}) && is_string($value->{$field})) {
+          $candidate = trim($value->{$field});
+          if ($candidate !== '') {
+            return $candidate;
+          }
+        }
+      }
+
+      foreach (get_object_vars($value) as $innerValue) {
+        $candidate = $this->extractUriString($innerValue);
+        if ($candidate !== '') {
+          return $candidate;
+        }
+      }
+    }
+
+    if (is_array($value)) {
+      foreach ($value as $innerValue) {
+        $candidate = $this->extractUriString($innerValue);
+        if ($candidate !== '') {
+          return $candidate;
+        }
+      }
+    }
+
+    return '';
   }
 
   /**

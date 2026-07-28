@@ -30,6 +30,7 @@ class RouteSubscriber extends RouteSubscriberBase {
     $config = $this->configFactory->get('std.settings');
     $std_home = $config->get('std_home');
     $preferred_workflow = \Drupal::config('rep.settings')->get('preferred_process');
+    $preferred_study = trim((string) (\Drupal::config('rep.settings')->get('preferred_study') ?: 'Study'));
 
     if($std_home == '1'){
       if ($route = $collection->get('view.frontpage.page_1')) {
@@ -48,6 +49,9 @@ class RouteSubscriber extends RouteSubscriberBase {
     }
     if ($route = $collection->get('std.add_workflow')) {
       $route->setDefault('_title', 'Add ' . $preferred_workflow);
+    }
+    if ($route = $collection->get('std.search_studies_variables')) {
+      $route->setDefault('_title', $preferred_study . ' Search');
     }
   }
 

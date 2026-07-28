@@ -64,3 +64,84 @@ function std_menu_links_discovered_alter(&$links) {
     $links['std.manage_workflowstems']['weight'] = 23;
   }
 }
+
+/**
+ * Resolve manage-study ownership mode for the current route.
+ */
+function std_get_manage_study_mode(): ?string {
+  if (\Drupal::routeMatch()->getRouteName() !== 'std.manage_study_elements') {
+    return NULL;
+  }
+
+  $studyuriParam = \Drupal::routeMatch()->getParameter('studyuri');
+  if (!is_string($studyuriParam) || trim($studyuriParam) === '') {
+    return NULL;
+  }
+
+  $decodedStudyUri = base64_decode($studyuriParam, TRUE);
+  if (!is_string($decodedStudyUri) || trim($decodedStudyUri) === '') {
+    return NULL;
+  }
+
+  try {
+    $api = \Drupal::service('rep.api_connector');
+    $study = $api->parseObjectResponse($api->getUri($decodedStudyUri), 'getUri');
+    if (!is_object($study)) {
+      return NULL;
+    }
+
+    $piMbox = '';
+    if (isset($study->pi) && is_object($study->pi)) {
+      $piMbox = strtolower(trim((string) ($study->pi->mbox ?? '')));
+    }
+
+    $currentEmail = strtolower(trim((string) (\Drupal::currentUser()->getEmail() ?? '')));
+    $ownerCandidates = [
+      strtolower(trim((string) ($study->hasSIRManagerEmail ?? ''))),
+      strtolower(trim((string) ($study->contactEmail ?? ''))),
+      $piMbox,
+    ];
+
+    if (in_array($currentEmail, $ownerCandidates, TRUE) && $currentEmail !== '') {
+      return 'edit';
+    }
+
+    return 'view';
+  }
+  catch (\Throwable $e) {
+    return NULL;
+  }
+}
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function std_preprocess_html(array &$variables) {
+  $mode = std_get_manage_study_mode();
+  if ($mode === NULL) {
+    return;
+  }
+
+  $variables['attributes']['class'][] = 'std-manage-study-mode-' . $mode;
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function std_preprocess_page(array &$variables) {
+  if (\Drupal::routeMatch()->getRouteName() !== 'std.manage_study_elements') {
+    return;
+  }
+
+  $mode = std_get_manage_study_mode();
+  if ($mode === NULL) {
+    return;
+  }
+
+  $modeLabel = $mode === 'edit' ? 'Edit Mode' : 'View Mode';
+  $modeClass = $mode === 'edit' ? 'std-title-mode-edit' : 'std-title-mode-view';
+
+  $variables['title'] = \Drupal\Core\Render\Markup::create(
+    'Manage Study Elements <span class="std-title-mode-badge ' . $modeClass . '">' . $modeLabel . '</span>'
+  );
+}
