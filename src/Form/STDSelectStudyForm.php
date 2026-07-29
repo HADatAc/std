@@ -840,8 +840,11 @@ class STDSelectStudyForm extends FormBase
         ]);
 
         // Edit link
+        $edit_route_param = in_array($this->element_type, ['study', 'processbasedstudy'], TRUE)
+          ? 'studyuri'
+          : $this->element_type . 'uri';
         $edit_element_str = base64_encode(Url::fromRoute('std.edit_'.$this->element_type, [
-          $this->element_type.'uri' => $elementUriEncoded,
+          $edit_route_param => $elementUriEncoded,
         ])->toString());
 
         $edit_element = Url::fromRoute('rep.back_url', [
@@ -1059,8 +1062,11 @@ class STDSelectStudyForm extends FormBase
       ]);
 
       // Link para Editar
+      $edit_route_param = in_array($this->element_type, ['study', 'processbasedstudy'], TRUE)
+        ? 'studyuri'
+        : $this->element_type . 'uri';
       $edit_element_str = base64_encode(Url::fromRoute('std.edit_'.$this->element_type, [
-        $this->element_type.'uri' => $elementUriEncoded,
+        $edit_route_param => $elementUriEncoded,
       ])->toString());
 
       $edit_study = Url::fromRoute('rep.back_url', [

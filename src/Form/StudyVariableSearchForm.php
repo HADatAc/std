@@ -157,15 +157,13 @@ class StudyVariableSearchForm extends FormBase {
       );
     }
 
-    if (!empty($processStemAggregated)) {
-      $sidebarHtml .= $this->renderFilterSection(
-        'Clinical Processes',
-        array_values($processStemAggregated),
-        'process',
-        TRUE,
-        'workflowstem'
-      );
-    }
+    $sidebarHtml .= $this->renderFilterSection(
+      'Clinical Processes',
+      array_values($processStemAggregated),
+      'process',
+      TRUE,
+      'workflowstem'
+    );
 
     // Render existing variable filter sections
     foreach (self::SOURCE_TITLES as $sourceKey => $sourceTitle) {

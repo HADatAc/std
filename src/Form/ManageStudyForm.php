@@ -103,7 +103,7 @@ class ManageStudyForm extends FormBase
     $refererUrl = Utils::trackingPeekPreviousUrl($uid, 'std.manage_study_elements');
     $backButtonLabel = 'Back to Manage Studies'; // Default
     if ($refererUrl && strpos($refererUrl, '/std/search/studies') !== false) {
-      $backButtonLabel = 'Back to Study Search';
+      $backButtonLabel = 'Back to ' . $preferredStudyLabel . ' Search';
     }
 
     //Libraries

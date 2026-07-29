@@ -201,10 +201,12 @@ class ProcessBasedStudy extends Study {
       return NULL;
     }
 
+    $processUri = Utils::canonicalizePmsrUri((string) $processUri);
+
     $api = \Drupal::service('rep.api_connector');
     
     // Generate study URI
-    $studyUri = Utils::uriGen('study');
+    $studyUri = Utils::canonicalizePmsrUri(Utils::uriGen('study'));
     
     // Build minimal JSON payload - backend will auto-generate metadata
     $studyData = [
@@ -273,15 +275,18 @@ class ProcessBasedStudy extends Study {
     if (empty($wkfUri)) {
       return '';
     }
+
+    $wkfUri = Utils::canonicalizePmsrUri((string) $wkfUri);
     
     // Extract ID from WKF URI
-    // Example: http://pmsr.net/ont/pmsr#/WKF_SECRETION_001 → STD_SECRETION_001
+    // Example: https://pmsr.net/ont/WKF-SECRETION-001/... -> STD-SECRETION-001
     if (preg_match('/WKF[-_](.+?)(?:\/|$)/', $wkfUri, $matches)) {
       return 'STD-' . str_replace('_', '-', $matches[1]);
     }
     
     // Fallback: just replace WKF with STD
-    return str_replace(['WKF-', 'WKF_'], ['STD-', 'STD_'], $wkfUri);
+    $fallback = str_replace(['WKF-', 'WKF_', 'WFK-', 'WFK_'], ['STD-', 'STD-', 'STD-', 'STD-'], $wkfUri);
+    return str_replace('_', '-', $fallback);
   }
 
   /**

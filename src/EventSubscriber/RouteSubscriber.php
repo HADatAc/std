@@ -50,8 +50,14 @@ class RouteSubscriber extends RouteSubscriberBase {
     if ($route = $collection->get('std.add_workflow')) {
       $route->setDefault('_title', 'Add ' . $preferred_workflow);
     }
+    if ($route = $collection->get('std.edit_processbasedstudy')) {
+      $route->setDefault('_title', 'Edit ' . $preferred_study);
+    }
     if ($route = $collection->get('std.search_studies_variables')) {
       $route->setDefault('_title', $preferred_study . ' Search');
+    }
+    if ($route = $collection->get('std.manage_study_elements')) {
+      $route->setDefault('_title', 'Manage ' . $preferred_study . ' Elements');
     }
   }
 

@@ -43,7 +43,7 @@ class AddProcessBasedStudyForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
 
-    $prefilledProcessUri = trim((string) \Drupal::request()->query->get('process_uri', \Drupal::request()->query->get('processUri', '')));
+    $prefilledProcessUri = Utils::canonicalizePmsrUri(trim((string) \Drupal::request()->query->get('process_uri', \Drupal::request()->query->get('processUri', ''))));
 
     // Check if the study URI already exists in the form state.
     // If not, generate a new URI and store it in the form state.
@@ -96,7 +96,7 @@ class AddProcessBasedStudyForm extends FormBase {
     $form['study_metadata']['study_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Study ID'),
-      '#description' => $this->t('Study identifier (e.g., STD-001). Must start with "STD-". Leave empty to auto-derive from Workflow ID.'),
+        '#description' => $this->t('Study identifier (e.g., STD-001). Must start with "STD-". Leave empty to auto-derive from Workflow ID.'),
       '#maxlength' => 128,
     ];
 
@@ -200,20 +200,32 @@ class AddProcessBasedStudyForm extends FormBase {
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
     $process_uri = trim($form_state->getValue('process_uri'));
-    $study_id = trim($form_state->getValue('study_id'));
+    $study_id = trim((string) $form_state->getValue('study_id'));
     $contact_email = trim($form_state->getValue('contact_email'));
+
+    // Auto-normalize legacy identifiers such as STD_ABC to STD-ABC.
+    if ($study_id !== '') {
+      $normalizedStudyId = str_replace('_', '-', $study_id);
+      if ($normalizedStudyId !== $study_id) {
+        $form_state->setValue('study_id', $normalizedStudyId);
+      }
+      $study_id = $normalizedStudyId;
+    }
 
     // Validate Process URI format
     if (!empty($process_uri)) {
       if (!filter_var($process_uri, FILTER_VALIDATE_URL)) {
         $form_state->setErrorByName('process_uri', $this->t('Process URI must be a valid URL.'));
       }
+      if (preg_match('/\/WKF[_]/i', $process_uri) || preg_match('/\/WFK[-_]/i', $process_uri)) {
+        $form_state->setErrorByName('process_uri', $this->t('Process URI must use "WKF-" (hyphen), not "WKF_"/"WFK_".'));
+      }
     }
 
     // Validate Study ID format if provided
     if (!empty($study_id)) {
-      if (!preg_match('/^STD-/', $study_id)) {
-        $form_state->setErrorByName('study_id', $this->t('Study ID must start with "STD-".'));
+        if (!preg_match('/^STD-/', $study_id)) {
+          $form_state->setErrorByName('study_id', $this->t('Study ID must start with "STD-".'));
       }
     }
 
@@ -248,8 +260,16 @@ class AddProcessBasedStudyForm extends FormBase {
 
     try {
       $useremail = \Drupal::currentUser()->getEmail();
-      $newStudyUri = $form_state->getValue('study_uri');
-      $process_uri = trim($form_state->getValue('process_uri'));
+      $newStudyUri = Utils::canonicalizePmsrUri((string) $form_state->getValue('study_uri'));
+      $process_uri = Utils::canonicalizePmsrUri(trim((string) $form_state->getValue('process_uri')));
+
+      $studyId = trim((string) $form_state->getValue('study_id'));
+      if ($studyId !== '') {
+        $studyId = str_replace('_', '-', $studyId);
+        if (str_starts_with($studyId, 'STD_')) {
+          $studyId = 'STD-' . substr($studyId, 4);
+        }
+      }
 
       // Build JSON payload for ProcessBasedStudy
       // Include all metadata fields (empty strings will trigger auto-generation in backend)
@@ -258,7 +278,7 @@ class AddProcessBasedStudyForm extends FormBase {
         'typeUri' => HASCO::PROCESS_BASED_STUDY,
         'hascoTypeUri' => HASCO::PROCESS_BASED_STUDY,
         'processUri' => $process_uri,
-        'studyID' => trim($form_state->getValue('study_id')),
+        'studyID' => $studyId,
         'studyTitle' => trim($form_state->getValue('study_title')),
         'specificAims' => trim($form_state->getValue('specific_aims')),
         'significance' => trim($form_state->getValue('significance')),

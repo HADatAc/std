@@ -40,7 +40,13 @@ class PersistentDatabaseBackend extends DatabaseBackend {
    * {@inheritdoc}
    */
   public function invalidateTags(array $tags) {
-    parent::invalidateTags($tags);
+    if (empty($tags)) {
+      return;
+    }
+
+    // DatabaseBackend does not expose invalidateTags() in this core version.
+    // Delegate to the global cache tag invalidator service.
+    \Drupal::service('cache_tags.invalidator')->invalidateTags($tags);
   }
 
 }

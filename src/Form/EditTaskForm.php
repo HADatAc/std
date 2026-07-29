@@ -654,9 +654,23 @@ class EditTaskForm extends FormBase {
       '#markup' => '<br><br>',
     ];
 
+    $saveTargetLabel = ($this->getTask()->hasSupertaskUri === null ? 'Workflow' : ' Parent Task');
+    $backToParam = (string) \Drupal::request()->query->get('back_to', '');
+    if ($backToParam !== '') {
+      $decodedBackTo = base64_decode(rawurldecode($backToParam), TRUE);
+      if (is_string($decodedBackTo) && strpos($decodedBackTo, '/std/manage/editprocessbasedstudy/') !== FALSE) {
+        $preferredStudy = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
+        $preferredStudyLabel = ucfirst(trim((string) $preferredStudy));
+        if ($preferredStudyLabel === '') {
+          $preferredStudyLabel = 'Study';
+        }
+        $saveTargetLabel = $preferredStudyLabel;
+      }
+    }
+
     $form['save_submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Save and Go to ' . ($this->getTask()->hasSupertaskUri === null ? 'Workflow':' Parent Task')),
+      '#value' => $this->t('Save and Go to @target', ['@target' => $saveTargetLabel]),
       '#name' => 'save',
       '#attributes' => [
         'class' => ['btn', 'btn-primary', 'save-button'],
@@ -709,6 +723,10 @@ class EditTaskForm extends FormBase {
     // BUILD NEW URL
     $root_url = \Drupal::request()->getBaseUrl();
     $newUrl = $root_url . REPGUI::EDIT_TASK . '/' . $process . '/' . $state . '/' . base64_encode($this->getTask()->uri);
+    $backToParam = (string) \Drupal::request()->query->get('back_to', '');
+    if ($backToParam !== '') {
+      $newUrl .= '?back_to=' . rawurlencode($backToParam);
+    }
 
     // REDIRECT TO NEW URL
     $response = new AjaxResponse();
@@ -1866,6 +1884,16 @@ class EditTaskForm extends FormBase {
     // $response = new RedirectResponse($root_url . '/std/select/task/1/9');
     // $response->send();
     // return;
+
+    $backToParam = (string) \Drupal::request()->query->get('back_to', '');
+    if ($backToParam !== '') {
+      $decodedBackTo = base64_decode(rawurldecode($backToParam), TRUE);
+      if (is_string($decodedBackTo) && str_starts_with($decodedBackTo, '/')) {
+        $response = new RedirectResponse($decodedBackTo);
+        $response->send();
+        return;
+      }
+    }
 
     $encoded_workflow_uri = '';
     if ($this->getProcessUri()) {

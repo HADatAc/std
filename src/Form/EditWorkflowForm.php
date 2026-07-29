@@ -108,6 +108,13 @@ class EditWorkflowForm extends FormBase {
     $languages = $tables->getLanguages();
     $informants = $tables->getInformants();
 
+    if (!is_array($languages)) {
+      $languages = [];
+    }
+    if (!is_array($informants)) {
+      $informants = [];
+    }
+
     //SELECT ONE
     $languages = ['' => $this->t('Select language please')] + $languages;
     $informants = ['' => $this->t('Select Informant please')] + $informants;
@@ -884,8 +891,18 @@ class EditWorkflowForm extends FormBase {
    */
   protected function legacyEditorUrl() {
     $api = \Drupal::service('rep.api_connector');
-    $topTaskUri = (string) ($this->getProcess()->hasTopTaskUri ?? '');
-    $topTask = $topTaskUri !== '' ? $api->parseObjectResponse($api->getUri($topTaskUri), 'getUri') : NULL;
+    $topTaskUri = trim((string) ($this->getProcess()->hasTopTaskUri ?? ''));
+    if ($topTaskUri === '' && isset($this->getProcess()->hasTopTask) && is_object($this->getProcess()->hasTopTask)) {
+      $topTaskUri = trim((string) ($this->getProcess()->hasTopTask->uri ?? ''));
+    }
+    if ($topTaskUri === '') {
+      \Drupal::messenger()->addWarning($this->t('Legacy task editor is unavailable because this workflow has no Top Task. Opening workflow editor instead.'));
+      return Url::fromRoute('std.edit_workflow', [
+        'workflowuri' => base64_encode($this->getWorkflowUri()),
+      ]);
+    }
+
+    $topTask = $api->parseObjectResponse($api->getUri($topTaskUri), 'getUri');
     $state = ($topTask && ($topTask->typeUri ?? '') === VSTOI::ABSTRACT_TASK) ? 'tasks' : 'basic';
     return Url::fromRoute('std.edit_task', [
       'workflowuri' => base64_encode($this->getWorkflowUri()),
@@ -906,6 +923,9 @@ class EditWorkflowForm extends FormBase {
     $api = \Drupal::service('rep.api_connector');
     $process = $this->getProcess();
     $topTaskUri = is_object($process) ? trim((string) ($process->hasTopTaskUri ?? '')) : '';
+    if ($topTaskUri === '' && is_object($process) && isset($process->hasTopTask) && is_object($process->hasTopTask)) {
+      $topTaskUri = trim((string) ($process->hasTopTask->uri ?? ''));
+    }
 
     if ($topTaskUri === '') {
       \Drupal::messenger()->addError($this->t('Validation failed: this workflow has no Top Task (hasTopTask), so the editor cannot render a task tree.'));
