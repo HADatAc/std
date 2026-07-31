@@ -407,7 +407,9 @@ class EditStudyForm extends FormBase {
         'class' => ['btn', 'btn-primary', 'save-button'],
       ],
     ];
-    $cancelUrl = $this->resolveBackUrl();
+    $cancelUrl = Url::fromRoute('std.manage_study_elements', [
+      'studyuri' => base64_encode($this->getStudy()->uri),
+    ])->toString();
     $form['cancel_link'] = [
       '#type' => 'link',
       '#title' => $this->t('Cancel'),
@@ -481,7 +483,7 @@ class EditStudyForm extends FormBase {
     $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'back') {
-      self::backUrl();
+      $this->backUrl();
       return;
     }
 
@@ -573,12 +575,12 @@ class EditStudyForm extends FormBase {
         \Drupal\std\Service\StudyVariableSearchService::invalidateCache($this->getStudy()->uri);
       }
 
-      self::backUrl();
+      $this->backUrl();
       return;
 
     } catch(\Exception $e) {
       \Drupal::messenger()->addMessage(t("An error occurred while updating ".ucfirst($preferred_study).": ".$e->getMessage()));
-      self::backUrl();
+      $this->backUrl();
       return;
     }
 
@@ -590,6 +592,15 @@ class EditStudyForm extends FormBase {
       $response->send();
       return;
     } else {
+      if ($this->getStudy() != NULL && isset($this->getStudy()->uri) && trim((string) $this->getStudy()->uri) !== '') {
+        $manageUrl = Url::fromRoute('std.manage_study_elements', [
+          'studyuri' => base64_encode(trim((string) $this->getStudy()->uri)),
+        ])->toString();
+        $response = new RedirectResponse($manageUrl);
+        $response->send();
+        return;
+      }
+
       $uid = \Drupal::currentUser()->id();
       $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_study');
 

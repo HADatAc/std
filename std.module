@@ -129,19 +129,20 @@ function std_preprocess_html(array &$variables) {
  * Implements hook_preprocess_page().
  */
 function std_preprocess_page(array &$variables) {
-  if (\Drupal::routeMatch()->getRouteName() !== 'std.manage_study_elements') {
+  $routeName = \Drupal::routeMatch()->getRouteName();
+  if (!in_array($routeName, ['std.manage_study_elements', 'std.edit_study', 'std.edit_processbasedstudy'], TRUE)) {
     return;
   }
+  $preferredStudy = trim((string) (\Drupal::config('rep.settings')->get('preferred_study') ?: 'Study'));
+  $preferredStudyEscaped = \Drupal\Component\Utility\Html::escape($preferredStudy);
+  $manageTitle = $preferredStudyEscaped . ' Search > Manage ' . $preferredStudyEscaped . ' Elements';
 
-  $mode = std_get_manage_study_mode();
-  if ($mode === NULL) {
+  if ($routeName === 'std.manage_study_elements') {
+    $variables['title'] = \Drupal\Core\Render\Markup::create($manageTitle);
     return;
   }
-
-  $modeLabel = $mode === 'edit' ? 'Edit Mode' : 'View Mode';
-  $modeClass = $mode === 'edit' ? 'std-title-mode-edit' : 'std-title-mode-view';
 
   $variables['title'] = \Drupal\Core\Render\Markup::create(
-    'Manage Study Elements <span class="std-title-mode-badge ' . $modeClass . '">' . $modeLabel . '</span>'
+    $manageTitle . ' > Edit ' . $preferredStudyEscaped
   );
 }

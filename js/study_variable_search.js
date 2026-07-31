@@ -47,6 +47,23 @@
     };
   };
 
+  const getStudyLabels = function () {
+    const settings = (typeof drupalSettings !== 'undefined' && drupalSettings.stdStudySearch)
+      ? drupalSettings.stdStudySearch
+      : {};
+
+    const labels = settings.studyLabels || {};
+    const singular = String(labels.singular || 'Study').trim() || 'Study';
+    const plural = String(labels.plural || 'Studies').trim() || 'Studies';
+
+    return {
+      singular,
+      plural,
+      singularLower: String(labels.singular_lower || singular.toLowerCase()),
+      pluralLower: String(labels.plural_lower || plural.toLowerCase()),
+    };
+  };
+
   const splitTags = function (raw) {
     return String(raw || '')
       .split('|')
@@ -180,6 +197,7 @@
   };
 
   const applyFilters = function (root) {
+    const studyLabels = getStudyLabels();
     const selectedVariableChecks = Array.from(root.querySelectorAll('.study-variable-checkbox:checked'));
     const selectedOntologyChecks = Array.from(root.querySelectorAll('.std-ontology-checkbox:checked'));
     const selectedOrganizationChecks = Array.from(root.querySelectorAll('.std-organization-checkbox:checked'));
@@ -344,22 +362,22 @@
     if (emptyState) {
       if (!hasAnyFilter) {
         if (visibleCount === 0) {
-          emptyState.textContent = 'No studies are available in the current context.';
+          emptyState.textContent = `No ${studyLabels.pluralLower} are available in the current context.`;
         }
         else if (isInitialUsage && totalMatched > visibleCount) {
-          emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} studies. Scroll down to load more.`;
+          emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} ${studyLabels.pluralLower}. Scroll down to load more.`;
         }
         else {
-          emptyState.textContent = 'Showing all studies. Select filters to narrow results.';
+          emptyState.textContent = `Showing all ${studyLabels.pluralLower}. Select filters to narrow results.`;
         }
         emptyState.style.display = '';
       }
       else if (visibleCount === 0) {
-        emptyState.textContent = 'No studies match the selected filters.';
+        emptyState.textContent = `No ${studyLabels.pluralLower} match the selected filters.`;
         emptyState.style.display = '';
       }
       else if (isInitialUsage && totalMatched > visibleCount) {
-        emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} matching studies. Scroll down to load more.`;
+        emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} matching ${studyLabels.pluralLower}. Scroll down to load more.`;
         emptyState.style.display = '';
       }
       else {

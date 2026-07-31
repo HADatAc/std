@@ -33,6 +33,9 @@ class StudyVariableSearchForm extends FormBase {
    * {@inheritdoc}
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
+    $preferredStudy = trim((string) (\Drupal::config('rep.settings')->get('preferred_study') ?: 'Study'));
+    $studyLabels = $this->buildStudyLabels($preferredStudy);
+
     $session = \Drupal::request()->getSession();
     $usageCount = (int) $session->get('std.study_search.usage_count', 0);
     $isInitialUsage = ($usageCount === 0);
@@ -51,6 +54,7 @@ class StudyVariableSearchForm extends FormBase {
       'isInitialUsage' => $isInitialUsage,
       'usageCount' => $usageCount,
       'maxInitialStudies' => $maxInitialStudies,
+      'studyLabels' => $studyLabels,
     ];
 
     /** @var \Drupal\std\Service\StudyVariableSearchService $searchService */
@@ -190,7 +194,7 @@ class StudyVariableSearchForm extends FormBase {
       );
     }
 
-    $cardsHtml = $this->renderStudyCards($studyCards, $ontologyDefinitions);
+    $cardsHtml = $this->renderStudyCards($studyCards, $ontologyDefinitions, $studyLabels);
     $errorBanner = $this->renderErrorBanner($errors);
 
     $form['search_page'] = [
@@ -199,7 +203,7 @@ class StudyVariableSearchForm extends FormBase {
         '<section id="std-study-variable-search" class="std-study-search">'
           . $errorBanner
           . '<header class="std-search-header">'
-          . '<p class="text-muted mb-3">Use the hierarchical variable browser or other filters (Organizations, Platforms, etc.) to select and rank related studies by relevance.</p>'
+          . '<p class="text-muted mb-3">Use the hierarchical variable browser or other filters (Organizations, Platforms, etc.) to select and rank related ' . Html::escape($studyLabels['plural_lower']) . ' by relevance.</p>'
           . '<div class="std-filter-topbar">'
           . '<div class="std-logic-toggle" role="radiogroup" aria-label="Filter logic">'
           . '<label><input type="radio" name="std-search-logic" value="and"> AND</label>'
@@ -217,10 +221,10 @@ class StudyVariableSearchForm extends FormBase {
           . '<div class="col-12 col-lg-8">'
           . '<div id="std-selected-preview" class="std-selected-preview mb-2" aria-live="polite"></div>'
           . '<div class="std-results-header mb-2">'
-          . '<strong id="std-visible-results">0</strong> of <strong id="std-total-studies">' . $totalStudies . '</strong> studies visible'
+          . '<strong id="std-visible-results">0</strong> of <strong id="std-total-studies">' . $totalStudies . '</strong> ' . Html::escape($studyLabels['plural_lower']) . ' visible'
           . '<span class="text-muted ms-2" id="std-ranking-indicator"></span>'
           . '</div>'
-          . '<p id="std-study-empty-state" class="text-muted mb-3">Select at least one filter to display studies.</p>'
+          . '<p id="std-study-empty-state" class="text-muted mb-3">Select at least one filter to display ' . Html::escape($studyLabels['plural_lower']) . '.</p>'
           . '<div id="std-study-cards" class="std-study-grid">'
           . $cardsHtml
           . '</div>'
@@ -383,7 +387,7 @@ class StudyVariableSearchForm extends FormBase {
     return $html;
   }
 
-  private function renderStudyCards(array $studyCards, array $ontologyDefinitions): string {
+  private function renderStudyCards(array $studyCards, array $ontologyDefinitions, array $studyLabels): string {
     $cardsHtml = '';
     foreach ($studyCards as $card) {
       if (!is_array($card)) {
@@ -502,14 +506,14 @@ class StudyVariableSearchForm extends FormBase {
       $cardsHtml .= '</div>';
 
       $cardsHtml .= '<div class="std-study-actions mt-3">'
-        . '<a class="btn btn-sm btn-primary" href="' . Html::escape((string) ($card['manage_url'] ?? '#')) . '">Manage Study</a>'
+        . '<a class="btn btn-sm btn-primary" href="' . Html::escape((string) ($card['manage_url'] ?? '#')) . '">Manage ' . Html::escape($studyLabels['singular']) . '</a>'
         . ' <a class="btn btn-sm btn-secondary" href="' . Html::escape((string) ($card['edit_url'] ?? '#')) . '">Edit</a>'
         . '</div>';
       $cardsHtml .= '</article>';
     }
 
     if ($cardsHtml === '') {
-      $cardsHtml = '<p class="text-muted">No studies are available in the current context.</p>';
+      $cardsHtml = '<p class="text-muted">No ' . Html::escape($studyLabels['plural_lower']) . ' are available in the current context.</p>';
     }
 
     return $cardsHtml;
@@ -617,6 +621,41 @@ class StudyVariableSearchForm extends FormBase {
     $html .= '</div>';
     $html .= '</details>';
     return $html;
+  }
+
+  private function buildStudyLabels(string $preferredStudy): array {
+    $singular = trim($preferredStudy) === '' ? 'Study' : trim($preferredStudy);
+    $plural = $this->derivePluralLabel($singular);
+
+    return [
+      'singular' => $singular,
+      'plural' => $plural,
+      'singular_lower' => mb_strtolower($singular),
+      'plural_lower' => mb_strtolower($plural),
+    ];
+  }
+
+  private function derivePluralLabel(string $singular): string {
+    if ($singular === '') {
+      return 'Studies';
+    }
+
+    $len = mb_strlen($singular);
+    if ($len >= 2) {
+      $last = mb_substr($singular, -1);
+      $prev = mb_substr($singular, -2, 1);
+      $endsWithY = strtolower($last) === 'y';
+      $prevIsVowel = (bool) preg_match('/[aeiou]/i', $prev);
+      if ($endsWithY && !$prevIsVowel) {
+        return mb_substr($singular, 0, $len - 1) . 'ies';
+      }
+    }
+
+    if (preg_match('/(s|x|z|ch|sh)$/i', $singular)) {
+      return $singular . 'es';
+    }
+
+    return $singular . 's';
   }
 
 }

@@ -78,6 +78,7 @@ study_variable_search:
     - core/jquery
     - core/drupal
     - core/once
+    - core/drupalSettings
 
 manage_study_fix:
   version: 1.0

@@ -68,6 +68,128 @@ class EditProcessBasedStudyForm extends FormBase {
   }
 
   /**
+   * Resolve organization URI from a Process-Based Study object.
+   */
+  private function resolveOrganizationUriFromStudy($study): string {
+    $institutionValue = is_object($study) ? ($study->institution ?? $study->hasInstitution ?? NULL) : NULL;
+
+    if (is_object($institutionValue)) {
+      $uri = trim((string) ($institutionValue->uri ?? $institutionValue->hasURI ?? ''));
+      return Utils::canonicalizePmsrUri($uri);
+    }
+
+    if (is_string($institutionValue)) {
+      $candidate = trim($institutionValue);
+      if (preg_match('/^https?:\/\//i', $candidate) === 1) {
+        return Utils::canonicalizePmsrUri($candidate);
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Recursively extract laboratory options from API payload values.
+   */
+  private function extractLaboratoryOptionsFromValue($value, array &$options, int $depth = 0): void {
+    if ($depth > 5 || $value === NULL) {
+      return;
+    }
+
+    if (is_array($value)) {
+      foreach ($value as $item) {
+        $this->extractLaboratoryOptionsFromValue($item, $options, $depth + 1);
+      }
+      return;
+    }
+
+    if (is_object($value)) {
+      $label = trim((string) ($value->label ?? $value->name ?? $value->title ?? ''));
+      $uri = trim((string) ($value->uri ?? $value->hasURI ?? ''));
+      $candidateValue = $uri !== '' ? $uri : $label;
+      if ($candidateValue !== '' && !isset($options[$candidateValue])) {
+        $options[$candidateValue] = $label !== '' ? $label : $candidateValue;
+      }
+
+      foreach (get_object_vars($value) as $key => $child) {
+        if (stripos((string) $key, 'lab') !== FALSE || is_array($child) || is_object($child)) {
+          $this->extractLaboratoryOptionsFromValue($child, $options, $depth + 1);
+        }
+      }
+      return;
+    }
+
+    if (is_string($value)) {
+      $candidate = trim($value);
+      if ($candidate === '') {
+        return;
+      }
+      if (stripos($candidate, 'lab') !== FALSE || preg_match('/^https?:\/\//i', $candidate) === 1) {
+        if (!isset($options[$candidate])) {
+          $options[$candidate] = $candidate;
+        }
+      }
+    }
+  }
+
+  /**
+   * Build laboratory options from the selected organization (fallback: any).
+   */
+  private function buildLaboratoryOptions(string $organizationUri, string $organizationName = ''): array {
+    $options = [
+      'any' => $this->t('any'),
+    ];
+
+    if ($organizationUri === '') {
+      return $options;
+    }
+
+    try {
+      $api = \Drupal::service('rep.api_connector');
+      $organizationResponse = $api->getUri($organizationUri);
+      $organization = $api->parseObjectResponse($organizationResponse, 'getUri');
+      if ($organization === NULL || !is_object($organization)) {
+        return $options;
+      }
+
+      $candidateKeys = [
+        'hasLaboratory',
+        'hasLaboratories',
+        'hasLaboratoryUris',
+        'hasLaboratoryUri',
+        'laboratory',
+        'laboratories',
+      ];
+
+      foreach ($candidateKeys as $key) {
+        if (isset($organization->{$key})) {
+          $this->extractLaboratoryOptionsFromValue($organization->{$key}, $options);
+        }
+      }
+
+      foreach (get_object_vars($organization) as $key => $value) {
+        if (stripos((string) $key, 'lab') !== FALSE) {
+          $this->extractLaboratoryOptionsFromValue($value, $options);
+        }
+      }
+    }
+    catch (\Throwable $e) {
+      // Keep the safe fallback option if organization laboratory lookup fails.
+    }
+
+    // Fallback for known organizations when URI-based lab discovery is unavailable.
+    $normalizedOrgName = mb_strtolower(trim($organizationName));
+    if ($normalizedOrgName === 'escola superior de tecnologia e gestao jean piaget - instituto politecnico jean piaget do sul'
+      || $normalizedOrgName === 'escola superior de tecnologia e gestão jean piaget - instituto politécnico jean piaget do sul') {
+      if (!isset($options['laboratory'])) {
+        $options['laboratory'] = $this->t('Laboratory');
+      }
+    }
+
+    return $options;
+  }
+
+  /**
    * Resolve the linked process URI from a Process-Based Study object.
    */
   private function resolveProcessUriFromStudy($study): string {
@@ -184,72 +306,14 @@ class EditProcessBasedStudyForm extends FormBase {
     // Normalize process URI values that may arrive as structured objects.
     $processUri = Utils::canonicalizePmsrUri($this->resolveProcessUriFromStudy($this->study));
     $this->processUri = $processUri;
-
-    $form['process_header'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['d-flex', 'align-items-center', 'mb-3'],
-      ],
-    ];
-
-    $form['process_header']['process_actions'] = [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['ms-auto', 'btn-group'],
-        'role' => 'group',
-        'aria-label' => $this->t('Workflow actions'),
-      ],
-    ];
-
-    $form['process_header']['process_actions']['validate_task_model'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Validate Task Model'),
-      '#submit' => ['::validateTaskModel'],
-      '#limit_validation_errors' => [],
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'me-2', 'check-button', 'top-icon'],
-        'style' => 'max-width: 120px;',
-      ],
-    ];
-
-    $form['process_header']['process_actions']['execute_task_model'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Execute Task Model'),
-      '#limit_validation_errors' => [],
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'me-2', 'execute-button'],
-        'style' => 'max-width: 120px;',
-      ],
-      '#disabled' => TRUE,
-    ];
-
-    $form['process_header']['process_actions']['edit_task'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Edit Task Model'),
-      '#submit' => ['::openLegacyEditor'],
-      '#limit_validation_errors' => [],
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'me-2', 'edit-task-button', 'edit-element-button', 'top-icon'],
-        'style' => 'max-width: 120px; border-color: #006600;',
-      ],
-    ];
-
-    $form['process_header']['process_actions']['edit_task_canvas'] = [
-      '#type' => 'submit',
-      '#value' => $this->t('Edit Task Model - Canvas'),
-      '#submit' => ['::openCanvasEditor'],
-      '#limit_validation_errors' => [],
-      '#attributes' => [
-        'class' => ['btn', 'btn-primary', 'edit-task-button', 'edit-element-button', 'top-icon', 'edit-task-canvas-button'],
-        'style' => 'max-width: 120px; border-color: #006600;',
-      ],
-    ];
-
-    $form['study_uri_display'] = [
-      '#type' => 'item',
-      '#title' => $this->t('@study URI', ['@study' => $preferredStudyLabel]),
-      '#markup' => Html::escape($this->studyUri),
-    ];
+    $organizationUri = $this->resolveOrganizationUriFromStudy($this->study);
+    $organizationName = $this->toSafeString($this->study->institutionName ?? ($this->study->institution ?? ''));
+    $laboratoryOptions = $this->buildLaboratoryOptions($organizationUri, $organizationName);
+    $existingLaboratory = $this->toSafeString($this->study->laboratory ?? ($this->study->hasLaboratory ?? ''));
+    if ($existingLaboratory !== '' && !isset($laboratoryOptions[$existingLaboratory])) {
+      $laboratoryOptions[$existingLaboratory] = $existingLaboratory;
+    }
+    $defaultLaboratory = $existingLaboratory !== '' ? $existingLaboratory : 'any';
 
     // Hidden field to preserve the URI
     $form['study_uri'] = [
@@ -257,43 +321,75 @@ class EditProcessBasedStudyForm extends FormBase {
       '#value' => $this->studyUri,
     ];
 
-    // Display Process URI (read-only, cannot be changed)
-    $form['process_uri_display'] = [
-      '#type' => 'item',
-      '#title' => $this->t('Process/Workflow URI'),
-      '#markup' => $processUri !== '' ? Html::escape($processUri) : 'N/A',
-      '#description' => $this->t('The associated Process/Workflow cannot be changed after creation.'),
-    ];
-
-    if ($processUri !== '') {
-      $processDetailsUrl = Url::fromRoute('rep.describe_element', [
-        'elementuri' => rawurlencode(base64_encode($processUri)),
-      ])->toString();
-
-      $taskModelUrl = Url::fromUri('internal:/ctt/editor', [
-        'query' => [
-          'processUri' => $processUri,
-          'studyUri' => $this->studyUri,
-          'execution' => '1',
-        ],
-      ])->toString();
-
-      $form['procedure_links'] = [
-        '#type' => 'item',
-        '#title' => $this->t('Procedure / Task Model'),
-        '#markup' => '<a href="' . $processDetailsUrl . '">' . $this->t('Open Procedure Details') . '</a>' .
-          ' | <a href="' . $taskModelUrl . '">' . $this->t('Open Task Model Canvas') . '</a>',
-      ];
-    }
-
-    // EDITABLE: Study metadata fields
+    // Study metadata layout
     $form['study_metadata'] = [
-      '#type' => 'fieldset',
-      '#title' => $this->t('@study Metadata', ['@study' => $preferredStudyLabel]),
-      '#collapsible' => FALSE,
+      '#type' => 'container',
     ];
 
-    $form['study_metadata']['study_id'] = [
+    $form['study_metadata']['properties_layout'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['row', 'g-3'],
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-12', 'col-lg-6'],
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['right_column'] = [
+      '#type' => 'container',
+      '#attributes' => [
+        'class' => ['col-12', 'col-lg-6'],
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['predefined_properties'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Predefined Properties'),
+      '#weight' => 0,
+      '#attributes' => [
+        'style' => 'border: 2px solid #9ca3af; border-radius: 8px; padding: 12px; background: #ffffff;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['task_management'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Task Management'),
+      '#weight' => 20,
+      '#attributes' => [
+        'class' => ['mt-3'],
+        'style' => 'border: 2px solid #9ca3af; border-radius: 8px; padding: 12px; background: #ffffff;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Adjustable Properties'),
+      '#attributes' => [
+        'style' => 'border: 2px solid #9ca3af; border-radius: 8px; padding: 12px; background: #ffffff;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['study_uri_display'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('@study URI', ['@study' => $preferredStudyLabel]),
+      '#default_value' => $this->toSafeString($this->studyUri),
+      '#disabled' => TRUE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['process_uri_display'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Process/Workflow URI'),
+      '#default_value' => $processUri !== '' ? $this->toSafeString($processUri) : 'N/A',
+      '#description' => $this->t('The associated Process/Workflow cannot be changed after creation.'),
+      '#disabled' => TRUE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['study_id'] = [
       '#type' => 'textfield',
       '#title' => $this->t('@study ID', ['@study' => $preferredStudyLabel]),
       '#default_value' => $this->toSafeString($this->study->studyID ?? ''),
@@ -302,7 +398,97 @@ class EditProcessBasedStudyForm extends FormBase {
       '#disabled' => TRUE,
     ];
 
-    $form['study_metadata']['study_title'] = [
+    $form['study_metadata']['properties_layout']['left_column']['context_properties'] = [
+      '#type' => 'fieldset',
+      '#title' => $this->t('Context Properties'),
+      '#weight' => 10,
+      '#attributes' => [
+        'class' => ['mt-3'],
+        'style' => 'border: 2px solid #9ca3af; border-radius: 8px; padding: 12px; background: #ffffff;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['context_properties']['institution'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Institution'),
+      '#default_value' => $this->toSafeString($this->study->institutionName ?? ($this->study->institution ?? '')),
+      '#description' => $this->t('Name of the institution conducting the @study.', ['@study' => $preferredStudyNoun]),
+      '#maxlength' => 256,
+      '#disabled' => TRUE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['context_properties']['laboratory'] = [
+      '#type' => 'select',
+      '#title' => $this->t('Laboratory'),
+      '#description' => $this->t('Optional. Select a laboratory available at the selected organization.'),
+      '#options' => $laboratoryOptions,
+      '#default_value' => $defaultLaboratory,
+      '#required' => FALSE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['principal_investigator'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Principal Investigator'),
+      '#default_value' => $this->toSafeString($this->study->principalInvestigator ?? ($this->study->pi ?? '')),
+      '#description' => $this->t('Name of the PI.'),
+      '#maxlength' => 256,
+      '#disabled' => TRUE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['contact_email'] = [
+      '#type' => 'email',
+      '#title' => $this->t('Contact Email'),
+      '#default_value' => $this->toSafeString($this->study->contactEmail ?? ''),
+      '#description' => $this->t('Email address for @study contact.', ['@study' => $preferredStudyNoun]),
+      '#maxlength' => 256,
+      '#disabled' => TRUE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['task_management']['validate_task_model'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Validate Task Model'),
+      '#submit' => ['::validateTaskModel'],
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'me-2', 'mb-2', 'check-button', 'top-icon'],
+        'style' => 'max-width: 220px;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['task_management']['execute_task_model'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Execute Task Model'),
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'me-2', 'mb-2', 'execute-button'],
+        'style' => 'max-width: 220px;',
+      ],
+      '#disabled' => TRUE,
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['task_management']['edit_task'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Edit Task Model'),
+      '#submit' => ['::openLegacyEditor'],
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'me-2', 'mb-2', 'edit-task-button', 'edit-element-button', 'top-icon'],
+        'style' => 'max-width: 220px; border-color: #006600;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['left_column']['task_management']['edit_task_canvas'] = [
+      '#type' => 'submit',
+      '#value' => $this->t('Edit Task Model - Canvas'),
+      '#submit' => ['::openCanvasEditor'],
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['btn', 'btn-primary', 'mb-2', 'edit-task-button', 'edit-element-button', 'top-icon', 'edit-task-canvas-button'],
+        'style' => 'max-width: 220px; border-color: #006600;',
+      ],
+    ];
+
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['study_title'] = [
       '#type' => 'textfield',
       '#title' => $this->t('@study Title', ['@study' => $preferredStudyLabel]),
       '#default_value' => $this->toSafeString($this->study->studyTitle ?? ''),
@@ -310,7 +496,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#maxlength' => 512,
     ];
 
-    $form['study_metadata']['specific_aims'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['specific_aims'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Specific Aims'),
       '#default_value' => $this->toSafeString($this->study->specificAims ?? ''),
@@ -318,7 +504,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#rows' => 3,
     ];
 
-    $form['study_metadata']['significance'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['significance'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Significance'),
       '#default_value' => $this->toSafeString($this->study->significance ?? ''),
@@ -326,45 +512,21 @@ class EditProcessBasedStudyForm extends FormBase {
       '#rows' => 3,
     ];
 
-    $form['study_metadata']['institution'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Institution'),
-      '#default_value' => $this->toSafeString($this->study->institutionName ?? ($this->study->institution ?? '')),
-      '#description' => $this->t('Name of the institution conducting the @study.', ['@study' => $preferredStudyNoun]),
-      '#maxlength' => 256,
-    ];
-
-    $form['study_metadata']['principal_investigator'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Principal Investigator'),
-      '#default_value' => $this->toSafeString($this->study->principalInvestigator ?? ($this->study->pi ?? '')),
-      '#description' => $this->t('Name of the PI.'),
-      '#maxlength' => 256,
-    ];
-
-    $form['study_metadata']['contact_email'] = [
-      '#type' => 'email',
-      '#title' => $this->t('Contact Email'),
-      '#default_value' => $this->toSafeString($this->study->contactEmail ?? ''),
-      '#description' => $this->t('Email address for @study contact.', ['@study' => $preferredStudyNoun]),
-      '#maxlength' => 256,
-    ];
-
-    $form['study_metadata']['start_date'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['start_date'] = [
       '#type' => 'date',
       '#title' => $this->t('Start Date'),
       '#default_value' => $this->toSafeString($this->study->startDate ?? ''),
       '#description' => $this->t('@study start date (ISO 8601 format: YYYY-MM-DD).', ['@study' => $preferredStudyLabel]),
     ];
 
-    $form['study_metadata']['end_date'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['end_date'] = [
       '#type' => 'date',
       '#title' => $this->t('End Date'),
       '#default_value' => $this->toSafeString($this->study->endDate ?? ''),
       '#description' => $this->t('@study end date (ISO 8601 format: YYYY-MM-DD).', ['@study' => $preferredStudyLabel]),
     ];
 
-    $form['study_metadata']['learning_objectives'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['learning_objectives'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Learning Objectives'),
       '#default_value' => $this->toSafeString($this->study->hasLearningObjectives ?? ''),
@@ -372,7 +534,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#rows' => 3,
     ];
 
-    $form['study_metadata']['critical_actions'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['critical_actions'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Critical Actions'),
       '#default_value' => $this->toSafeString($this->study->hasCriticalActions ?? ''),
@@ -380,7 +542,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#rows' => 3,
     ];
 
-    $form['study_metadata']['debriefing_focus'] = [
+    $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['debriefing_focus'] = [
       '#type' => 'textarea',
       '#title' => $this->t('Debriefing Focus'),
       '#default_value' => $this->toSafeString($this->study->hasDebriefingFocus ?? ''),
@@ -414,6 +576,10 @@ class EditProcessBasedStudyForm extends FormBase {
       '#type' => 'submit',
       '#value' => $this->t('Back'),
       '#name' => 'back',
+      '#limit_validation_errors' => [],
+      '#attributes' => [
+        'class' => ['button'],
+      ],
     ];
 
     return $form;
@@ -466,9 +632,10 @@ class EditProcessBasedStudyForm extends FormBase {
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'];
+    $studyUriForNavigation = $this->resolveStudyUriForSubmit($form_state);
 
     if ($button_name === 'back') {
-      self::backUrl();
+      $this->backUrl($studyUriForNavigation);
       return;
     }
 
@@ -500,7 +667,7 @@ class EditProcessBasedStudyForm extends FormBase {
 
         \Drupal::messenger()->addMessage($this->t('Process-Based @study has been deleted successfully.', ['@study' => $this->preferredStudyLabel()]));
         \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
-        self::backUrl();
+        $this->backUrl($studyUri);
         return;
       }
       catch (\Exception $e) {
@@ -508,7 +675,7 @@ class EditProcessBasedStudyForm extends FormBase {
           '@study' => $this->preferredStudyLabel(),
           '@message' => $e->getMessage(),
         ]));
-        self::backUrl();
+        $this->backUrl($studyUriForNavigation);
         return;
       }
     }
@@ -536,6 +703,28 @@ class EditProcessBasedStudyForm extends FormBase {
           $studyId = 'STD-' . substr($studyId, 4);
         }
       }
+
+      // Preserve read-only values: disabled fields are not submitted by browsers.
+      $institutionName = trim((string) $form_state->getValue('institution'));
+      if ($institutionName === '') {
+        $institutionName = $this->toSafeString($this->study->institutionName ?? ($this->study->institution ?? ''));
+      }
+
+      $principalInvestigator = trim((string) $form_state->getValue('principal_investigator'));
+      if ($principalInvestigator === '') {
+        $principalInvestigator = $this->toSafeString($this->study->principalInvestigator ?? ($this->study->pi ?? ''));
+      }
+
+      $contactEmail = trim((string) $form_state->getValue('contact_email'));
+      if ($contactEmail === '') {
+        $contactEmail = $this->toSafeString($this->study->contactEmail ?? '');
+      }
+
+      $laboratory = trim((string) $form_state->getValue('laboratory'));
+      if (strtolower($laboratory) === 'any') {
+        $laboratory = '';
+      }
+
       $studyData = [
         'uri' => $studyUri,
         'typeUri' => HASCO::PROCESS_BASED_STUDY,
@@ -545,9 +734,12 @@ class EditProcessBasedStudyForm extends FormBase {
         'studyTitle' => trim($form_state->getValue('study_title')),
         'specificAims' => trim($form_state->getValue('specific_aims')),
         'significance' => trim($form_state->getValue('significance')),
-        'institutionName' => trim($form_state->getValue('institution')),
-        'principalInvestigator' => trim($form_state->getValue('principal_investigator')),
-        'contactEmail' => trim($form_state->getValue('contact_email')),
+        'institutionName' => $institutionName,
+        'institution' => $institutionName,
+        'principalInvestigator' => $principalInvestigator,
+        'contactEmail' => $contactEmail,
+        'laboratory' => $laboratory,
+        'hasLaboratory' => $laboratory,
         'startDate' => $form_state->getValue('start_date') ?: '',
         'endDate' => $form_state->getValue('end_date') ?: '',
         'hasLearningObjectives' => trim($form_state->getValue('learning_objectives')),
@@ -602,7 +794,7 @@ class EditProcessBasedStudyForm extends FormBase {
       // Invalidate study search cache for this study
       \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
       
-      self::backUrl();
+      $this->backUrl($studyUri);
       return;
 
     } catch(\Exception $e) {
@@ -610,7 +802,7 @@ class EditProcessBasedStudyForm extends FormBase {
         '@study' => $this->preferredStudyLabel(),
         '@message' => $e->getMessage(),
       ]));
-      self::backUrl();
+      $this->backUrl($studyUriForNavigation);
       return;
     }
   }
@@ -784,14 +976,30 @@ class EditProcessBasedStudyForm extends FormBase {
   /**
    * Navigate back to previous page
    */
-  function backUrl() {
-    $uid = \Drupal::currentUser()->id();
-    $previousUrl = Utils::trackingGetPreviousUrl($uid, 'std.edit_processbasedstudy');
-    if ($previousUrl) {
-      $response = new RedirectResponse($previousUrl);
+  function backUrl(?string $studyUri = NULL) {
+    $candidateStudyUri = trim((string) $studyUri);
+    if ($candidateStudyUri === '') {
+      $candidateStudyUri = trim((string) ($this->studyUri ?? ''));
+    }
+    if ($candidateStudyUri === '' && is_object($this->study) && isset($this->study->uri)) {
+      $candidateStudyUri = trim((string) $this->study->uri);
+    }
+
+    if ($candidateStudyUri !== '') {
+      $encodedStudyUri = base64_encode($candidateStudyUri);
+      $response = new RedirectResponse(Url::fromRoute('std.manage_study_elements', [
+        'studyuri' => $encodedStudyUri,
+      ])->toString());
       $response->send();
       return;
     }
+
+    $response = new RedirectResponse(Url::fromRoute('std.select_study', [
+      'elementtype' => 'study',
+      'page' => 1,
+      'pagesize' => 9,
+    ])->toString());
+    $response->send();
   }
 
 }

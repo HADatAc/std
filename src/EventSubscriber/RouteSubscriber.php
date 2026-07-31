@@ -31,6 +31,9 @@ class RouteSubscriber extends RouteSubscriberBase {
     $std_home = $config->get('std_home');
     $preferred_workflow = \Drupal::config('rep.settings')->get('preferred_process');
     $preferred_study = trim((string) (\Drupal::config('rep.settings')->get('preferred_study') ?: 'Study'));
+    $studySearchTitle = $preferred_study . ' Search';
+    $manageStudyTitle = $studySearchTitle . ' > Manage ' . $preferred_study . ' Elements';
+    $editStudyTitle = $manageStudyTitle . ' > Edit ' . $preferred_study;
 
     if($std_home == '1'){
       if ($route = $collection->get('view.frontpage.page_1')) {
@@ -54,10 +57,16 @@ class RouteSubscriber extends RouteSubscriberBase {
       $route->setDefault('_title', 'Edit ' . $preferred_study);
     }
     if ($route = $collection->get('std.search_studies_variables')) {
-      $route->setDefault('_title', $preferred_study . ' Search');
+      $route->setDefault('_title', $studySearchTitle);
     }
     if ($route = $collection->get('std.manage_study_elements')) {
-      $route->setDefault('_title', 'Manage ' . $preferred_study . ' Elements');
+      $route->setDefault('_title', $manageStudyTitle);
+    }
+    if ($route = $collection->get('std.edit_study')) {
+      $route->setDefault('_title', $editStudyTitle);
+    }
+    if ($route = $collection->get('std.edit_processbasedstudy')) {
+      $route->setDefault('_title', $editStudyTitle);
     }
   }
 

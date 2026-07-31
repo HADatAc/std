@@ -498,7 +498,15 @@ class ManageStudyForm extends FormBase
       if ($isOwner && $currentStudyUri !== '') {
         $encodedStudyUri = base64_encode($currentStudyUri);
         $editRoute = $isProcessBasedStudyType ? 'std.edit_processbasedstudy' : 'std.edit_study';
-        $editStudyUrl = Url::fromRoute($editRoute, ['studyuri' => $encodedStudyUri]);
+        $currentPath = \Drupal::request()->getPathInfo();
+        $safePreviousUrl = rtrim(strtr(base64_encode($currentPath), '+/', '-_'), '=');
+        $safePreviousUrlStr = base64_encode($safePreviousUrl);
+        $editStudyUrlStr = base64_encode(Url::fromRoute($editRoute, ['studyuri' => $encodedStudyUri])->toString());
+        $editStudyUrl = Url::fromRoute('rep.back_url', [
+          'previousurl' => $safePreviousUrlStr,
+          'currenturl' => $editStudyUrlStr,
+          'currentroute' => $editRoute,
+        ]);
         $form['row1_actions']['edit_study'] = [
           '#type' => 'link',
           '#title' => $this->t('Edit @study', ['@study' => $preferredStudyLabel]),
