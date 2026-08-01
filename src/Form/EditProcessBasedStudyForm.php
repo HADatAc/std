@@ -68,6 +68,49 @@ class EditProcessBasedStudyForm extends FormBase {
   }
 
   /**
+   * Resolve a URI candidate from mixed API values.
+   */
+  private function resolveUriFromValue($value): string {
+    if (is_string($value)) {
+      $candidate = trim($value);
+      if (preg_match('/^https?:\/\//i', $candidate) === 1) {
+        return Utils::canonicalizePmsrUri($candidate);
+      }
+      return '';
+    }
+
+    if (is_object($value)) {
+      foreach (['uri', 'hasURI', 'value'] as $key) {
+        if (isset($value->{$key}) && is_string($value->{$key})) {
+          $candidate = trim((string) $value->{$key});
+          if (preg_match('/^https?:\/\//i', $candidate) === 1) {
+            return Utils::canonicalizePmsrUri($candidate);
+          }
+        }
+      }
+      return '';
+    }
+
+    return '';
+  }
+
+  /**
+   * Build a small detail button pointing to the URI describe page.
+   */
+  private function buildDetailButtonMarkup(string $uri): string {
+    $trimmed = trim($uri);
+    if ($trimmed === '') {
+      return '<span class="btn btn-secondary btn-sm disabled" style="margin-left:8px; display:inline-block; vertical-align:middle;" aria-disabled="true">' . $this->t('Detail') . '</span>';
+    }
+
+    $encoded = rawurlencode(base64_encode($trimmed));
+    $url = Url::fromUserInput('/rep/uri/' . $encoded)->toString();
+
+    return '<a class="btn btn-secondary btn-sm" style="margin-left:8px; display:inline-block; vertical-align:middle;" target="_blank" rel="noopener noreferrer" href="'
+      . Html::escape($url) . '">' . $this->t('Detail') . '</a>';
+  }
+
+  /**
    * Resolve organization URI from a Process-Based Study object.
    */
   private function resolveOrganizationUriFromStudy($study): string {
@@ -85,7 +128,108 @@ class EditProcessBasedStudyForm extends FormBase {
       }
     }
 
+    if (is_object($study)) {
+      foreach (['hasInstitutionUri', 'institutionUri'] as $key) {
+        if (isset($study->{$key}) && is_string($study->{$key})) {
+          $candidate = trim((string) $study->{$key});
+          if (preg_match('/^https?:\/\//i', $candidate) === 1) {
+            return Utils::canonicalizePmsrUri($candidate);
+          }
+        }
+      }
+    }
+
     return '';
+  }
+
+  /**
+   * Resolve principal investigator URI from a Process-Based Study object.
+   */
+  private function resolvePrincipalInvestigatorUriFromStudy($study): string {
+    if (!is_object($study)) {
+      return '';
+    }
+
+    foreach (['principalInvestigator', 'principalInvestigatorUri', 'hasPrincipalInvestigator', 'hasPrincipalInvestigatorUri', 'pi', 'piUri'] as $key) {
+      if (!isset($study->{$key})) {
+        continue;
+      }
+      $candidate = $this->resolveUriFromValue($study->{$key});
+      if ($candidate !== '') {
+        return $candidate;
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Normalize candidate email values for exact comparisons.
+   */
+  private function normalizeEmailValue($value): string {
+    if (!is_string($value)) {
+      return '';
+    }
+
+    $email = strtolower(trim($value));
+    if ($email === '') {
+      return '';
+    }
+
+    if (strpos($email, 'mailto:') === 0) {
+      $email = trim(substr($email, 7));
+    }
+
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+  }
+
+  /**
+   * Resolve PI URI from KGR Person by matching PI email.
+   */
+  private function resolvePrincipalInvestigatorUriByEmail(string $email): string {
+    $targetEmail = $this->normalizeEmailValue($email);
+    if ($targetEmail === '') {
+      return '';
+    }
+
+    try {
+      $api = \Drupal::service('rep.api_connector');
+      $people = $this->parseApiListBody($api->listByKeyword('person', $targetEmail, 25, 0));
+      if (empty($people)) {
+        return '';
+      }
+
+      $firstUri = '';
+      foreach ($people as $person) {
+        if (!is_object($person)) {
+          continue;
+        }
+
+        $uri = trim((string) ($person->uri ?? ''));
+        if ($uri !== '' && $firstUri === '') {
+          $firstUri = Utils::canonicalizePmsrUri($uri);
+        }
+
+        $emailCandidates = [
+          $person->mbox ?? NULL,
+          $person->userEmail ?? NULL,
+          $person->hasSIRManagerEmail ?? NULL,
+          $person->email ?? NULL,
+        ];
+
+        foreach ($emailCandidates as $candidateValue) {
+          $candidateEmail = $this->normalizeEmailValue(is_string($candidateValue) ? $candidateValue : '');
+          if ($candidateEmail !== '' && $candidateEmail === $targetEmail && $uri !== '') {
+            return Utils::canonicalizePmsrUri($uri);
+          }
+        }
+      }
+
+      return $firstUri;
+    }
+    catch (\Throwable $e) {
+      return '';
+    }
   }
 
   /**
@@ -133,6 +277,220 @@ class EditProcessBasedStudyForm extends FormBase {
   }
 
   /**
+   * Parse list-style API responses into a plain array of objects.
+   */
+  private function parseApiListBody($raw): array {
+    if ($raw === NULL) {
+      return [];
+    }
+
+    $decoded = NULL;
+    if (is_string($raw)) {
+      $decoded = json_decode($raw);
+      if (!is_object($decoded)) {
+        return [];
+      }
+    }
+    elseif (is_object($raw) || is_array($raw)) {
+      $decoded = json_decode(json_encode($raw));
+      if (!is_object($decoded)) {
+        return [];
+      }
+    }
+
+    if (!is_object($decoded) || empty($decoded->isSuccessful)) {
+      return [];
+    }
+
+    $body = $decoded->body ?? NULL;
+    if (is_string($body)) {
+      $body = json_decode($body);
+    }
+
+    if (is_array($body)) {
+      return $body;
+    }
+
+    if (is_object($body) && isset($body->elements) && is_array($body->elements)) {
+      return $body->elements;
+    }
+
+    return [];
+  }
+
+  /**
+   * Parse total-style API responses.
+   */
+  private function parseApiTotal($raw): int {
+    if ($raw === NULL) {
+      return 0;
+    }
+
+    $decoded = NULL;
+    if (is_string($raw)) {
+      $decoded = json_decode($raw);
+    }
+    elseif (is_object($raw) || is_array($raw)) {
+      $decoded = json_decode(json_encode($raw));
+    }
+
+    if (!is_object($decoded) || empty($decoded->isSuccessful)) {
+      return 0;
+    }
+
+    $body = $decoded->body ?? NULL;
+    if (is_string($body)) {
+      $body = json_decode($body);
+    }
+
+    if (is_object($body) && isset($body->total) && is_numeric($body->total)) {
+      return (int) $body->total;
+    }
+
+    if (is_array($body) && isset($body['total']) && is_numeric($body['total'])) {
+      return (int) $body['total'];
+    }
+
+    return 0;
+  }
+
+  /**
+   * Extract organization URI references from an organization object.
+   */
+  private function extractOrganizationUriCandidates($organization): array {
+    $uris = [];
+    if (!is_object($organization)) {
+      return $uris;
+    }
+
+    foreach (['uri', 'parentOrganizationUri', 'hasParentOrganizationUri', 'parentOrganization'] as $key) {
+      if (!isset($organization->{$key})) {
+        continue;
+      }
+
+      $value = $organization->{$key};
+      $candidate = '';
+      if (is_string($value)) {
+        $candidate = trim($value);
+      }
+      elseif (is_object($value)) {
+        $candidate = trim((string) ($value->uri ?? $value->hasURI ?? ''));
+      }
+
+      if ($candidate !== '' && preg_match('/^https?:\/\//i', $candidate) === 1) {
+        $canonical = Utils::canonicalizePmsrUri($candidate);
+        $uris[$canonical] = TRUE;
+      }
+    }
+
+    return array_keys($uris);
+  }
+
+  /**
+   * Build laboratory options using platform instances linked via hasco:partOf.
+   */
+  private function buildLaboratoryOptionsFromPartOf(string $organizationUri, array $fallbackOrganizationUris = []): array {
+    $options = [];
+    $organizationUris = [];
+
+    $normalizedOrgUri = Utils::canonicalizePmsrUri($organizationUri);
+    if ($normalizedOrgUri !== '') {
+      $organizationUris[$normalizedOrgUri] = TRUE;
+    }
+
+    foreach ($fallbackOrganizationUris as $uri) {
+      if (!is_string($uri)) {
+        continue;
+      }
+      $normalized = Utils::canonicalizePmsrUri(trim($uri));
+      if ($normalized !== '') {
+        $organizationUris[$normalized] = TRUE;
+      }
+    }
+
+    if (empty($organizationUris)) {
+      return $options;
+    }
+
+    try {
+      $api = \Drupal::service('rep.api_connector');
+      $total = $this->parseApiTotal($api->listSizeByKeyword('platforminstance', '_'));
+      if ($total <= 0) {
+        return $options;
+      }
+
+      $target = min($total, 500);
+      $pageSize = 100;
+      $offset = 0;
+
+      while ($offset < $target) {
+        $chunk = $this->parseApiListBody($api->listByKeyword('platforminstance', '_', $pageSize, $offset));
+        if (empty($chunk)) {
+          break;
+        }
+
+        foreach ($chunk as $instance) {
+          if (!is_object($instance) || empty($instance->uri)) {
+            continue;
+          }
+
+          $partOf = '';
+          if (isset($instance->partOf)) {
+            if (is_string($instance->partOf)) {
+              $partOf = trim($instance->partOf);
+            }
+            elseif (is_object($instance->partOf)) {
+              $partOf = trim((string) ($instance->partOf->uri ?? $instance->partOf->hasURI ?? ''));
+            }
+          }
+
+          if ($partOf === '') {
+            continue;
+          }
+
+          $partOf = Utils::canonicalizePmsrUri($partOf);
+          if (!isset($organizationUris[$partOf])) {
+            continue;
+          }
+
+          $typeUri = trim((string) ($instance->type->uri ?? $instance->typeUri ?? ''));
+          $typeLabel = trim((string) ($instance->type->label ?? ''));
+          $isLaboratory = FALSE;
+
+          if ($typeUri !== '') {
+            $isLaboratory = stripos($typeUri, '#Laboratory') !== FALSE || stripos($typeUri, '/Laboratory') !== FALSE;
+          }
+          if (!$isLaboratory && $typeLabel !== '') {
+            $isLaboratory = stripos($typeLabel, 'laboratory') !== FALSE || stripos($typeLabel, 'laborat') !== FALSE;
+          }
+
+          if (!$isLaboratory) {
+            continue;
+          }
+
+          $uri = trim((string) $instance->uri);
+          $label = trim((string) ($instance->label ?? ''));
+          if ($uri !== '' && !isset($options[$uri])) {
+            $options[$uri] = $label !== '' ? $label : $uri;
+          }
+        }
+
+        if (count($chunk) < $pageSize) {
+          break;
+        }
+
+        $offset += $pageSize;
+      }
+    }
+    catch (\Throwable $e) {
+      return $options;
+    }
+
+    asort($options, SORT_NATURAL | SORT_FLAG_CASE);
+    return $options;
+  }
+
+  /**
    * Build laboratory options from the selected organization (fallback: any).
    */
   private function buildLaboratoryOptions(string $organizationUri, string $organizationName = ''): array {
@@ -144,12 +502,22 @@ class EditProcessBasedStudyForm extends FormBase {
       return $options;
     }
 
+    $organizationFallbackUris = [];
+
     try {
       $api = \Drupal::service('rep.api_connector');
       $organizationResponse = $api->getUri($organizationUri);
       $organization = $api->parseObjectResponse($organizationResponse, 'getUri');
       if ($organization === NULL || !is_object($organization)) {
         return $options;
+      }
+
+      $organizationFallbackUris = $this->extractOrganizationUriCandidates($organization);
+
+      // Preferred source: platform instances linked to the organization via hasco:partOf.
+      $linkedLabs = $this->buildLaboratoryOptionsFromPartOf($organizationUri, $organizationFallbackUris);
+      foreach ($linkedLabs as $labUri => $labLabel) {
+        $options[$labUri] = $labLabel;
       }
 
       $candidateKeys = [
@@ -170,6 +538,21 @@ class EditProcessBasedStudyForm extends FormBase {
       foreach (get_object_vars($organization) as $key => $value) {
         if (stripos((string) $key, 'lab') !== FALSE) {
           $this->extractLaboratoryOptionsFromValue($value, $options);
+        }
+      }
+
+      // If direct org relation yields none, try parent organization relation once.
+      if (count($options) <= 1 && !empty($organizationFallbackUris)) {
+        $parentOnly = [];
+        foreach ($organizationFallbackUris as $candidateUri) {
+          $normalizedCandidate = Utils::canonicalizePmsrUri((string) $candidateUri);
+          if ($normalizedCandidate !== '' && $normalizedCandidate !== Utils::canonicalizePmsrUri($organizationUri)) {
+            $parentOnly[] = $normalizedCandidate;
+          }
+        }
+        $parentLabs = $this->buildLaboratoryOptionsFromPartOf('', $parentOnly);
+        foreach ($parentLabs as $labUri => $labLabel) {
+          $options[$labUri] = $labLabel;
         }
       }
     }
@@ -307,6 +690,11 @@ class EditProcessBasedStudyForm extends FormBase {
     $processUri = Utils::canonicalizePmsrUri($this->resolveProcessUriFromStudy($this->study));
     $this->processUri = $processUri;
     $organizationUri = $this->resolveOrganizationUriFromStudy($this->study);
+    $piEmail = $this->toSafeString($this->study->contactEmail ?? '');
+    $principalInvestigatorUri = $this->resolvePrincipalInvestigatorUriByEmail($piEmail);
+    if ($principalInvestigatorUri === '') {
+      $principalInvestigatorUri = $this->resolvePrincipalInvestigatorUriFromStudy($this->study);
+    }
     $organizationName = $this->toSafeString($this->study->institutionName ?? ($this->study->institution ?? ''));
     $laboratoryOptions = $this->buildLaboratoryOptions($organizationUri, $organizationName);
     $existingLaboratory = $this->toSafeString($this->study->laboratory ?? ($this->study->hasLaboratory ?? ''));
@@ -379,14 +767,16 @@ class EditProcessBasedStudyForm extends FormBase {
       '#title' => $this->t('@study URI', ['@study' => $preferredStudyLabel]),
       '#default_value' => $this->toSafeString($this->studyUri),
       '#disabled' => TRUE,
+      '#field_suffix' => $this->buildDetailButtonMarkup($this->studyUri),
     ];
 
     $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['process_uri_display'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Process/Workflow URI'),
+      '#title' => $this->t('Process URI'),
       '#default_value' => $processUri !== '' ? $this->toSafeString($processUri) : 'N/A',
-      '#description' => $this->t('The associated Process/Workflow cannot be changed after creation.'),
+      '#description' => $this->t('The associated Process cannot be changed after creation.'),
       '#disabled' => TRUE,
+      '#field_suffix' => $this->buildDetailButtonMarkup($processUri),
     ];
 
     $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['study_id'] = [
@@ -415,6 +805,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#description' => $this->t('Name of the institution conducting the @study.', ['@study' => $preferredStudyNoun]),
       '#maxlength' => 256,
       '#disabled' => TRUE,
+      '#field_suffix' => $this->buildDetailButtonMarkup($organizationUri),
     ];
 
     $form['study_metadata']['properties_layout']['left_column']['context_properties']['laboratory'] = [
@@ -433,6 +824,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#description' => $this->t('Name of the PI.'),
       '#maxlength' => 256,
       '#disabled' => TRUE,
+      '#field_suffix' => $this->buildDetailButtonMarkup($principalInvestigatorUri),
     ];
 
     $form['study_metadata']['properties_layout']['left_column']['predefined_properties']['contact_email'] = [

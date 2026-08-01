@@ -446,6 +446,21 @@ class ManageStudyForm extends FormBase
       '#weight' => '-99999',
     ];
 
+    $form['workflow_canvas_svg'] = [
+      '#type' => 'hidden',
+      '#default_value' => '',
+    ];
+
+    $form['workflow_canvas_png'] = [
+      '#type' => 'hidden',
+      '#default_value' => '',
+    ];
+
+    $form['workflow_canvas_source'] = [
+      '#type' => 'hidden',
+      '#default_value' => 'none',
+    ];
+
     // First row with a single card
     $form['row1']['card0']['card'] = [
       '#type'       => 'markup',
@@ -480,6 +495,17 @@ class ManageStudyForm extends FormBase
       ];
 
       if ($isProcessBasedStudyType) {
+        $form['row1_actions']['generate_pdf'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Generate PDF'),
+          '#name' => 'generate_pdf',
+          '#limit_validation_errors' => [],
+          '#attributes' => [
+            'class' => ['btn', 'btn-outline-secondary'],
+            'id' => 'std-generate-pdf-button',
+          ],
+        ];
+
         $createQuery = [];
         if ($currentProcessUri !== '') {
           $createQuery['process_uri'] = $currentProcessUri;
@@ -1664,6 +1690,31 @@ class ManageStudyForm extends FormBase
   {
     $triggering_element = $form_state->getTriggeringElement();
     $button_name = $triggering_element['#name'] ?? '';
+
+    if ($button_name === 'generate_pdf') {
+      $encodedStudyUri = (string) (\Drupal::routeMatch()->getParameter('studyuri') ?? '');
+      $decodedStudyUri = base64_decode($encodedStudyUri, TRUE);
+      if (!is_string($decodedStudyUri) || trim($decodedStudyUri) === '') {
+        \Drupal::messenger()->addError($this->t('Unable to generate PDF: invalid study URI.'));
+        return;
+      }
+
+      $svgMarkup = trim((string) $form_state->getValue('workflow_canvas_svg', ''));
+      $pngDataUrl = trim((string) $form_state->getValue('workflow_canvas_png', ''));
+      $captureSource = trim((string) $form_state->getValue('workflow_canvas_source', 'none'));
+      $svgKey = sha1($decodedStudyUri . '|' . microtime(TRUE));
+      \Drupal::service('tempstore.private')->get('std')->set('study_report_svg_' . $svgKey, [
+        'svg' => $svgMarkup,
+        'png' => $pngDataUrl,
+        'source' => $captureSource !== '' ? $captureSource : 'none',
+      ]);
+
+      $routeParams = ['studyuri' => $encodedStudyUri];
+      $routeOptions = ['query' => ['svg_key' => $svgKey]];
+
+      $form_state->setRedirect('std.download_study_report_pdf', $routeParams, $routeOptions);
+      return;
+    }
 
     if ($button_name === 'associate_workflow') {
       $encodedStudyUri = (string) (\Drupal::routeMatch()->getParameter('studyuri') ?? '');

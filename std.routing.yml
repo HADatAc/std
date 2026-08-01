@@ -183,6 +183,17 @@ std.download_dsg:
     _permission: 'access content'
     _custom_access_check: 'TRUE'
 
+std.download_study_report_pdf:
+  path: 'std/manage/studyreport/pdf/{studyuri}'
+  defaults:
+    _controller: '\Drupal\std\Controller\StudyReportPdfController::download'
+    _title: 'Generate Study PDF'
+  requirements:
+    _permission: 'access content'
+    _custom_access_check: 'TRUE'
+  options:
+    no_cache: 'TRUE'
+
 # Study Role CRUD options
 
 std.add_studyrole:
