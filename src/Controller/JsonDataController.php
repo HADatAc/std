@@ -582,6 +582,7 @@ class JsonDataController extends ControllerBase
         try {
 
             $streamUri = null;
+            $forceUnassociated = filter_var((string) $request->query->get('forceUnassociated', '0'), FILTER_VALIDATE_BOOLEAN);
             $uri = basename(base64_decode($studyuri));
             // Captura o arquivo enviado.
             $uploaded_files = $request->files->all();
@@ -626,7 +627,7 @@ class JsonDataController extends ControllerBase
 
             // Se o tipo for "da", adiciona a lógica adicional.
             if ($folder === 'da') {
-                $streamUri = $this->processDAFile($file, $originalName, $studyuri);
+                $streamUri = $this->processDAFile($file, $originalName, $studyuri, $forceUnassociated);
             }
 
             // Log de sucesso.
@@ -661,7 +662,7 @@ class JsonDataController extends ControllerBase
      * @return string|null
      *   The stream URI if a matching stream is found, otherwise null.
      */
-    private function processDAFile(File $file, string $filename, $studyuri)
+    private function processDAFile(File $file, string $filename, $studyuri, bool $forceUnassociated = FALSE)
     {
         try {
             $api       = \Drupal::service('rep.api_connector');
@@ -672,41 +673,49 @@ class JsonDataController extends ControllerBase
             $streamList = $api->parseObjectResponse($api->streamByStudyState(base64_decode($studyuri),HASCO::ACTIVE,99999,0),'streamByStudyState');
 
             $streamUri = null;
-            foreach ($streamList as $stream) {
+            if (!$forceUnassociated) {
+              foreach ($streamList as $stream) {
 
-              if ($stream->method === 'files') {
-                $rawPattern = $stream->datasetPattern;
-                if (empty($rawPattern)) {
-                    continue;
-                }
+                if ($stream->method === 'files') {
+                  $rawPattern = $stream->datasetPattern;
+                  if (empty($rawPattern)) {
+                      continue;
+                  }
 
-                // 1) Prepare regex body: remove possible delimiters
-                $body = trim($rawPattern, '/');
+                  // 1) Prepare regex body: remove possible delimiters
+                  $body = trim($rawPattern, '/');
 
-                // 2) Ensure it matches only at the start (anchor ^)
-                if (strpos($body, '^') !== 0) {
-                    $body = '^' . $body;
-                }
+                  // 2) Ensure it matches only at the start (anchor ^)
+                  if (strpos($body, '^') !== 0) {
+                      $body = '^' . $body;
+                  }
 
-                // 3) Build the regex with delimiters and, optionally, flags (none here)
-                $regex = '/' . $body . '/';
+                  // 3) Build the regex with delimiters and, optionally, flags (none here)
+                  $regex = '/' . $body . '/';
 
-                // 4) Try to match; if invalid, preg_match returns false
-                $res = @preg_match($regex, $filename);
+                  // 4) Try to match; if invalid, preg_match returns false
+                  $res = @preg_match($regex, $filename);
 
-                if ($res === false) {
-                    \Drupal::logger('std')
-                        ->warning("Invalid pattern “{$rawPattern}”: regex “{$regex}”");
-                    continue;
-                }
+                  if ($res === false) {
+                      \Drupal::logger('std')
+                          ->warning("Invalid pattern “{$rawPattern}”: regex “{$regex}”");
+                      continue;
+                  }
 
-                if ($res === 1) {
-                    \Drupal::logger('std')
-                        ->info("Filename “{$filename}” matched regex “{$regex}”");
-                    $streamUri = $stream->uri;
-                    break;
+                  if ($res === 1) {
+                      \Drupal::logger('std')
+                          ->info("Filename “{$filename}” matched regex “{$regex}”");
+                      $streamUri = $stream->uri;
+                      break;
+                  }
                 }
               }
+            }
+
+            if ($forceUnassociated) {
+                \Drupal::logger('std')->info('Forcing unassociated DA upload for file "@file" based on edit-mode proprietary extension routing.', [
+                    '@file' => $filename,
+                ]);
             }
 
             if ($streamUri === null) {
@@ -919,10 +928,14 @@ class JsonDataController extends ControllerBase
         }
 
         $all_files = scandir($file_system->realpath($directory));
-        $filtered_files = array_filter($all_files, function ($file) {
-            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-            return in_array($extension, ['pdf', 'docx']);
-        });
+        $filtered_files = array_values(array_filter($all_files, function ($file) use ($file_system, $directory) {
+            if ($file === '.' || $file === '..') {
+                return FALSE;
+            }
+
+            $realPath = $file_system->realpath($directory . $file);
+            return $realPath && is_file($realPath);
+        }));
 
         $total_files = count($filtered_files);
         $offset = ($page - 1) * $pagesize;
@@ -1060,10 +1073,14 @@ class JsonDataController extends ControllerBase
         }
 
         $all_files = scandir($file_system->realpath($directory));
-        $filtered_files = array_filter($all_files, function ($file) {
-            $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-            return in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'mp3', 'mp4', 'avi', 'mpeg', 'wav']);
-        });
+        $filtered_files = array_values(array_filter($all_files, function ($file) use ($file_system, $directory) {
+            if ($file === '.' || $file === '..') {
+                return FALSE;
+            }
+
+            $realPath = $file_system->realpath($directory . $file);
+            return $realPath && is_file($realPath);
+        }));
 
         $total_files = count($filtered_files);
         $offset = ($page - 1) * $pagesize;
@@ -1131,8 +1148,13 @@ class JsonDataController extends ControllerBase
         }
 
         $all_files = scandir($file_system->realpath($directory));
-        $filtered_files = array_values(array_filter($all_files, function ($file) {
-            return StudyFileTypeResolver::isOhifFile((string) $file);
+        $filtered_files = array_values(array_filter($all_files, function ($file) use ($file_system, $directory) {
+            if ($file === '.' || $file === '..') {
+                return FALSE;
+            }
+
+            $realPath = $file_system->realpath($directory . $file);
+            return $realPath && is_file($realPath);
         }));
 
         $total_files = count($filtered_files);
@@ -1296,6 +1318,140 @@ class JsonDataController extends ControllerBase
                 'details' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Move a file between fixed content panels in Manage Study (Publications, Media, Medical Images).
+     */
+    public function moveContentFile(Request $request)
+    {
+        try {
+            $studyuri = trim((string) $request->request->get('studyuri', ''));
+            $filename = basename(trim((string) $request->request->get('filename', '')));
+            $sourceType = trim((string) $request->request->get('sourceType', ''));
+            $targetType = trim((string) $request->request->get('targetType', ''));
+
+            if ($studyuri === '' || $filename === '' || $sourceType === '' || $targetType === '') {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Missing required parameters.',
+                ], 400);
+            }
+
+            $folderMap = [
+                'Publications' => 'Publications',
+                'media' => 'media',
+                'OHIF' => 'OHIF',
+            ];
+
+            if (!isset($folderMap[$sourceType]) || !isset($folderMap[$targetType])) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Invalid source or target panel.',
+                ], 400);
+            }
+
+            if ($sourceType === $targetType) {
+                return new JsonResponse([
+                    'status' => 'success',
+                    'message' => 'File already in the selected panel.',
+                    'filename' => $filename,
+                ]);
+            }
+
+            $decodedStudyUri = basename((string) base64_decode($studyuri));
+            if ($decodedStudyUri === '') {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Invalid study URI.',
+                ], 400);
+            }
+
+            $fileSystem = \Drupal::service('file_system');
+            $sourceFolder = $folderMap[$sourceType];
+            $targetFolder = $folderMap[$targetType];
+
+            $sourceUri = 'private://std/' . $decodedStudyUri . '/' . $sourceFolder . '/' . $filename;
+            $sourceRealPath = $fileSystem->realpath($sourceUri);
+            if (!$sourceRealPath || !file_exists($sourceRealPath)) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Source file not found.',
+                ], 404);
+            }
+
+            $targetDirectoryUri = 'private://std/' . $decodedStudyUri . '/' . $targetFolder . '/';
+            if (!$fileSystem->prepareDirectory($targetDirectoryUri, FileSystemInterface::CREATE_DIRECTORY)) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unable to prepare target directory.',
+                ], 500);
+            }
+
+            $targetDirectoryRealPath = $fileSystem->realpath($targetDirectoryUri);
+            if (!$targetDirectoryRealPath) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unable to resolve target directory.',
+                ], 500);
+            }
+
+            $targetFilename = $this->buildUniqueTargetFilename($targetDirectoryRealPath, $filename);
+            $targetUri = $targetDirectoryUri . $targetFilename;
+            $movedUri = $fileSystem->move($sourceUri, $targetUri);
+
+            if (!$movedUri) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'Unable to move file.',
+                ], 500);
+            }
+
+            return new JsonResponse([
+                'status' => 'success',
+                'message' => 'File moved successfully.',
+                'filename' => basename((string) $movedUri),
+                'sourceType' => $sourceType,
+                'targetType' => $targetType,
+            ]);
+        }
+        catch (\Exception $e) {
+            \Drupal::logger('std')->error('Error moving file between content panels: @message', ['@message' => $e->getMessage()]);
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error moving file.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function buildUniqueTargetFilename(string $targetDirectoryRealPath, string $originalFilename): string
+    {
+        $candidate = $originalFilename;
+        $fullPath = rtrim($targetDirectoryRealPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidate;
+        if (!file_exists($fullPath)) {
+            return $candidate;
+        }
+
+        $lower = strtolower($originalFilename);
+        if (str_ends_with($lower, '.nii.gz')) {
+            $base = substr($originalFilename, 0, -7);
+            $extension = '.nii.gz';
+        }
+        else {
+            $base = pathinfo($originalFilename, PATHINFO_FILENAME);
+            $ext = pathinfo($originalFilename, PATHINFO_EXTENSION);
+            $extension = $ext !== '' ? '.' . $ext : '';
+        }
+
+        $counter = 1;
+        do {
+            $candidate = $base . '_' . $counter . $extension;
+            $fullPath = rtrim($targetDirectoryRealPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $candidate;
+            $counter++;
+        } while (file_exists($fullPath));
+
+        return $candidate;
     }
 
     private function supportsEmbeddedMedicalViewer(string $filename): bool

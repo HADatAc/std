@@ -797,6 +797,22 @@
   const attachDragAndDropEvents = function () {
     const dropCard = document.querySelector("#drop-card");
 
+    const PROPRIETARY_SIMULATION_RESULT_SUFFIXES = [
+      "ssx",
+      "scx",
+      "xml",
+      "log",
+      "sim",
+      "cas",
+      "rec",
+      "pat",
+      "cfg",
+      "evt",
+      "case",
+      "score",
+      "session",
+    ];
+
     if (!dropCard) {
       showToast("Upload area not found.", "danger");
       return;
@@ -835,6 +851,22 @@
       return extension === "nii.gz"
         ? `${suggestedFileName}.nii.gz`
         : `${suggestedFileName}.${extension}`;
+    };
+
+    const isEditModeDrop = function () {
+      const manageSettings = (typeof drupalSettings !== "undefined" && drupalSettings.stdManageStudy)
+        ? drupalSettings.stdManageStudy
+        : {};
+
+      if (Object.prototype.hasOwnProperty.call(manageSettings, "isOwner")) {
+        return Boolean(manageSettings.isOwner);
+      }
+
+      return String(manageSettings.modeLabel || "").toLowerCase() === "edit mode";
+    };
+
+    const shouldForceUnassociatedByExtension = function (extension) {
+      return PROPRIETARY_SIMULATION_RESULT_SUFFIXES.includes(String(extension || "").toLowerCase());
     };
 
     const refreshStreamsTable = function (streamKey) {
@@ -894,6 +926,7 @@
     const uploadSingleFile = async function (file, studyuri) {
       const originalFileName = file.name;
       const extension = getNormalizedExtension(originalFileName);
+      const forceUnassociated = isEditModeDrop() && shouldForceUnassociatedByExtension(extension);
 
       if (!extension) {
         throw new Error(`Unsupported file type: ${originalFileName}`);
@@ -903,7 +936,13 @@
         throw new Error("ZIP files are not supported. Upload individual files instead.");
       }
 
-      const checkUrl = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
+      const checkParams = new URLSearchParams();
+      if (forceUnassociated) {
+        checkParams.set("forceUnassociated", "1");
+      }
+
+      const checkUrlBase = `${drupalSettings.path.baseUrl}std/check-file-name/${encodeURIComponent(studyuri)}/${encodeURIComponent(originalFileName)}`;
+      const checkUrl = checkParams.toString() ? `${checkUrlBase}?${checkParams.toString()}` : checkUrlBase;
       const checkResponse = await fetch(checkUrl, { method: "GET" });
       if (!checkResponse.ok) {
         throw new Error(`Could not validate file name (${checkResponse.status}).`);
@@ -919,7 +958,13 @@
       const formData = new FormData();
       formData.append("files[mt_filename]", renamedFile);
 
-      const uploadUrl = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${encodeURIComponent(studyuri)}`;
+      const uploadParams = new URLSearchParams();
+      if (forceUnassociated) {
+        uploadParams.set("forceUnassociated", "1");
+      }
+
+      const uploadUrlBase = `${drupalSettings.path.baseUrl}std/file-upload/mt_filename/${encodeURIComponent(studyuri)}`;
+      const uploadUrl = uploadParams.toString() ? `${uploadUrlBase}?${uploadParams.toString()}` : uploadUrlBase;
       const uploadResponse = await new Promise((resolve, reject) => {
         $.ajax({
           url: uploadUrl,
@@ -990,6 +1035,182 @@
     });
   };
 
+  const isContentsEditMode = function () {
+    const manageSettings = (typeof drupalSettings !== "undefined" && drupalSettings.stdManageStudy)
+      ? drupalSettings.stdManageStudy
+      : {};
+
+    if (Object.prototype.hasOwnProperty.call(manageSettings, "isOwner")) {
+      return Boolean(manageSettings.isOwner);
+    }
+
+    return String(manageSettings.modeLabel || "").toLowerCase() === "edit mode";
+  };
+
+  const parseFileDragPayload = function (event) {
+    try {
+      const raw = event.dataTransfer.getData("text/plain");
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.filename || !parsed.fileType) {
+        return null;
+      }
+      return parsed;
+    }
+    catch (e) {
+      return null;
+    }
+  };
+
+  const moveFileAcrossPanels = async function (filename, sourceType, targetType) {
+    const studyuri = getStdStudyUri();
+    if (!studyuri) {
+      throw new Error("Study URI is missing.");
+    }
+
+    const response = await fetch(`${drupalSettings.path.baseUrl}std/move-content-file`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: new URLSearchParams({
+        studyuri: studyuri,
+        filename: filename,
+        sourceType: sourceType,
+        targetType: targetType,
+      }).toString(),
+      credentials: "same-origin",
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    }
+    catch (e) {
+      payload = null;
+    }
+
+    if (!response.ok || !payload || payload.status !== "success") {
+      throw new Error((payload && payload.message) ? payload.message : "Unable to move file.");
+    }
+
+    return payload;
+  };
+
+  const initializeCrossPanelFileDnD = function () {
+    if (!isContentsEditMode()) {
+      return;
+    }
+
+    const panelTargets = [
+      { containerId: "publication-table-container", type: "Publications" },
+      { containerId: "media-table-container", type: "media" },
+      { containerId: "medical-images-table-container", type: "OHIF" },
+    ];
+
+    panelTargets.forEach(function (target) {
+      const container = document.getElementById(target.containerId);
+      if (!container) {
+        return;
+      }
+
+      const rows = container.querySelectorAll("tbody tr");
+      rows.forEach(function (row) {
+        const nameCell = row.querySelector("td");
+        const filename = nameCell ? String(nameCell.textContent || "").trim() : "";
+        if (!filename || filename.toLowerCase() === "no results found.") {
+          return;
+        }
+
+        row.classList.add("std-movable-file-row");
+        row.setAttribute("draggable", "true");
+        row.dataset.stdFileName = filename;
+        row.dataset.stdFileType = target.type;
+
+        if (row.dataset.stdDragBound === "1") {
+          return;
+        }
+
+        row.addEventListener("dragstart", function (event) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", JSON.stringify({
+            filename: filename,
+            fileType: target.type,
+          }));
+          row.classList.add("std-file-row-dragging");
+        });
+
+        row.addEventListener("dragend", function () {
+          row.classList.remove("std-file-row-dragging");
+          document.querySelectorAll(".std-file-drop-target.drag-over").forEach(function (el) {
+            el.classList.remove("drag-over");
+          });
+        });
+
+        row.dataset.stdDragBound = "1";
+      });
+
+      const dropTarget = container.closest(".card") || container;
+      dropTarget.classList.add("std-file-drop-target");
+      dropTarget.dataset.stdTargetType = target.type;
+
+      if (dropTarget.dataset.stdDropBound === "1") {
+        return;
+      }
+
+      dropTarget.addEventListener("dragover", function (event) {
+        const payload = parseFileDragPayload(event);
+        if (!payload || payload.fileType === target.type) {
+          return;
+        }
+
+        event.preventDefault();
+        dropTarget.classList.add("drag-over");
+      });
+
+      dropTarget.addEventListener("dragleave", function () {
+        dropTarget.classList.remove("drag-over");
+      });
+
+      dropTarget.addEventListener("drop", async function (event) {
+        event.preventDefault();
+        dropTarget.classList.remove("drag-over");
+
+        const payload = parseFileDragPayload(event);
+        if (!payload) {
+          return;
+        }
+
+        if (payload.fileType === target.type) {
+          showToast("File is already in this panel.", "info");
+          return;
+        }
+
+        try {
+          const moveResult = await moveFileAcrossPanels(payload.filename, payload.fileType, target.type);
+          showToast(moveResult.message || "File moved successfully.", "success");
+
+          const currentDaPage = drupalSettings.std.page || 1;
+          const currentPubPage = drupalSettings.pub.page || 1;
+          const currentMediaPage = drupalSettings.media.page || 1;
+          const currentMedicalPage = drupalSettings.medical?.page || 1;
+
+          loadTableData(currentDaPage);
+          loadPublicationFiles(currentPubPage);
+          loadMediaFiles(currentMediaPage);
+          loadMedicalImageFiles(currentMedicalPage);
+        }
+        catch (err) {
+          showToast(err.message || "Unable to move file.", "danger");
+        }
+      });
+
+      dropTarget.dataset.stdDropBound = "1";
+    });
+  };
+
   const showToast = function (message, type = "success") {
     const toastId = `toast-${Date.now()}`;
     const toastHtml = `
@@ -1053,6 +1274,7 @@
           updateTotal();
           // limpa paginaÃƒÂ§ÃƒÂ£o
           $("#publication-table-pager").empty();
+          initializeCrossPanelFileDnD();
           return;
         }
 
@@ -1113,6 +1335,7 @@
             }
             renderPublicationPagination(response.pagination);
             attachPublicationDeleteEvents();
+            initializeCrossPanelFileDnD();
           } else {
             showToast("Incomplete response: files or pagination are missing.", "danger");
           }
@@ -1227,6 +1450,7 @@
         totals.media = 0;
         updateTotal();
         $("#media-table-pager").empty();
+        initializeCrossPanelFileDnD();
         return;
       }
 
@@ -1281,6 +1505,7 @@
             }
             renderMediaPagination(response.pagination);
             attachMediaEvents();
+            initializeCrossPanelFileDnD();
           } else {
             showToast("Incomplete response: files or pagination are missing.", "danger");
           }
@@ -1518,6 +1743,7 @@
           totals.medicalImages = 0;
           updateTotal();
           $("#medical-images-table-pager").empty();
+          initializeCrossPanelFileDnD();
           return;
         }
 
@@ -1578,6 +1804,7 @@
           updateTotal();
           renderMedicalImagePagination(response.pagination);
           attachMedicalImageEvents();
+          initializeCrossPanelFileDnD();
         } else {
           showToast("Incomplete response: files or pagination are missing.", "danger");
         }

@@ -13,11 +13,15 @@ use Drupal\std\Controller\JsonDataController;
 use Drupal\dpl\Controller\StreamController;
 use Drupal\Core\Render\Markup;
 use Drupal\Component\Utility\Html;
+use Drupal\file\Entity\File;
+use Drupal\file\FileInterface;
 
 use function Termwind\style;
 
 class ManageStudyForm extends FormBase
 {
+  private const ANY_PROCESS_URI = 'http://hadatac.org/ont/hasco/AnyProcess';
+
 
   Const CONFIGNAME = "rep.settings";
 
@@ -202,6 +206,8 @@ class ManageStudyForm extends FormBase
     $form['#attached']['drupalSettings']['stdManageStudy'] = [
       'isOwner' => $isOwner,
       'modeLabel' => $isOwner ? 'Edit Mode' : 'View Mode',
+      'abortEndpoint' => Url::fromRoute('ctt.api.r_analysis.abort')->toString(),
+      'csrfToken' => \Drupal::csrfToken()->get('rest'),
     ];
 
     // get totals for current study
@@ -461,23 +467,6 @@ class ManageStudyForm extends FormBase
       '#default_value' => 'none',
     ];
 
-    // First row with a single card
-    $form['row1']['card0']['card'] = [
-      '#type'       => 'markup',
-      '#markup'     => Markup::create('
-        <div class="card"><div class="card-body" style="justify-content:normal!important;">
-          <h3 class="mb-5 mt-3">' . $this->getStudy()->label . '</h3>
-          <dl class="row">
-            <dt class="col-sm-1">' . $this->t('URI')        . ':</dt><dd class="col-sm-11">' . $this->getStudy()->uri     . '</dd>
-            <dt class="col-sm-1">' . $this->t('Name')       . ':</dt><dd class="col-sm-11">' . $title                       . '</dd>
-            <dt class="col-sm-1">' . $this->t('PI')         . ':</dt><dd class="col-sm-11">' . $piDisplayHtml               . '</dd>
-            <dt class="col-sm-1">' . $this->t('Institution'). ':</dt><dd class="col-sm-11">' . $institutionDisplayHtml      . '</dd>
-            <dt class="col-sm-1">' . $this->t('Description'). ':</dt><dd class="col-sm-11">' . $this->getStudy()->comment   . '</dd>
-          </dl>
-        </div></div>
-      '),
-    ];
-
     $currentStudyUri = trim((string) ($this->getStudy()->uri ?? ''));
     $currentProcessUri = '';
     if ($isProcessBasedStudyType) {
@@ -487,6 +476,91 @@ class ManageStudyForm extends FormBase
       }
       $currentProcessUri = trim($currentProcessUri);
     }
+
+    $criticalWarningInlineHtml = '';
+    if ($isProcessBasedStudyType && $currentProcessUri !== '') {
+      $criticalWarningData = $this->getRequiredInstrumentWarningData($currentProcessUri);
+      if (is_array($criticalWarningData)) {
+        $warningDialogId = 'std-critical-warning-dialog';
+        $warningOpenBtnId = 'std-critical-warning-open';
+        $warningCloseBtnId = 'std-critical-warning-close';
+
+        $missingList = $criticalWarningData['missingUris'] ?? [];
+        $affectedTasks = $criticalWarningData['affectedTasks'] ?? [];
+        $detailItemsHtml = '';
+        foreach ($missingList as $missingUri) {
+          $detailItemsHtml .= '<li>' . Html::escape((string) $missingUri) . '</li>';
+        }
+
+        $taskRowsHtml = '';
+        foreach ($affectedTasks as $taskInfo) {
+          if (!is_array($taskInfo)) {
+            continue;
+          }
+
+          $taskUri = trim((string) ($taskInfo['uri'] ?? ''));
+          $taskLabel = trim((string) ($taskInfo['label'] ?? ''));
+          if ($taskUri === '' && $taskLabel === '') {
+            continue;
+          }
+
+          $taskRowsHtml .= ''
+            . '<tr>'
+            . '  <td style="vertical-align:top;word-break:break-all;">' . Html::escape($taskUri !== '' ? $taskUri : '-') . '</td>'
+            . '  <td style="vertical-align:top;">' . Html::escape($taskLabel !== '' ? $taskLabel : '-') . '</td>'
+            . '</tr>';
+        }
+
+        $criticalWarningInlineHtml = ''
+          . '<div class="std-critical-warning-inline mt-2 mb-3" role="alert"'
+          . ' style="position:static!important;display:inline-flex;align-items:center;gap:.75rem;padding:.5rem .75rem;width:fit-content;max-width:100%;border:2px solid #dc3545;border-radius:.375rem;background:#f8d7da;color:#842029;">'
+          . '  <strong style="margin:0;">Critical Warning: Required Instruments Unavailable</strong>'
+          . '  <button type="button" class="btn btn-danger btn-sm" id="' . Html::escape($warningOpenBtnId) . '">See more</button>'
+          . '</div>'
+          . '<div id="' . Html::escape($warningDialogId) . '" class="d-none" aria-hidden="true"'
+          . ' style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1060;display:flex;align-items:center;justify-content:center;padding:1rem;">'
+          . '  <div role="dialog" aria-modal="true" aria-labelledby="std-critical-warning-title"'
+          . '    style="background:#fff;border-radius:.5rem;max-width:760px;width:100%;padding:1rem 1rem 1.25rem;box-shadow:0 8px 24px rgba(0,0,0,.2);max-height:80vh;overflow:auto;">'
+          . '    <h4 id="std-critical-warning-title" style="margin:0 0 .75rem 0;">Critical Warning: Required Instruments Unavailable</h4>'
+          . '    <p style="margin:0 0 .75rem 0;">This scenario currently references required instruments that are unavailable or unresolved. The scenario execution can be invalid until this is fixed.</p>'
+          . '    <p style="margin:0 0 .75rem 0;"><strong>Affected tasks:</strong> ' . Html::escape((string) ($criticalWarningData['affectedTaskCount'] ?? 0)) . ' | '
+          . '      <strong>Unavailable required instruments:</strong> ' . Html::escape((string) count($missingList)) . '</p>'
+          . '    <p style="margin:0 0 .5rem 0;"><strong>Affected tasks (URI - Label):</strong></p>'
+          . '    <div style="margin:0 0 .75rem 0;overflow:auto;max-height:240px;border:1px solid #dee2e6;border-radius:.25rem;">'
+          . '      <table class="table table-sm table-striped mb-0">'
+          . '        <thead style="position:sticky;top:0;background:#f8f9fa;z-index:1;">'
+          . '          <tr><th style="white-space:nowrap;">Task URI</th><th>Task Label</th></tr>'
+          . '        </thead>'
+          . '        <tbody>' . ($taskRowsHtml !== '' ? $taskRowsHtml : '<tr><td colspan="2">No task details available.</td></tr>') . '</tbody>'
+          . '      </table>'
+          . '    </div>'
+          . '    <p style="margin:0 0 .5rem 0;"><strong>Unavailable required instruments:</strong></p>'
+          . '    <ul style="margin:0 0 .75rem 1rem;">' . $detailItemsHtml . '</ul>'
+          . '    <p style="margin:0 0 1rem 0;">Review workflow task instrument assignments and verify the related objects in Objects of Interest.</p>'
+          . '    <div style="display:flex;justify-content:flex-end;gap:.5rem;">'
+          . '      <button type="button" id="' . Html::escape($warningCloseBtnId) . '" class="btn btn-outline-secondary">Close</button>'
+          . '    </div>'
+          . '  </div>'
+          . '</div>';
+      }
+    }
+
+    // First row with a single card
+    $form['row1']['card0']['card'] = [
+      '#type'       => 'markup',
+      '#markup'     => Markup::create('
+        <div class="card"><div class="card-body" style="justify-content:normal!important;">
+          <h3 class="mb-3 mt-3">' . $this->getStudy()->label . '</h3>
+          <dl class="row">
+            <dt class="col-sm-1">' . $this->t('URI')        . ':</dt><dd class="col-sm-11">' . $this->getStudy()->uri     . '</dd>
+            <dt class="col-sm-1">' . $this->t('Name')       . ':</dt><dd class="col-sm-11">' . $title                       . '</dd>
+            <dt class="col-sm-1">' . $this->t('PI')         . ':</dt><dd class="col-sm-11">' . $piDisplayHtml               . '</dd>
+            <dt class="col-sm-1">' . $this->t('Institution'). ':</dt><dd class="col-sm-11">' . $institutionDisplayHtml      . '</dd>
+            <dt class="col-sm-1">' . $this->t('Description'). ':</dt><dd class="col-sm-11">' . $this->getStudy()->comment   . '</dd>
+          </dl>' . $criticalWarningInlineHtml . '
+        </div></div>
+      '),
+    ];
 
     if ($isProcessBasedStudyType || $isOwner) {
       $form['row1_actions'] = [
@@ -506,6 +580,22 @@ class ManageStudyForm extends FormBase
           ],
         ];
 
+        $form['row1_actions']['wkf_generation_scope'] = [
+          '#type' => 'hidden',
+          '#default_value' => 'full',
+        ];
+
+        $form['row1_actions']['generate_wkf'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Generate WKF'),
+          '#name' => 'generate_wkf',
+          '#limit_validation_errors' => [],
+          '#attributes' => [
+            'class' => ['btn', 'btn-outline-success'],
+            'id' => 'std-generate-wkf-button',
+          ],
+        ];
+
         $createQuery = [];
         if ($currentProcessUri !== '') {
           $createQuery['process_uri'] = $currentProcessUri;
@@ -519,6 +609,50 @@ class ManageStudyForm extends FormBase
           '#url' => $createStudyUrl,
           '#attributes' => ['class' => ['btn', 'btn-outline-primary']],
         ];
+
+        if ($isOwner) {
+          $form['row1_actions']['students_count'] = [
+            '#type' => 'hidden',
+            '#default_value' => '',
+            '#attributes' => [
+              'id' => 'std-students-count-hidden',
+            ],
+          ];
+
+          $form['row1_actions']['add_students'] = [
+            '#type' => 'submit',
+            '#value' => $this->t('Add Students'),
+            '#name' => 'add_students',
+            '#limit_validation_errors' => [
+              ['row1_actions', 'students_count'],
+              ['students_count'],
+            ],
+            '#attributes' => [
+              'class' => ['btn', 'btn-outline-info'],
+              'id' => 'std-add-students-button',
+            ],
+          ];
+
+          $form['row1_actions']['add_students_modal'] = [
+            '#type' => 'markup',
+            '#markup' => Markup::create(''
+              . '<div id="std-add-students-modal" class="d-none" aria-hidden="true"'
+              . ' style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1055;display:flex;align-items:center;justify-content:center;padding:1rem;">'
+              . '  <div role="dialog" aria-modal="true" aria-labelledby="std-add-students-title"'
+              . '    style="background:#fff;border-radius:.5rem;max-width:460px;width:100%;padding:1rem 1rem 1.25rem;box-shadow:0 8px 24px rgba(0,0,0,.2);">'
+              . '    <h5 id="std-add-students-title" style="margin:0 0 .75rem 0;">Add Students</h5>'
+              . '    <p style="margin:0 0 .75rem 0;">How many students should be included in SOC-STUDENT? (1 to 100)</p>'
+              . '    <input id="std-add-students-count-input" type="number" min="1" max="100" step="1" value="1" class="form-control" />'
+              . '    <div id="std-add-students-error" class="text-danger" style="display:none;margin-top:.5rem;">Please enter a number between 1 and 100.</div>'
+              . '    <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;">'
+              . '      <button type="button" id="std-add-students-cancel" class="btn btn-outline-secondary">Cancel</button>'
+              . '      <button type="button" id="std-add-students-confirm" class="btn btn-primary">Confirm</button>'
+              . '    </div>'
+              . '  </div>'
+              . '</div>'
+            ),
+          ];
+        }
       }
 
       if ($isOwner && $currentStudyUri !== '') {
@@ -539,6 +673,41 @@ class ManageStudyForm extends FormBase
           '#url' => $editStudyUrl,
           '#attributes' => ['class' => ['btn', 'btn-primary']],
         ];
+
+        if ($canSubmitCttWorkflow) {
+          $manageToolsProcessUri = $currentProcessUri;
+          if ($manageToolsProcessUri === '' && !empty($associatedWorkflows)) {
+            foreach ($associatedWorkflows as $workflowCandidate) {
+              $candidateUri = trim((string) ($workflowCandidate->uri ?? ''));
+              if (preg_match('/^https?:\/\//i', $candidateUri) === 1) {
+                $manageToolsProcessUri = $candidateUri;
+                break;
+              }
+            }
+          }
+
+          $returnToManageScenarioUrl = Url::fromRoute('std.manage_study_elements', [
+            'studyuri' => base64_encode($currentStudyUri),
+          ])->toString();
+
+          $manageToolsUrl = Url::fromRoute('ctt.tools_repository', [], [
+            'query' => [
+              'studyUri' => $currentStudyUri,
+              'scenarioUri' => $currentStudyUri,
+              'processUri' => $manageToolsProcessUri,
+              'returnTo' => $returnToManageScenarioUrl,
+            ],
+          ]);
+
+          $form['row1_actions']['manage_tools'] = [
+            '#type' => 'link',
+            '#title' => $this->t('Manage Tools'),
+            '#url' => $manageToolsUrl,
+            '#attributes' => [
+              'class' => ['btn', 'btn-outline-secondary'],
+            ],
+          ];
+        }
       }
     }
 
@@ -1412,7 +1581,7 @@ class ManageStudyForm extends FormBase
       'button' => [
         '#type' => 'html_tag',
         '#tag' => 'button',
-        '#value' => $this->t('<h3 class="mb-0">Executions of ' . $preferredProcessLabel . '</h3>'),
+        '#value' => $this->t('<h3 class="mb-0">Process Executions</h3>'),
         '#attributes' => [
           'class' => ['accordion-button', 'collapsed'],
           'type' => 'button',
@@ -1444,194 +1613,155 @@ class ManageStudyForm extends FormBase
       '#attributes' => ['class' => ['row','g-0','p-3','pt-0']],
     ];
 
-    if ($isOwner && $canSubmitCttWorkflow) {
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow'] = [
-        '#type' => 'container',
-        '#attributes' => ['class' => ['col-12', 'mb-4']],
-      ];
+    $processExecutionsReturnTo = Url::fromRoute('std.manage_study_elements', [
+      'studyuri' => base64_encode((string) $this->getStudy()->uri),
+    ], [
+      'fragment' => 'process-executions',
+    ])->toString();
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card'] = [
-        '#type' => 'container',
-        '#attributes' => ['class' => ['card']],
-      ];
+    $effectiveProcessUri = trim($currentProcessUri);
+    if ($effectiveProcessUri === '' && !empty($associatedWorkflows)) {
+      foreach ($associatedWorkflows as $workflowCandidate) {
+        $candidateUri = trim((string) ($workflowCandidate->uri ?? ''));
+        if ($candidateUri !== '') {
+          $effectiveProcessUri = $candidateUri;
+          break;
+        }
+      }
+    }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['header'] = [
-        '#type' => 'markup',
-        '#markup' => Markup::create(
-          '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">'
-            . '<div class="d-flex align-items-center gap-2">'
-            . '<strong>Associate Workflow to This Study</strong>'
-            . '<span class="badge bg-secondary">Associated: ' . $totalPRCs . '</span>'
-            . '<span class="badge bg-info text-dark">Available: ' . $availableWorkflowCount . '</span>'
-            . '</div>'
-            . '<button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#ctt-associate-workflow-panel" aria-expanded="false" aria-controls="ctt-associate-workflow-panel">'
-            . 'Show / Hide'
-            . '</button>'
-            . '</div>'
-        ),
-      ];
+    $toolExecutionRows = '';
+    $toolExecutions = $this->getAnalyticalToolExecutionsForStudy((string) $this->getStudy()->uri, $effectiveProcessUri);
+    foreach ($toolExecutions as $execution) {
+      $toolLabel = Html::escape((string) ($execution['toolLabel'] ?? $execution['toolUri'] ?? 'Unknown tool'));
+      $startedAt = Html::escape((string) ($execution['startedAt'] ?? '-'));
+      $endedAt = Html::escape((string) ($execution['endedAt'] ?? '-'));
+      $statusLabel = strtolower(trim((string) ($execution['status'] ?? '')));
+      $resultsLink = '-';
+      $resultUri = trim((string) ($execution['resultUri'] ?? ''));
+      if ($resultUri !== '' && (str_starts_with($resultUri, 'http://') || str_starts_with($resultUri, 'https://'))) {
+        $resultsLink = '<a href="' . Html::escape($resultUri) . '" target="_blank" rel="noopener noreferrer">Results</a>';
+      }
+      elseif (!empty($execution['runId'])) {
+        $fallbackUrl = Url::fromRoute('ctt.r_analysis', [], [
+          'query' => [
+            'studyUri' => (string) $this->getStudy()->uri,
+            'processUri' => $effectiveProcessUri,
+          ],
+        ])->toString();
+        $resultsLink = '<a href="' . Html::escape($fallbackUrl) . '" target="_blank" rel="noopener noreferrer">View Run ' . Html::escape((string) $execution['runId']) . '</a>';
+      }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel'] = [
-        '#type' => 'container',
-        '#attributes' => [
-          'id' => 'ctt-associate-workflow-panel',
-          'class' => ['collapse'],
-        ],
-      ];
+      if ($statusLabel !== '') {
+        $resultsLink .= ' <span class="badge bg-light text-dark border ms-1">' . Html::escape($statusLabel) . '</span>';
+      }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body'] = [
-        '#type' => 'container',
-        '#attributes' => ['class' => ['card-body', 'border-top']],
-      ];
+      $toolExecutionRows .= '<tr>'
+        . '<td class="text-break">' . $toolLabel . '</td>'
+        . '<td>' . $startedAt . '</td>'
+        . '<td>' . $endedAt . '</td>'
+        . '<td>' . $resultsLink . '</td>'
+        . '</tr>';
+    }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['intro'] = [
-        '#type' => 'markup',
-        '#markup' => '<small class="text-muted d-block mb-2">Select a workflow and click Associate to add it to this study.</small>',
-      ];
+    if ($toolExecutionRows === '') {
+      $toolExecutionRows = '<tr><td colspan="4" class="text-center text-muted">No tool executions found for this scenario/process.</td></tr>';
+    }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row'] = [
-        '#type' => 'container',
-        '#attributes' => ['class' => ['row', 'g-2', 'align-items-end']],
-      ];
+    $availableToolRows = '';
+    $availableTools = $this->getAvailableAnalyticalToolsForProcess($api, $effectiveProcessUri);
+    foreach ($availableTools as $toolEntry) {
+      $toolName = trim((string) ($toolEntry['name'] ?? $toolEntry['label'] ?? $toolEntry['toolUri'] ?? ''));
+      if ($toolName === '') {
+        $toolName = (string) $this->t('Unnamed tool');
+      }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['associate_workflow_uri'] = [
-        '#type' => 'select',
-        '#title' => $this->t('Workflow / Process'),
-        '#options' => $workflowAssociationOptions,
-        '#empty_option' => $this->t('- Select workflow -'),
-        '#parents' => ['associate_workflow_uri'],
-        '#wrapper_attributes' => ['class' => ['col-lg-9', 'col-md-8', 'col-12']],
-        '#disabled' => empty($workflowAssociationOptions),
-      ];
+      $toolUri = trim((string) ($toolEntry['toolUri'] ?? $toolEntry['uri'] ?? ''));
+      $isGenericSimulator = in_array(strtolower($toolName), [
+        'individual ctt simulator',
+        'cohort ctt simulator',
+      ], TRUE);
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['actions'] = [
-        '#type' => 'container',
-        '#attributes' => ['class' => ['col-lg-3', 'col-md-4', 'col-12', 'd-grid', 'gap-2']],
-      ];
+      $inputContent = $isGenericSimulator
+        ? (string) $this->t('Task model')
+        : trim((string) ($toolEntry['datasetUri'] ?? ''));
+      if ($inputContent === '') {
+        $inputContent = $isGenericSimulator
+          ? (string) $this->t('Task model')
+          : (string) $this->t('Study dataset (as configured)');
+      }
 
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['actions']['associate_submit'] = [
-        '#type' => 'submit',
-        '#name' => 'associate_workflow',
-        '#value' => $this->t('Associate'),
-        '#attributes' => ['class' => ['btn', 'btn-primary', 'btn-sm']],
-        '#disabled' => empty($workflowAssociationOptions),
-      ];
-
-      $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['form_row']['actions']['create_workflow'] = [
-        '#type' => 'link',
-        '#title' => $this->t('Create New Workflow'),
-        '#url' => Url::fromRoute('std.add_workflow', ['state' => 'basic']),
-        '#attributes' => ['class' => ['btn', 'btn-outline-secondary', 'btn-sm'], 'target' => '_blank', 'rel' => 'noopener noreferrer'],
-      ];
-
-      if (empty($workflowAssociationOptions)) {
-        $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['hint'] = [
-          '#type' => 'markup',
-          '#markup' => '<small class="text-muted d-block mt-2">No workflows available to associate. Create one first.</small>',
-        ];
+      $runUrl = '';
+      if ($isGenericSimulator) {
+        $runUrl = Url::fromRoute('ctt.submission_entry', [
+          'studyuri' => base64_encode((string) $this->getStudy()->uri),
+        ], [
+          'query' => [
+            'processUri' => $effectiveProcessUri,
+            'autoExecute' => '1',
+            'executionPanel' => 'top',
+            'returnTo' => $processExecutionsReturnTo,
+          ],
+        ])->toString();
       }
       else {
-        $form['row6']['item']['collapse']['body']['cards_row']['associate_workflow']['card']['panel']['body']['hint'] = [
-          '#type' => 'markup',
-          '#markup' => '<small class="text-muted d-block mt-2">Select and click Associate.</small>',
-        ];
+        $runUrl = Url::fromRoute('ctt.r_analysis', [], [
+          'query' => [
+            'studyUri' => (string) $this->getStudy()->uri,
+            'processUri' => $effectiveProcessUri,
+            'toolUri' => $toolUri,
+          ],
+        ])->toString();
       }
+
+      $actions = '<a href="' . Html::escape($runUrl) . '" class="btn btn-sm btn-primary me-1" target="_blank" rel="noopener noreferrer">Run</a>'
+        . '<button type="button"'
+        . ' class="btn btn-sm btn-outline-danger ctt-tool-abort-button"'
+        . ' data-study-uri="' . Html::escape((string) $this->getStudy()->uri) . '"'
+        . ' data-process-uri="' . Html::escape($effectiveProcessUri) . '"'
+        . ' data-tool-uri="' . Html::escape($toolUri) . '"'
+        . '>Abort</button>';
+
+      $availableToolRows .= '<tr>'
+        . '<td class="text-break">' . Html::escape($toolName) . '</td>'
+        . '<td class="text-break">' . Html::escape($inputContent) . '</td>'
+        . '<td style="white-space: nowrap; text-align: center;">' . $actions . '</td>'
+        . '</tr>';
     }
 
-    $workflowTableColumnClasses = ['col-12', 'mt-2'];
-
-    $workflowRows = '';
-    if (!empty($associatedWorkflows)) {
-      foreach ($associatedWorkflows as $workflow) {
-        $workflowUri = (string) ($workflow->uri ?? '');
-        if ($workflowUri === '') {
-          continue;
-        }
-
-        $workflowLabel = Html::escape((string) ($workflow->label ?? $workflow->title ?? $workflowUri));
-        $workflowUriEscaped = Html::escape($workflowUri);
-
-        $viewWorkflowUrl = $canAccessCttEditor
-          ? Url::fromRoute('ctt.editor', [], [
-            'query' => [
-              'studyUri' => $this->getStudy()->uri,
-              'processUri' => $workflowUri,
-            ],
-          ])->toString()
-          : Url::fromRoute('rep.describe_element', [
-            'elementuri' => base64_encode($workflowUri),
-          ])->toString();
-
-        $actions = '<a href="' . Html::escape($viewWorkflowUrl) . '" class="btn btn-sm btn-secondary me-1" target="_blank" rel="noopener noreferrer">View Workflow</a>';
-
-        if ($canSubmitCttWorkflow) {
-          $toolsRepositoryUrl = Url::fromRoute('ctt.tools_repository', [], [
-            'query' => [
-              'studyUri' => $this->getStudy()->uri,
-            ],
-          ])->toString();
-
-          $rAnalysisUrl = Url::fromRoute('ctt.r_analysis', [], [
-            'query' => [
-              'studyUri' => $this->getStudy()->uri,
-              'processUri' => $workflowUri,
-            ],
-          ])->toString();
-
-          $actions .= '<a href="' . Html::escape($toolsRepositoryUrl) . '" class="btn btn-sm btn-outline-secondary me-1" target="_blank" rel="noopener noreferrer">Tools Repository</a>';
-          $actions .= '<a href="' . Html::escape($rAnalysisUrl) . '" class="btn btn-sm btn-outline-secondary me-1" target="_blank" rel="noopener noreferrer">R Analysis</a>';
-        }
-
-        if ($isOwner && $canSubmitCttWorkflow) {
-          $createExecutionUrl = Url::fromRoute('ctt.submission_entry', [
-            'studyuri' => base64_encode($this->getStudy()->uri),
-          ], [
-            'query' => [
-              'processUri' => $workflowUri,
-            ],
-          ])->toString();
-          $actions .= '<a href="' . Html::escape($createExecutionUrl) . '" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Start Structured Submission</a>';
-        }
-        elseif ($isOwner) {
-          $actions .= '<span class="badge bg-light text-dark border ms-1">Missing submit ctt workflow permission</span>';
-        }
-        else {
-          $actions .= '<span class="badge bg-light text-dark border ms-1">Owner only</span>';
-        }
-
-        if (!$canAccessCttEditor) {
-          $actions .= '<span class="badge bg-light text-dark border ms-1">Canvas requires access ctt editor</span>';
-        }
-
-        $workflowRows .= '<tr>'
-          . '<td class="text-break">' . $workflowLabel . '</td>'
-          . '<td class="text-break">' . $workflowUriEscaped . '</td>'
-          . '<td style="white-space: nowrap; text-align: center;">' . $actions . '</td>'
-          . '</tr>';
-      }
+    if ($availableToolRows === '') {
+      $availableToolRows = '<tr><td colspan="3" class="text-center text-muted">No tools available for the current process.</td></tr>';
     }
 
-    if ($workflowRows === '') {
-      $workflowRows = '<tr><td colspan="3" class="text-center text-muted">No workflows associated with this study were found.</td></tr>';
-    }
-
-    $workflowHint = $isOwner
-      ? 'You can create executions for each associated workflow.'
-      : 'You can view associated workflows. Only the study owner can create executions.';
-
-    $form['row6']['item']['collapse']['body']['cards_row']['workflow_table'] = [
+    $form['row6']['item']['collapse']['body']['cards_row']['tool_executions_table'] = [
       '#type' => 'markup',
       '#markup' => Markup::create(
-        '<div class="' . Html::escape(implode(' ', $workflowTableColumnClasses)) . '">'
+        '<div class="col-12 mt-3">'
           . '<div class="card">'
-          . '<div class="card-header text-center"><h3 class="mb-0">Associated Workflows (' . $totalPRCs . ')</h3></div>'
+          . '<div class="card-header text-center" id="process-executions"><h3 class="mb-0">Tool Executions</h3></div>'
           . '<div class="card-body">'
           . '<table class="table table-striped table-bordered mb-0">'
-          . '<thead><tr><th>Workflow</th><th>URI</th><th style="width: 1%; white-space: nowrap; text-align: center;">Actions</th></tr></thead>'
-          . '<tbody>' . $workflowRows . '</tbody>'
+          . '<thead><tr><th>Tool</th><th>Start Date</th><th>End Date</th><th>Results</th></tr></thead>'
+          . '<tbody>' . $toolExecutionRows . '</tbody>'
           . '</table>'
           . '</div>'
-          . '<div class="card-footer text-center"><small class="text-muted">' . Html::escape($workflowHint) . '</small></div>'
+          . '</div>'
+          . '</div>'
+      ),
+    ];
+
+    $form['row6']['item']['collapse']['body']['cards_row']['available_tools_table'] = [
+      '#type' => 'markup',
+      '#markup' => Markup::create(
+        '<div class="col-12 mt-3">'
+          . '<div class="card">'
+          . '<div class="card-header text-center"><h3 class="mb-0">Available Tools</h3></div>'
+          . '<div class="card-body">'
+          . '<table class="table table-striped table-bordered mb-0">'
+          . '<thead><tr><th>Tool</th><th>Input Content</th><th style="width: 1%; white-space: nowrap; text-align: center;">Actions</th></tr></thead>'
+          . '<tbody>' . $availableToolRows . '</tbody>'
+          . '</table>'
+          . '</div>'
           . '</div>'
           . '</div>'
       ),
@@ -1681,6 +1811,19 @@ class ManageStudyForm extends FormBase
         $form_state->setErrorByName('associate_workflow_uri', $this->t('Select a workflow to associate.'));
       }
     }
+
+    if ($button_name === 'add_students') {
+      $countRaw = (string) $this->getStudentsCountRawFromFormState($form_state);
+      if ($countRaw === '' || !ctype_digit($countRaw)) {
+        $form_state->setErrorByName('students_count', $this->t('Please provide a valid number of students between 1 and 100.'));
+        return;
+      }
+
+      $count = (int) $countRaw;
+      if ($count < 1 || $count > 100) {
+        $form_state->setErrorByName('students_count', $this->t('Please provide a valid number of students between 1 and 100.'));
+      }
+    }
   }
 
   /**
@@ -1716,6 +1859,23 @@ class ManageStudyForm extends FormBase
       return;
     }
 
+    if ($button_name === 'generate_wkf') {
+      $encodedStudyUri = (string) (\Drupal::routeMatch()->getParameter('studyuri') ?? '');
+      $decodedStudyUri = base64_decode($encodedStudyUri, TRUE);
+      if (!is_string($decodedStudyUri) || trim($decodedStudyUri) === '') {
+        \Drupal::messenger()->addError($this->t('Unable to generate WKF: invalid study URI.'));
+        return;
+      }
+
+      $scope = trim((string) $form_state->getValue('wkf_generation_scope', 'full'));
+      if ($scope !== 'scenario') {
+        $scope = 'full';
+      }
+
+      $this->generateWkfForStudy($decodedStudyUri, $scope, $form_state);
+      return;
+    }
+
     if ($button_name === 'associate_workflow') {
       $encodedStudyUri = (string) (\Drupal::routeMatch()->getParameter('studyuri') ?? '');
       $decodedStudyUri = base64_decode($encodedStudyUri, TRUE);
@@ -1733,6 +1893,27 @@ class ManageStudyForm extends FormBase
       $this->persistStudyWorkflowAssociation($decodedStudyUri, $workflowUri);
       \Drupal::messenger()->addStatus($this->t('Workflow successfully associated with this study.'));
 
+      $form_state->setRedirect('std.manage_study_elements', [
+        'studyuri' => $encodedStudyUri,
+      ]);
+      return;
+    }
+
+    if ($button_name === 'add_students') {
+      $encodedStudyUri = (string) (\Drupal::routeMatch()->getParameter('studyuri') ?? '');
+      $decodedStudyUri = base64_decode($encodedStudyUri, TRUE);
+      if (!is_string($decodedStudyUri) || trim($decodedStudyUri) === '') {
+        \Drupal::messenger()->addError($this->t('Unable to add students: invalid study URI.'));
+        return;
+      }
+
+      $count = (int) $this->getStudentsCountRawFromFormState($form_state);
+      if ($count < 1 || $count > 100) {
+        \Drupal::messenger()->addError($this->t('Unable to add students: number must be between 1 and 100.'));
+        return;
+      }
+
+      $this->includeStudentsInSoc((string) $decodedStudyUri, $count);
       $form_state->setRedirect('std.manage_study_elements', [
         'studyuri' => $encodedStudyUri,
       ]);
@@ -1759,6 +1940,424 @@ class ManageStudyForm extends FormBase
       ]);
       return;
     }
+  }
+
+  private function generateWkfForStudy(string $studyUri, string $scope, FormStateInterface $form_state): void {
+    $studyUri = trim($studyUri);
+    if ($studyUri === '') {
+      \Drupal::messenger()->addError($this->t('Unable to generate WKF: invalid study URI.'));
+      return;
+    }
+
+    $api = \Drupal::service('rep.api_connector');
+    $originMgr = \Drupal::service('rep.file_origin_manager');
+
+    $study = $this->getStudy();
+    if (!is_object($study) || trim((string) ($study->uri ?? '')) !== $studyUri) {
+      $study = $api->parseObjectResponse($api->getUri($studyUri), 'getUri');
+    }
+
+    if (!is_object($study)) {
+      \Drupal::messenger()->addError($this->t('Unable to generate WKF: study could not be loaded from API.'));
+      return;
+    }
+
+    $processUri = trim((string) ($study->processUri ?? $study->hasProcess ?? $study->hasProcessUri ?? ''));
+    if (is_object($study->processUri ?? NULL)) {
+      $processUri = trim((string) (($study->processUri->uri ?? '')));
+    }
+
+    if ($scope === 'full' && $processUri === '') {
+      \Drupal::messenger()->addError($this->t('Unable to generate full WKF: this scenario has no associated process.'));
+      return;
+    }
+
+    $studyLabel = trim((string) ($study->label ?? $study->title ?? 'scenario'));
+    $slug = preg_replace('/[^A-Za-z0-9\-]+/', '-', strtoupper($studyLabel));
+    $slug = trim((string) $slug, '-');
+    if ($slug === '') {
+      $slug = 'SCENARIO';
+    }
+
+    $suffix = $scope === 'scenario' ? 'SCENARIO-ONLY' : 'FULL';
+    $filename = 'WKF-' . $slug . '-' . $suffix . '-' . gmdate('Ymd-His') . '.xlsx';
+
+    $raw = $api->generateMTPerElement(
+      'wkf',
+      'none',
+      $studyUri,
+      $filename,
+      'none',
+      $studyUri,
+      $scope !== 'scenario'
+    );
+    $generated = $api->parseObjectResponse($raw, 'generateMTPerElement');
+    $generatedFilename = basename(trim((string) $generated));
+
+    if ($generatedFilename === '') {
+      \Drupal::messenger()->addError($this->t('WKF generation failed: API did not return a generated filename.'));
+      return;
+    }
+
+    $file = File::create([
+      'uri' => 'private://generated_mt/' . $generatedFilename,
+      'filename' => $generatedFilename,
+      'status' => FileInterface::STATUS_PERMANENT,
+      'uid' => \Drupal::currentUser()->id(),
+    ]);
+    $file->save();
+
+    $originMgr->markApi((int) $file->id(), [
+      'study_uri' => $studyUri,
+      'process_uri' => $processUri,
+      'scope' => $scope,
+      'generator' => 'wkf',
+    ]);
+
+    $scopeLabel = $scope === 'scenario' ? 'Scenario only' : 'Scenario + Process + Task Model';
+    \Drupal::messenger()->addStatus($this->t('WKF generation started (@scope). Downloading generated file...', [
+      '@scope' => $scopeLabel,
+    ]));
+
+    $form_state->setRedirect('rep.file_download', [
+      'fid' => (string) $file->id(),
+    ]);
+  }
+
+  private function includeStudentsInSoc(string $studyUri, int $requestedCount): void
+  {
+    $studyUri = trim($studyUri);
+    if ($studyUri === '' || $requestedCount < 1) {
+      \Drupal::messenger()->addError($this->t('Unable to add students: invalid request.'));
+      return;
+    }
+
+    $api = \Drupal::service('rep.api_connector');
+    $useremail = (string) \Drupal::currentUser()->getEmail();
+
+    $socsRaw = $api->studyObjectCollectionsByStudy($studyUri);
+    $socs = $api->parseObjectResponse($socsRaw, 'studyObjectCollectionsByStudy');
+    if (is_object($socs)) {
+      $socs = [$socs];
+    }
+    if (!is_array($socs) || empty($socs)) {
+      \Drupal::messenger()->addError($this->t('No object collections were found for this scenario.'));
+      return;
+    }
+
+    $studentSoc = NULL;
+    foreach ($socs as $soc) {
+      if (!is_object($soc)) {
+        continue;
+      }
+      $candidateUri = strtoupper(trim((string) ($soc->uri ?? '')));
+      $candidateLabel = strtoupper(trim((string) ($soc->label ?? '')));
+      if (strpos($candidateUri, 'SOC-STUDENT') !== FALSE || strpos($candidateLabel, 'SOC-STUDENT') !== FALSE) {
+        $studentSoc = $soc;
+        break;
+      }
+    }
+
+    if (!is_object($studentSoc) || trim((string) ($studentSoc->uri ?? '')) === '') {
+      \Drupal::messenger()->addError($this->t('SOC-STUDENT was not found for this scenario.'));
+      return;
+    }
+
+    $studentSocUri = trim((string) $studentSoc->uri);
+    $existingRaw = $api->studyObjectsBySOCwithPage($studentSocUri, 10000, 0);
+    $existing = $api->parseObjectResponse($existingRaw, 'studyObjectsBySOCwithPage');
+    if (is_object($existing)) {
+      $existing = [$existing];
+    }
+    if (!is_array($existing)) {
+      $existing = [];
+    }
+
+    $existingUris = [];
+    foreach ($existing as $item) {
+      if (is_object($item)) {
+        $uri = trim((string) ($item->uri ?? ''));
+        if ($uri !== '') {
+          $existingUris[$uri] = TRUE;
+        }
+      }
+    }
+
+    $created = 0;
+    for ($i = 1; $i <= $requestedCount; $i++) {
+      $studentUri = $studentSocUri . $i;
+      if (isset($existingUris[$studentUri])) {
+        continue;
+      }
+
+      $payload = [
+        'uri' => $studentUri,
+        'typeUri' => HASCO::STUDY_OBJECT,
+        'hascoTypeUri' => HASCO::STUDY_OBJECT,
+        'isMemberOfUri' => $studentSocUri,
+        'label' => 'Student ' . $i,
+        'originalId' => (string) $i,
+        'comment' => 'Auto-created student ' . $i . ' for scenario participant collection.',
+        'hasSIRManagerEmail' => $useremail,
+      ];
+
+      $result = $api->parseObjectResponse(
+        $api->elementAdd('studyobject', json_encode($payload, JSON_UNESCAPED_SLASHES)),
+        'elementAdd'
+      );
+
+      if ($result !== NULL) {
+        $created++;
+      }
+    }
+
+    $existingCount = count($existingUris);
+    $totalAfter = $existingCount + $created;
+    if ($created > 0) {
+      \Drupal::messenger()->addStatus($this->t('Students updated in SOC-STUDENT: @created created, @total now available. Verify in Objects of Interest under this SOC.', [
+        '@created' => (string) $created,
+        '@total' => (string) $totalAfter,
+      ]));
+      return;
+    }
+
+    \Drupal::messenger()->addStatus($this->t('No new students were created. SOC-STUDENT already contains the requested sequential student URIs up to @count. Verify in Objects of Interest.', [
+      '@count' => (string) $requestedCount,
+    ]));
+  }
+
+  private function getStudentsCountRawFromFormState(FormStateInterface $form_state): string
+  {
+    $direct = trim((string) $form_state->getValue('students_count', ''));
+    if ($direct !== '') {
+      return $direct;
+    }
+
+    $row1 = $form_state->getValue('row1_actions', NULL);
+    if (is_array($row1) && isset($row1['students_count'])) {
+      $nested = trim((string) $row1['students_count']);
+      if ($nested !== '') {
+        return $nested;
+      }
+    }
+
+    $userInput = $form_state->getUserInput();
+    if (is_array($userInput)) {
+      if (isset($userInput['students_count'])) {
+        $raw = trim((string) $userInput['students_count']);
+        if ($raw !== '') {
+          return $raw;
+        }
+      }
+
+      if (isset($userInput['row1_actions']) && is_array($userInput['row1_actions']) && isset($userInput['row1_actions']['students_count'])) {
+        $rawNested = trim((string) $userInput['row1_actions']['students_count']);
+        if ($rawNested !== '') {
+          return $rawNested;
+        }
+      }
+
+      $rawDeep = $this->findStudentsCountInInput($userInput);
+      if ($rawDeep !== '') {
+        return $rawDeep;
+      }
+    }
+
+    return '';
+  }
+
+  private function findStudentsCountInInput(array $input): string
+  {
+    foreach ($input as $key => $value) {
+      if (is_array($value)) {
+        $found = $this->findStudentsCountInInput($value);
+        if ($found !== '') {
+          return $found;
+        }
+        continue;
+      }
+
+      if (!is_scalar($value)) {
+        continue;
+      }
+
+      $normalizedKey = strtolower(trim((string) $key));
+      if ($normalizedKey === 'students_count' || str_ends_with($normalizedKey, '[students_count]')) {
+        $candidate = trim((string) $value);
+        if ($candidate !== '') {
+          return $candidate;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  private function getRequiredInstrumentWarningData(string $processUri): ?array
+  {
+    $processUri = trim($processUri);
+    if ($processUri === '') {
+      return NULL;
+    }
+
+    if (!\Drupal::hasService('ctt.hasco_client')) {
+      return NULL;
+    }
+
+    try {
+      $cttClient = \Drupal::service('ctt.hasco_client');
+    }
+    catch (\Throwable $e) {
+      return NULL;
+    }
+
+    if (!is_object($cttClient) || !method_exists($cttClient, 'getTasksByProcess')) {
+      return NULL;
+    }
+
+    try {
+      $tasks = $cttClient->getTasksByProcess($processUri);
+    }
+    catch (\Throwable $e) {
+      return NULL;
+    }
+
+    if (!is_array($tasks) || empty($tasks)) {
+      return NULL;
+    }
+
+    $missingUris = [];
+    $affectedTasks = [];
+    $checkedUris = [];
+    $availability = [];
+
+    foreach ($tasks as $taskItem) {
+      $task = is_object($taskItem) ? get_object_vars($taskItem) : $taskItem;
+      if (!is_array($task)) {
+        continue;
+      }
+
+      $taskUri = trim((string) ($task['uri'] ?? $task['hasURI'] ?? ''));
+      $taskLabel = trim((string) ($task['label'] ?? $task['title'] ?? ''));
+      $taskKey = $taskUri !== '' ? $taskUri : sha1(json_encode($task));
+
+      $requiredInstrumentUris = $this->extractRequiredInstrumentUrisFromTask($task);
+      foreach ($requiredInstrumentUris as $candidateUri) {
+        if ($candidateUri === '') {
+          continue;
+        }
+
+        if ($this->looksLikeRequiredInstrumentReferenceUri($candidateUri)) {
+          $missingUris[$candidateUri] = TRUE;
+          $affectedTasks[$taskKey] = [
+            'uri' => $taskUri,
+            'label' => $taskLabel,
+          ];
+          continue;
+        }
+
+        if (!isset($checkedUris[$candidateUri])) {
+          $checkedUris[$candidateUri] = TRUE;
+          $isAvailable = FALSE;
+
+          try {
+            if (method_exists($cttClient, 'getByUri')) {
+              $instrumentEntity = $cttClient->getByUri($candidateUri);
+              $isAvailable = is_array($instrumentEntity)
+                && empty($instrumentEntity['error'])
+                && trim((string) ($instrumentEntity['uri'] ?? '')) !== '';
+            }
+          }
+          catch (\Throwable $e) {
+            $isAvailable = FALSE;
+          }
+
+          $availability[$candidateUri] = $isAvailable;
+        }
+
+        if (($availability[$candidateUri] ?? FALSE) === FALSE) {
+          $missingUris[$candidateUri] = TRUE;
+          $affectedTasks[$taskKey] = [
+            'uri' => $taskUri,
+            'label' => $taskLabel,
+          ];
+        }
+      }
+    }
+
+    if (empty($missingUris)) {
+      return NULL;
+    }
+
+    $missingList = array_keys($missingUris);
+    sort($missingList, SORT_STRING);
+
+    $affectedTaskList = array_values($affectedTasks);
+    usort($affectedTaskList, static function (array $left, array $right): int {
+      $leftKey = strtolower(trim((string) ($left['uri'] ?? $left['label'] ?? '')));
+      $rightKey = strtolower(trim((string) ($right['uri'] ?? $right['label'] ?? '')));
+      return strcmp($leftKey, $rightKey);
+    });
+
+    return [
+      'processUri' => $processUri,
+      'missingUris' => $missingList,
+      'affectedTaskCount' => count($affectedTaskList),
+      'affectedTasks' => $affectedTaskList,
+    ];
+  }
+
+  private function extractRequiredInstrumentUrisFromTask(array $task): array
+  {
+    $uris = [];
+
+    $requiredInstrumentEntries = $task['requiredInstrument'] ?? NULL;
+    if (is_array($requiredInstrumentEntries)) {
+      foreach ($requiredInstrumentEntries as $entry) {
+        if (is_array($entry)) {
+          $candidate = trim((string) ($entry['instrumentUri'] ?? $entry['usesInstrument'] ?? $entry['hasInstrument'] ?? ''));
+          if ($candidate !== '') {
+            $uris[$candidate] = TRUE;
+          }
+        }
+        elseif (is_string($entry) && trim($entry) !== '') {
+          $uris[trim($entry)] = TRUE;
+        }
+      }
+    }
+
+    $refs = $task['hasRequiredInstrumentUris'] ?? $task['hasRequiredInstrument'] ?? NULL;
+    if (is_string($refs) && trim($refs) !== '') {
+      $refs = preg_split('/\s*[|;]\s*/', trim($refs));
+    }
+
+    if (is_array($refs)) {
+      foreach ($refs as $ref) {
+        if (is_array($ref)) {
+          $candidate = trim((string) ($ref['uri'] ?? $ref['instrumentUri'] ?? ''));
+          if ($candidate !== '') {
+            $uris[$candidate] = TRUE;
+          }
+        }
+        elseif (is_string($ref) && trim($ref) !== '') {
+          $uris[trim($ref)] = TRUE;
+        }
+      }
+    }
+
+    return array_keys($uris);
+  }
+
+  private function looksLikeRequiredInstrumentReferenceUri(string $uri): bool
+  {
+    $normalized = strtolower(trim($uri));
+    if ($normalized === '') {
+      return FALSE;
+    }
+
+    return strpos($normalized, '/rin/') !== FALSE
+      || strpos($normalized, ':/rin/') !== FALSE
+      || strpos($normalized, 'requiredinstrument') !== FALSE;
   }
 
   private function persistStudyWorkflowAssociation(string $studyUri, string $workflowUri): void
@@ -1934,6 +2533,195 @@ class ManageStudyForm extends FormBase
     });
 
     return $associated;
+  }
+
+  /**
+   * Resolve available analytical tools for one process URI.
+   *
+   * Includes tools explicitly linked to the process and wildcard tools ('*').
+   *
+   * @return array<int, array<string, mixed>>
+   */
+  private function getAvailableAnalyticalToolsForProcess($api, string $processUri): array
+  {
+    $normalizedProcessUri = trim($processUri);
+
+    $allTools = [];
+    $allToolsRaw = [];
+    try {
+      if ($normalizedProcessUri !== '') {
+        $allToolsRaw = $api->listAnalyticalToolsByProcess($normalizedProcessUri);
+      }
+      else {
+        // If no process is selected yet, ask for wildcard scope directly.
+        $allToolsRaw = $api->listAnalyticalToolsByProcess(self::ANY_PROCESS_URI);
+      }
+    }
+    catch (\Throwable $e) {
+      $allToolsRaw = [];
+    }
+
+    if (is_string($allToolsRaw) && trim($allToolsRaw) !== '') {
+      $decoded = json_decode($allToolsRaw, TRUE);
+      if (is_array($decoded)) {
+        if (isset($decoded['body']) && is_array($decoded['body'])) {
+          $allTools = $decoded['body'];
+        }
+        elseif (isset($decoded[0])) {
+          $allTools = $decoded;
+        }
+      }
+    }
+    elseif (is_object($allToolsRaw)) {
+      $asArray = get_object_vars($allToolsRaw);
+      if (isset($asArray['body']) && is_array($asArray['body'])) {
+        $allTools = $asArray['body'];
+      }
+    }
+    elseif (is_array($allToolsRaw)) {
+      $allTools = $allToolsRaw;
+    }
+
+    $filtered = [];
+    foreach ($allTools as $tool) {
+      if (is_object($tool)) {
+        $tool = get_object_vars($tool);
+      }
+
+      if (!is_array($tool)) {
+        continue;
+      }
+
+      $toolUri = trim((string) ($tool['toolUri'] ?? $tool['uri'] ?? ''));
+      if ($toolUri === '') {
+        continue;
+      }
+
+      $processCandidate = trim((string) ($tool['hasProcessUri'] ?? $tool['processUri'] ?? ''));
+      if ($processCandidate !== ''
+        && $processCandidate !== '*'
+        && $processCandidate !== self::ANY_PROCESS_URI
+        && $processCandidate !== $normalizedProcessUri
+      ) {
+        continue;
+      }
+
+      $tool['toolUri'] = $toolUri;
+      if ($processCandidate !== '') {
+        $tool['processUri'] = $processCandidate;
+      }
+      $filtered[$toolUri] = $tool;
+    }
+
+    // Fallback: include wildcard tools from local CTT catalog if API response is empty
+    // or does not include those entries yet.
+    $catalog = \Drupal::state()->get('ctt.analytical_tools.catalog.v1', []);
+    if (is_array($catalog)) {
+      foreach ($catalog as $toolUri => $tool) {
+        if (is_object($tool)) {
+          $tool = get_object_vars($tool);
+        }
+        if (!is_array($tool)) {
+          continue;
+        }
+
+        $candidateToolUri = trim((string) ($tool['toolUri'] ?? (is_string($toolUri) ? $toolUri : '')));
+        if ($candidateToolUri === '') {
+          continue;
+        }
+
+        $processCandidate = trim((string) ($tool['hasProcessUri'] ?? $tool['processUri'] ?? ''));
+        $isWildcard = $processCandidate === '*' || $processCandidate === self::ANY_PROCESS_URI;
+        $matchesProcess = $normalizedProcessUri !== '' && $processCandidate === $normalizedProcessUri;
+
+        if (!$isWildcard && !$matchesProcess) {
+          continue;
+        }
+
+        $tool['toolUri'] = $candidateToolUri;
+        if ($processCandidate !== '') {
+          $tool['processUri'] = $processCandidate;
+        }
+        $filtered[$candidateToolUri] = $tool;
+      }
+    }
+
+    return array_values($filtered);
+  }
+
+  /**
+   * Resolve tool execution history for one study/process pair.
+   *
+   * @return array<int, array<string, string>>
+   */
+  private function getAnalyticalToolExecutionsForStudy(string $studyUri, string $processUri): array
+  {
+    $studyUri = trim($studyUri);
+    $processUri = trim($processUri);
+    if ($studyUri === '') {
+      return [];
+    }
+
+    $historyKey = 'ctt.r_analysis_runs.' . sha1($studyUri);
+    $history = \Drupal::state()->get($historyKey, []);
+    if (!is_array($history) || empty($history)) {
+      return [];
+    }
+
+    $catalog = \Drupal::state()->get('ctt.analytical_tools.catalog.v1', []);
+    if (!is_array($catalog)) {
+      $catalog = [];
+    }
+
+    $executions = [];
+    foreach ($history as $entry) {
+      if (!is_array($entry)) {
+        continue;
+      }
+
+      $entryProcess = trim((string) ($entry['processUri'] ?? ''));
+      if ($processUri !== '' && $entryProcess !== '' && $entryProcess !== $processUri) {
+        continue;
+      }
+
+      $toolUri = trim((string) ($entry['toolUri'] ?? ''));
+      $toolLabel = $toolUri;
+      if ($toolUri !== '' && isset($catalog[$toolUri]) && is_array($catalog[$toolUri])) {
+        $catalogEntry = $catalog[$toolUri];
+        $toolLabel = trim((string) ($catalogEntry['name'] ?? $catalogEntry['label'] ?? $toolUri));
+      }
+
+      $startedAt = trim((string) ($entry['requestedAt'] ?? ''));
+      $startedAtCandidate = trim((string) ($entry['startedAt'] ?? ''));
+      if ($startedAtCandidate !== '') {
+        $startedAt = $startedAtCandidate;
+      }
+      if ($startedAt === '') {
+        $startedAt = '-';
+      }
+
+      $finishedAt = trim((string) ($entry['finishedAt'] ?? ''));
+      if ($finishedAt === '') {
+        $finishedAt = '-';
+      }
+
+      $status = strtolower(trim((string) ($entry['status'] ?? '')));
+      if ($status === '') {
+        $status = 'completed';
+      }
+
+      $executions[] = [
+        'runId' => trim((string) ($entry['runId'] ?? '')),
+        'toolUri' => $toolUri,
+        'toolLabel' => $toolLabel !== '' ? $toolLabel : 'Unknown tool',
+        'startedAt' => $startedAt,
+        'endedAt' => $finishedAt,
+        'status' => $status,
+        'resultUri' => trim((string) ($entry['resultUri'] ?? '')),
+      ];
+    }
+
+    return $executions;
   }
 
   /**

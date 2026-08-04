@@ -53,12 +53,84 @@
         body.style.setProperty('visibility', 'visible', 'important');
       }
     });
+      function attachToolAbortHandlers(context) {
+        var settings = drupalSettings.stdManageStudy || {};
+        var abortEndpoint = String(settings.abortEndpoint || '').trim();
+        if (!abortEndpoint || typeof window.fetch !== 'function') {
+          return;
+        }
+
+        var csrfToken = String(settings.csrfToken || '').trim();
+
+        once('std-tool-abort', '.ctt-tool-abort-button', context).forEach(function (button) {
+          button.addEventListener('click', function () {
+            var studyUri = String(button.getAttribute('data-study-uri') || '').trim();
+            var processUri = String(button.getAttribute('data-process-uri') || '').trim();
+            var toolUri = String(button.getAttribute('data-tool-uri') || '').trim();
+
+            if (!studyUri || !processUri || !toolUri) {
+              window.alert('Missing execution context for abort request.');
+              return;
+            }
+
+            button.disabled = true;
+            var originalText = String(button.textContent || 'Abort');
+            button.textContent = 'Aborting...';
+
+            var headers = {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            };
+            if (csrfToken !== '') {
+              headers['X-CSRF-Token'] = csrfToken;
+            }
+
+            window.fetch(abortEndpoint, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: headers,
+              body: JSON.stringify({
+                studyUri: studyUri,
+                processUri: processUri,
+                toolUri: toolUri
+              })
+            }).then(function (response) {
+              return response.json().catch(function () {
+                return null;
+              });
+            }).then(function (payload) {
+              if (!payload || payload.isSuccessful !== true) {
+                var message = 'Unable to abort execution.';
+                if (payload && Array.isArray(payload.issues) && payload.issues.length > 0) {
+                  message = String(payload.issues[0].message || message);
+                }
+                window.alert(message);
+                button.disabled = false;
+                button.textContent = originalText;
+                return;
+              }
+
+              button.textContent = 'Aborted';
+              button.classList.remove('btn-outline-danger');
+              button.classList.add('btn-secondary');
+
+              // Refresh to update Tool Executions status/end timestamp.
+              window.location.reload();
+            }).catch(function () {
+              window.alert('Abort request failed due to a network or server error.');
+              button.disabled = false;
+              button.textContent = originalText;
+            });
+          });
+        });
+      }
   }
 
   function expandWorkflowPanelsForCapture(form) {
     var selectors = ['#collapseDescription', '#collapseAreas', '#collapseDropCard', '#collapseWorkflow'];
     selectors.forEach(function (selector) {
       var panel = form.querySelector(selector);
+            attachToolAbortHandlers(form);
       if (!panel) {
         return;
       }
@@ -621,6 +693,175 @@
                 button.setAttribute('data-pdf-capture-done', '1');
                 button.click();
               });
+          });
+        });
+
+        once('std-generate-wkf-scope', '#std-generate-wkf-button', form).forEach(function (button) {
+          button.addEventListener('click', function (event) {
+            if (button.getAttribute('data-wkf-scope-confirmed') === '1') {
+              button.removeAttribute('data-wkf-scope-confirmed');
+              return;
+            }
+
+            event.preventDefault();
+
+            var scopeInput = form.querySelector('input[name="wkf_generation_scope"]');
+            if (!scopeInput) {
+              scopeInput = document.createElement('input');
+              scopeInput.type = 'hidden';
+              scopeInput.name = 'wkf_generation_scope';
+              form.appendChild(scopeInput);
+            }
+
+            var includeModel = window.confirm(
+              'Generate WKF scope:\n\n'
+              + 'OK = Scenario + Process + Task Model\n'
+              + 'Cancel = Scenario only'
+            );
+
+            if (includeModel) {
+              scopeInput.value = 'full';
+            }
+            else {
+              var proceedScenarioOnly = window.confirm('Generate WKF with Scenario only?');
+              if (!proceedScenarioOnly) {
+                return;
+              }
+              scopeInput.value = 'scenario';
+            }
+
+            button.setAttribute('data-wkf-scope-confirmed', '1');
+            button.click();
+          });
+        });
+
+        once('std-add-students-modal', '#std-add-students-button', form).forEach(function (button) {
+          var modal = document.getElementById('std-add-students-modal');
+          var countInput = document.getElementById('std-add-students-count-input');
+          var confirmBtn = document.getElementById('std-add-students-confirm');
+          var cancelBtn = document.getElementById('std-add-students-cancel');
+          var errorBox = document.getElementById('std-add-students-error');
+
+          if (!modal || !countInput || !confirmBtn || !cancelBtn) {
+            return;
+          }
+
+          var closeModal = function () {
+            modal.classList.add('d-none');
+            modal.setAttribute('aria-hidden', 'true');
+            if (errorBox) {
+              errorBox.style.display = 'none';
+            }
+          };
+
+          var openModal = function () {
+            modal.classList.remove('d-none');
+            modal.setAttribute('aria-hidden', 'false');
+            if (errorBox) {
+              errorBox.style.display = 'none';
+            }
+            window.setTimeout(function () {
+              countInput.focus();
+              countInput.select();
+            }, 0);
+          };
+
+          button.addEventListener('click', function (event) {
+            if (button.getAttribute('data-add-students-confirmed') === '1') {
+              button.removeAttribute('data-add-students-confirmed');
+              return;
+            }
+
+            event.preventDefault();
+            openModal();
+          });
+
+          cancelBtn.addEventListener('click', function () {
+            closeModal();
+          });
+
+          modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+              closeModal();
+            }
+          });
+
+          confirmBtn.addEventListener('click', function () {
+            var parsed = parseInt(String(countInput.value || '').trim(), 10);
+            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+              if (errorBox) {
+                errorBox.style.display = 'block';
+              }
+              return;
+            }
+
+            var hiddenCountInput = document.getElementById('std-students-count-hidden')
+              || form.querySelector('input[name="students_count"]')
+              || form.querySelector('input[name$="[students_count]"]');
+            if (!hiddenCountInput) {
+              hiddenCountInput = document.createElement('input');
+              hiddenCountInput.type = 'hidden';
+              hiddenCountInput.name = 'students_count';
+              hiddenCountInput.id = 'std-students-count-hidden';
+              form.appendChild(hiddenCountInput);
+            }
+
+            hiddenCountInput.value = String(parsed);
+            closeModal();
+            button.setAttribute('data-add-students-confirmed', '1');
+            button.click();
+          });
+
+          countInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              confirmBtn.click();
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              closeModal();
+            }
+          });
+        });
+
+        once('std-critical-warning-dialog', '#std-critical-warning-open', form).forEach(function (button) {
+          var dialog = document.getElementById('std-critical-warning-dialog');
+          var closeBtn = document.getElementById('std-critical-warning-close');
+
+          if (!dialog || !closeBtn) {
+            return;
+          }
+
+          var closeDialog = function () {
+            dialog.classList.add('d-none');
+            dialog.setAttribute('aria-hidden', 'true');
+          };
+
+          var openDialog = function () {
+            dialog.classList.remove('d-none');
+            dialog.setAttribute('aria-hidden', 'false');
+          };
+
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            openDialog();
+          });
+
+          closeBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            closeDialog();
+          });
+
+          dialog.addEventListener('click', function (event) {
+            if (event.target === dialog) {
+              closeDialog();
+            }
+          });
+
+          document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !dialog.classList.contains('d-none')) {
+              closeDialog();
+            }
           });
         });
 

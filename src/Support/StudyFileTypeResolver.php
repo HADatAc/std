@@ -9,9 +9,38 @@ namespace Drupal\std\Support;
  */
 final class StudyFileTypeResolver {
 
+  private const PROPRIETARY_SIMULATION_RESULT_EXTENSIONS = [
+    'ssx',
+    'scx',
+    'xml',
+    'log',
+    'sim',
+    'cas',
+    'rec',
+    'pat',
+    'cfg',
+    'evt',
+    'case',
+    'score',
+    'session',
+  ];
+
   private const FOLDER_BY_EXTENSION = [
     'csv' => 'da',
     'xlsx' => 'da',
+    'ssx' => 'da',
+    'scx' => 'da',
+    'xml' => 'da',
+    'log' => 'da',
+    'sim' => 'da',
+    'cas' => 'da',
+    'rec' => 'da',
+    'pat' => 'da',
+    'cfg' => 'da',
+    'evt' => 'da',
+    'case' => 'da',
+    'score' => 'da',
+    'session' => 'da',
     'pdf' => 'Publications',
     'doc' => 'Publications',
     'docx' => 'Publications',
@@ -61,6 +90,15 @@ final class StudyFileTypeResolver {
 
   public static function isExtensionAllowed(string $filename): bool {
     return self::resolveStorageFolderFromFilename($filename) !== NULL;
+  }
+
+  public static function isProprietarySimulationResultFilename(string $filename): bool {
+    $extension = self::normalizeExtension($filename);
+    if ($extension === '') {
+      return FALSE;
+    }
+
+    return in_array($extension, self::PROPRIETARY_SIMULATION_RESULT_EXTENSIONS, TRUE);
   }
 
   /**

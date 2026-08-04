@@ -355,6 +355,145 @@ class EditProcessBasedStudyForm extends FormBase {
   }
 
   /**
+   * Build a normalized key for URI/ID comparisons.
+   */
+  private function normalizeIdentifierKey(string $value): string {
+    $normalized = preg_replace('/[^a-z0-9]/i', '', strtolower(trim($value)));
+    return is_string($normalized) ? $normalized : '';
+  }
+
+  /**
+   * Extract the last path segment from a URI-like value.
+   */
+  private function extractUriIdentifier(string $uri): string {
+    $candidate = trim($uri);
+    if ($candidate === '') {
+      return '';
+    }
+
+    $path = parse_url($candidate, PHP_URL_PATH);
+    if (is_string($path) && $path !== '') {
+      $segment = trim((string) basename($path));
+      if ($segment !== '') {
+        return $segment;
+      }
+    }
+
+    $parts = explode('/', $candidate);
+    return trim((string) end($parts));
+  }
+
+  /**
+   * Merge candidate ProcessBasedStudy records used for fallback URI lookup.
+   *
+   * @return array<int, mixed>
+   */
+  private function collectFallbackStudyCandidates(): array {
+    $api = \Drupal::service('rep.api_connector');
+    $candidates = [];
+    $indexed = [];
+
+    try {
+      $items = $this->parseApiListBody($api->listByKeyword('study', '_', 9999, 0));
+      foreach ($items as $item) {
+        if (!is_object($item)) {
+          continue;
+        }
+        $uri = Utils::canonicalizePmsrUri(trim((string) ($item->uri ?? '')));
+        if ($uri !== '' && isset($indexed[$uri])) {
+          continue;
+        }
+        if ($uri !== '') {
+          $indexed[$uri] = TRUE;
+        }
+        $candidates[] = $item;
+      }
+    }
+    catch (\Throwable $e) {
+      // Keep fallback best-effort only.
+    }
+
+    try {
+      $endpoint = '/hascoapi/api/processbasedstudy/search/_/9999/0';
+      $apiUrl = rtrim((string) $api->getApiUrl(), '/');
+      $raw = $api->perform_http_request('GET', $apiUrl . $endpoint, $api->getHeader());
+      $items = $this->parseApiListBody($raw);
+      foreach ($items as $item) {
+        if (!is_object($item)) {
+          continue;
+        }
+        $uri = Utils::canonicalizePmsrUri(trim((string) ($item->uri ?? '')));
+        if ($uri !== '' && isset($indexed[$uri])) {
+          continue;
+        }
+        if ($uri !== '') {
+          $indexed[$uri] = TRUE;
+        }
+        $candidates[] = $item;
+      }
+    }
+    catch (\Throwable $e) {
+      // Keep fallback best-effort only.
+    }
+
+    return $candidates;
+  }
+
+  /**
+   * Try resolving a ProcessBasedStudy object using URI/ID tolerant matching.
+   */
+  private function resolveStudyObjectWithFallback(string $requestedUri) {
+    $requested = Utils::canonicalizePmsrUri($requestedUri);
+    if ($requested === '') {
+      return NULL;
+    }
+
+    $api = \Drupal::service('rep.api_connector');
+    try {
+      $directResponse = $api->getUri($requested);
+      $direct = $api->parseObjectResponse($directResponse, 'getUri');
+      if (is_object($direct)) {
+        return $direct;
+      }
+    }
+    catch (\Throwable $e) {
+      // Continue to tolerant fallback matching.
+    }
+
+    $requestedId = $this->extractUriIdentifier($requested);
+    $requestedKey = $this->normalizeIdentifierKey($requestedId);
+    if ($requestedKey === '') {
+      return NULL;
+    }
+
+    $candidates = $this->collectFallbackStudyCandidates();
+    foreach ($candidates as $candidate) {
+      if (!is_object($candidate)) {
+        continue;
+      }
+
+      $candidateUri = Utils::canonicalizePmsrUri(trim((string) ($candidate->uri ?? '')));
+      $candidateId = trim((string) ($candidate->studyID ?? $candidate->hasStudyID ?? ''));
+
+      $keys = [];
+      if ($candidateUri !== '') {
+        $keys[] = $this->normalizeIdentifierKey($this->extractUriIdentifier($candidateUri));
+      }
+      if ($candidateId !== '') {
+        $keys[] = $this->normalizeIdentifierKey($candidateId);
+      }
+
+      foreach ($keys as $key) {
+        if ($key !== '' && $key === $requestedKey) {
+          return $candidate;
+        }
+      }
+    }
+
+    return NULL;
+  }
+
+  /**
    * Extract organization URI references from an organization object.
    */
   private function extractOrganizationUriCandidates($organization): array {
@@ -665,25 +804,19 @@ class EditProcessBasedStudyForm extends FormBase {
     }
     $this->studyUri = Utils::canonicalizePmsrUri(trim($decodedStudyUri));
 
-    // Fetch the existing ProcessBasedStudy from the API
-    $api = \Drupal::service('rep.api_connector');
-    try {
-      $studyResponse = $api->getUri($this->studyUri);
-      $this->study = $api->parseObjectResponse($studyResponse, 'getUri');
-    }
-    catch (\Throwable $e) {
-      \Drupal::messenger()->addError($this->t('Failed to load Process-Based @study: @message', [
-        '@study' => $preferredStudyLabel,
-        '@message' => $e->getMessage(),
-      ]));
-      $form_state->setRedirect('std.edit_study', ['studyuri' => $studyuri]);
-      return [];
-    }
+    // Fetch the existing ProcessBasedStudy from the API.
+    $this->study = $this->resolveStudyObjectWithFallback($this->studyUri);
 
     if ($this->study === NULL) {
       \Drupal::messenger()->addError($this->t('Failed to load ProcessBasedStudy with URI: @uri', ['@uri' => $this->studyUri]));
-      $form_state->setRedirect('std.edit_study', ['studyuri' => $studyuri]);
+      \Drupal::messenger()->addError($this->t('Unable to open this scenario in edit mode because it is missing or not fully synchronized in the knowledge graph.'));
+      $form_state->setRedirect('std.search_studies_variables');
       return [];
+    }
+
+    $resolvedStudyUri = Utils::canonicalizePmsrUri(trim((string) ($this->study->uri ?? '')));
+    if ($resolvedStudyUri !== '') {
+      $this->studyUri = $resolvedStudyUri;
     }
 
     // Normalize process URI values that may arrive as structured objects.
@@ -886,6 +1019,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#default_value' => $this->toSafeString($this->study->studyTitle ?? ''),
       '#description' => $this->t('Full title of the @study.', ['@study' => $preferredStudyNoun]),
       '#maxlength' => 512,
+      '#required' => TRUE,
     ];
 
     $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['specific_aims'] = [
@@ -982,6 +1116,7 @@ class EditProcessBasedStudyForm extends FormBase {
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
     $study_id = trim((string) $form_state->getValue('study_id'));
+    $study_title = trim((string) $form_state->getValue('study_title'));
     $contact_email = trim($form_state->getValue('contact_email'));
     $preferredStudyLabel = $this->preferredStudyLabel();
 
@@ -999,6 +1134,10 @@ class EditProcessBasedStudyForm extends FormBase {
       if (!preg_match('/^STD-/', $study_id)) {
         $form_state->setErrorByName('study_id', $this->t('@study ID must start with "STD-".', ['@study' => $preferredStudyLabel]));
       }
+    }
+
+    if ($study_title === '') {
+      $form_state->setErrorByName('study_title', $this->t('@study Title is required.', ['@study' => $preferredStudyLabel]));
     }
 
     // Validate email format if provided

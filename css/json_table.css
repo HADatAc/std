@@ -41,6 +41,19 @@
   margin-bottom: 2px;
 }
 
+.std-movable-file-row {
+  cursor: grab;
+}
+
+.std-movable-file-row.std-file-row-dragging {
+  opacity: 0.55;
+}
+
+.std-file-drop-target.drag-over {
+  box-shadow: inset 0 0 0 2px #198754;
+  background-color: rgba(25, 135, 84, 0.08);
+}
+
 #json-table-container,
 #publication-table-container,
 #media-table-container,

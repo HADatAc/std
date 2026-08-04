@@ -6,6 +6,7 @@ namespace Drupal\std\Service;
 
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Url;
+use Drupal\rep\Utils;
 use Drupal\std\Support\StudyFileTypeResolver;
 
 /**
@@ -74,7 +75,7 @@ final class StudyVariableSearchService {
         continue;
       }
 
-      $studyUri = trim((string) ($study->uri ?? ''));
+      $studyUri = $this->normalizePmsrDisplayUri(trim((string) ($study->uri ?? '')));
       if ($studyUri === '') {
         continue;
       }
@@ -130,7 +131,7 @@ final class StudyVariableSearchService {
       $completenessScore = round(($hasData + $hasWorkflow + $hasImages) / 3, 4);
 
       // Determine study type and extract ProcessBasedStudy metadata
-      $processUri = trim((string) ($study->processUri ?? ''));
+      $processUri = $this->normalizePmsrDisplayUri(trim((string) ($study->processUri ?? '')));
       $studyType = !empty($processUri) && $processUri !== 'None' ? 'processbasedstudy' : 'study';
 
       // Get process metadata if available (including ProcessStem for filtering)
@@ -185,12 +186,26 @@ final class StudyVariableSearchService {
         $platformSlug = $platformMetadataMap[$organization]['slug'] ?? '';
       }
 
+      if ($processLabel !== '' && $organization !== '' && str_ends_with($processLabel, ' at Unknown Organization')) {
+        $processLabel = preg_replace('/\s+at\s+Unknown\s+Organization$/i', ' at ' . $organization, $processLabel) ?? $processLabel;
+      }
+
+      $studyLabel = trim((string) ($study->label ?? $study->title ?? $study->studyTitle ?? $study->hasStudyTitle ?? $studyUri));
+      if ($studyLabel !== '' && $organization !== '' && str_ends_with($studyLabel, ' at Unknown Organization')) {
+        $studyLabel = preg_replace('/\s+at\s+Unknown\s+Organization$/i', ' at ' . $organization, $studyLabel) ?? $studyLabel;
+      }
+
+      $description = trim((string) ($study->comment ?? ''));
+      if ($description !== '') {
+        $description = preg_replace('#https?://pmsr\.net/ont/WKF\#/?#i', 'https://pmsr.net/ont/', $description) ?? $description;
+      }
+
       $studyCards[] = [
-        'label' => trim((string) ($study->label ?? $study->title ?? $study->studyTitle ?? $study->hasStudyTitle ?? $studyUri)),
+        'label' => $studyLabel,
         'uri' => $studyUri,
         'study_type' => $studyType,
         'study_id' => trim((string) ($study->studyID ?? $study->hasStudyID ?? '')),
-        'description' => trim((string) ($study->comment ?? '')),
+        'description' => $description,
         'organization' => $organization,
         'organization_slug' => $this->slugify($organization),
         'platform_label' => $platformLabel,
@@ -1329,7 +1344,7 @@ final class StudyVariableSearchService {
         continue;
       }
       
-      $processUri = trim((string) ($study->processUri ?? ''));
+      $processUri = $this->normalizePmsrDisplayUri(trim((string) ($study->processUri ?? '')));
       if ($processUri === '' || $processUri === 'None') {
         continue;
       }
@@ -1561,6 +1576,17 @@ final class StudyVariableSearchService {
     }
     
     return $platformMap;
+  }
+
+  private function normalizePmsrDisplayUri(string $uri): string {
+    $value = Utils::canonicalizePmsrUri($uri);
+    if ($value === '') {
+      return '';
+    }
+
+    // Defensive normalization for fragment-like WKF URI drift variants.
+    $value = str_ireplace(['/WKF#/', '/WKF#'], '/', $value);
+    return $value;
   }
 
 }

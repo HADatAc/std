@@ -1506,7 +1506,7 @@ class EditTaskForm extends FormBase {
 
           $taskData = [
             'uri'                   => $this->getTask()->uri,
-            'typeUri'               => UTILS::uriFromAutocomplete($basic['tasktype']),
+            'typeUri'               => $this->normalizeTaskTypeUri((string) $basic['tasktype']),
             'hascoTypeUri'          => VSTOI::TASK,
             'hasTemporalDependency' =>
               ($this->getTask()->typeUri === VSTOI::ABSTRACT_TASK
@@ -1571,6 +1571,52 @@ class EditTaskForm extends FormBase {
     if (!empty($trigger['#name']) && $trigger['#name'] === 'back') {
       return;
     }
+
+    if (!empty($trigger['#name']) && $trigger['#name'] === 'save') {
+      $input = $form_state->getUserInput();
+      $taskTypeValue = (string) ($input['task_tasktype'] ?? '');
+      $taskTypeUri = $this->resolveTaskTypeUri($taskTypeValue);
+
+      if (!$this->isValidTaskTypeUri($taskTypeUri)) {
+        $form_state->setErrorByName('task_tasktype', $this->t('Task Type must be vstoi:Task or a Task subclass.'));
+      }
+    }
+  }
+
+  private function normalizeTaskTypeUri(string $typeValue): string {
+    $resolved = $this->resolveTaskTypeUri($typeValue);
+    return $this->isValidTaskTypeUri($resolved) ? $resolved : '';
+  }
+
+  private function resolveTaskTypeUri(string $typeValue): string {
+    $resolved = Utils::uriFromAutocomplete($typeValue);
+    if (strcasecmp(trim($resolved), 'Task') === 0) {
+      return VSTOI::TASK;
+    }
+    return $resolved;
+  }
+
+  private function isValidTaskTypeUri(?string $typeUri): bool {
+    $uri = trim((string) ($typeUri ?? ''));
+    if ($uri === '') {
+      return false;
+    }
+
+    if ($uri === VSTOI::TASK) {
+      return true;
+    }
+
+    if (in_array($uri, [
+      VSTOI::ABSTRACT_TASK,
+      VSTOI::APPLICATION_TASK,
+      VSTOI::INTERACTION_TASK,
+      VSTOI::USER_TASK,
+    ], TRUE)) {
+      return true;
+    }
+
+    // Accept vstoi namespace Task subclasses only.
+    return str_starts_with($uri, VSTOI::VSTOI) && str_ends_with($uri, 'Task');
   }
 
   public function getComponents($instrumentUri) {
@@ -1737,6 +1783,15 @@ class EditTaskForm extends FormBase {
         'subtasks][new_subtask_form][subtask_type]',
         $this->t('You must enter a Type for the sub-task.')
       );
+      return;
+    }
+
+    $typeUri = $this->resolveTaskTypeUri((string) $type);
+    if (!$this->isValidTaskTypeUri($typeUri)) {
+      $form_state->setErrorByName(
+        'subtasks][new_subtask_form][subtask_type]',
+        $this->t('Task Type must be vstoi:Task or a Task subclass.')
+      );
     }
   }
 
@@ -1748,11 +1803,21 @@ class EditTaskForm extends FormBase {
     $api = \Drupal::service('rep.api_connector');
     $parentUri = $this->getTask()->uri;
     $useremail = \Drupal::currentUser()->getEmail();
+    $normalizedTypeUri = $this->normalizeTaskTypeUri((string) $type);
+
+    if (!$this->isValidTaskTypeUri($normalizedTypeUri)) {
+      $form_state->setErrorByName(
+        'subtasks][new_subtask_form][subtask_type]',
+        $this->t('Task Type must be vstoi:Task or a Task subclass.')
+      );
+      $form_state->setRebuild(TRUE);
+      return;
+    }
 
     $newTaskUri = Utils::uriGen('task');
     $newSubtask = [
       'uri'                       => $newTaskUri,
-      'typeUri'                   => UTILS::uriFromAutocomplete($type),
+      'typeUri'                   => $normalizedTypeUri,
       'hascoTypeUri'              => VSTOI::TASK,
       'hasStatus'                 => VSTOI::DRAFT,
       'hasTemporalDependency'     => '',

@@ -529,6 +529,17 @@ std.delete_medical_image_file:
   options:
     _format: 'json'
 
+std.move_content_file:
+  path: '/std/move-content-file'
+  defaults:
+    _controller: '\Drupal\std\Controller\JsonDataController::moveContentFile'
+    _title: 'Move content file between panels'
+  requirements:
+    _permission: 'access content'
+  methods: [POST]
+  options:
+    _format: 'json'
+
 std.view_media_file:
   path: '/std/view-file/{filename}/{studyuri}/{type}/{token}'
   defaults:
