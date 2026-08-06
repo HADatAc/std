@@ -13,6 +13,7 @@ use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\file\Entity\File;
 use Drupal\Core\Render\Markup;
+use Drupal\std\Entity\ProcessBasedStudy;
 
 class AddStudyForm extends FormBase {
 
@@ -63,11 +64,15 @@ class AddStudyForm extends FormBase {
     $form['study_short_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Short Name'),
+      '#description' => $this->t('Automatically managed by the system.'),
+      '#disabled' => TRUE,
     ];
 
     $form['study_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Long Name'),
+      '#description' => $this->t('Automatically managed by the system.'),
+      '#disabled' => TRUE,
     ];
 
     $form['study_pi'] = [
@@ -279,12 +284,7 @@ class AddStudyForm extends FormBase {
     $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
-      if(strlen($form_state->getValue('study_short_name')) < 1) {
-        $form_state->setErrorByName('study_short_name', $this->t('Please enter a valid short name for the '.ucfirst($preferred_study)));
-      }
-      if(strlen($form_state->getValue('study_name')) < 1) {
-        $form_state->setErrorByName('study_name', $this->t('Please enter a valid name for the '.ucfirst($preferred_study)));
-      }
+      // Study naming is managed by system policy.
     }
   }
 
@@ -309,6 +309,8 @@ class AddStudyForm extends FormBase {
         $useremail = \Drupal::currentUser()->getEmail();
 
         $newStudyUri = $form_state->getValue('study_uri');
+        $personLabel = ProcessBasedStudy::resolvePersonLabelByEmail((string) $useremail);
+        $autoLabel = ProcessBasedStudy::composeScenarioLabel($personLabel, 'Unlinked ProcessStem', 'Unknown Organization', gmdate('Ymd'), gmdate('H:i'));
         $institutionUri = '';
         if ($form_state->getValue('study_institution') != NULL && $form_state->getValue('study_institution') != '') {
           $institutionUri = Utils::uriFromAutocomplete($form_state->getValue('study_institution'));
@@ -371,8 +373,8 @@ class AddStudyForm extends FormBase {
         $studyJSON = '{"uri":"'. $newStudyUri .'",'.
           '"typeUri":"'.HASCO::STUDY.'",'.
           '"hascoTypeUri":"'.HASCO::STUDY.'",'.
-          '"label":"'.$form_state->getValue('study_short_name').'",'.
-          '"title":"'.$form_state->getValue('study_name').'",'.
+          '"label":"'.$autoLabel.'",'.
+          '"title":"'.$autoLabel.'",'.
           '"comment":"'.$form_state->getValue('study_description').'",'.
           '"institutionUri":"' . $institutionUri . '",'.
           // '"pi":"'.$form_state->getValue('study_pi').'",'.

@@ -549,8 +549,8 @@ class ManageStudyForm extends FormBase
     $form['row1']['card0']['card'] = [
       '#type'       => 'markup',
       '#markup'     => Markup::create('
-        <div class="card"><div class="card-body" style="justify-content:normal!important;">
-          <h3 class="mb-3 mt-3">' . $this->getStudy()->label . '</h3>
+        <div class="card std-study-header-panel"><div class="card-body" style="justify-content:normal!important;">
+          <h3 class="mb-3 mt-0 std-study-header-title">' . $this->getStudy()->label . '</h3>
           <dl class="row">
             <dt class="col-sm-1">' . $this->t('URI')        . ':</dt><dd class="col-sm-11">' . $this->getStudy()->uri     . '</dd>
             <dt class="col-sm-1">' . $this->t('Name')       . ':</dt><dd class="col-sm-11">' . $title                       . '</dd>
@@ -568,8 +568,20 @@ class ManageStudyForm extends FormBase
         '#attributes' => ['class' => ['d-flex', 'gap-2', 'mb-3', 'flex-wrap']],
       ];
 
+      $form['row1_actions']['panel'] = [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['std-top-actions-panel', 'd-flex', 'gap-2', 'flex-wrap']],
+      ];
+
+      $form['row1_actions']['panel']['title'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#value' => $this->t('Actions'),
+        '#attributes' => ['class' => ['std-top-actions-panel__title']],
+      ];
+
       if ($isProcessBasedStudyType) {
-        $form['row1_actions']['generate_pdf'] = [
+        $form['row1_actions']['panel']['generate_pdf'] = [
           '#type' => 'submit',
           '#value' => $this->t('Generate PDF'),
           '#name' => 'generate_pdf',
@@ -585,7 +597,7 @@ class ManageStudyForm extends FormBase
           '#default_value' => 'full',
         ];
 
-        $form['row1_actions']['generate_wkf'] = [
+        $form['row1_actions']['panel']['generate_wkf'] = [
           '#type' => 'submit',
           '#value' => $this->t('Generate WKF'),
           '#name' => 'generate_wkf',
@@ -603,7 +615,7 @@ class ManageStudyForm extends FormBase
         $createStudyUrl = Url::fromRoute('std.add_processbasedstudy', [], [
           'query' => $createQuery,
         ]);
-        $form['row1_actions']['create_study_with_process'] = [
+        $form['row1_actions']['panel']['create_study_with_process'] = [
           '#type' => 'link',
           '#title' => $this->t('Create @study with this Process', ['@study' => $preferredStudyLabel]),
           '#url' => $createStudyUrl,
@@ -619,7 +631,7 @@ class ManageStudyForm extends FormBase
             ],
           ];
 
-          $form['row1_actions']['add_students'] = [
+          $form['row1_actions']['panel']['add_students'] = [
             '#type' => 'submit',
             '#value' => $this->t('Add Students'),
             '#name' => 'add_students',
@@ -667,7 +679,7 @@ class ManageStudyForm extends FormBase
           'currenturl' => $editStudyUrlStr,
           'currentroute' => $editRoute,
         ]);
-        $form['row1_actions']['edit_study'] = [
+        $form['row1_actions']['panel']['edit_study'] = [
           '#type' => 'link',
           '#title' => $this->t('Edit @study', ['@study' => $preferredStudyLabel]),
           '#url' => $editStudyUrl,
@@ -699,7 +711,7 @@ class ManageStudyForm extends FormBase
             ],
           ]);
 
-          $form['row1_actions']['manage_tools'] = [
+          $form['row1_actions']['panel']['manage_tools'] = [
             '#type' => 'link',
             '#title' => $this->t('Manage Tools'),
             '#url' => $manageToolsUrl,
@@ -1559,6 +1571,16 @@ class ManageStudyForm extends FormBase
 
     // WORKFLOW EXECUTIONS
     $preferredProcessLabel = $config->get('preferred_process') ?: 'Workflow';
+    $expandProcessExecutions = trim((string) \Drupal::request()->query->get('openPanel', '')) === 'process-executions';
+    $workflowAccordionButtonClasses = ['accordion-button'];
+    if (!$expandProcessExecutions) {
+      $workflowAccordionButtonClasses[] = 'collapsed';
+    }
+    $workflowCollapseClasses = ['accordion-collapse', 'collapse'];
+    if ($expandProcessExecutions) {
+      $workflowCollapseClasses[] = 'show';
+    }
+
     $form['row6'] = [
       '#type' => 'container',
       '#attributes' => ['class' => ['accordion', 'mt-3'], 'id' => 'accordionWorkflow'],
@@ -1583,11 +1605,11 @@ class ManageStudyForm extends FormBase
         '#tag' => 'button',
         '#value' => $this->t('<h3 class="mb-0">Process Executions</h3>'),
         '#attributes' => [
-          'class' => ['accordion-button', 'collapsed'],
+          'class' => $workflowAccordionButtonClasses,
           'type' => 'button',
           'data-bs-toggle' => 'collapse',
           'data-bs-target' => '#collapseWorkflow',
-          'aria-expanded' => 'false',
+          'aria-expanded' => $expandProcessExecutions ? 'true' : 'false',
           'aria-controls' => 'collapseWorkflow',
         ],
       ],
@@ -1597,7 +1619,7 @@ class ManageStudyForm extends FormBase
       '#type' => 'container',
       '#attributes' => [
         'id' => 'collapseWorkflow',
-        'class' => ['accordion-collapse','collapse'],
+        'class' => $workflowCollapseClasses,
         'aria-labelledby' => 'headingWorkflow',
         'data-bs-parent' => '#accordionWorkflow',
       ],
@@ -1616,6 +1638,9 @@ class ManageStudyForm extends FormBase
     $processExecutionsReturnTo = Url::fromRoute('std.manage_study_elements', [
       'studyuri' => base64_encode((string) $this->getStudy()->uri),
     ], [
+      'query' => [
+        'openPanel' => 'process-executions',
+      ],
       'fragment' => 'process-executions',
     ])->toString();
 
@@ -1638,11 +1663,21 @@ class ManageStudyForm extends FormBase
       $endedAt = Html::escape((string) ($execution['endedAt'] ?? '-'));
       $statusLabel = strtolower(trim((string) ($execution['status'] ?? '')));
       $resultsLink = '-';
-      $resultUri = trim((string) ($execution['resultUri'] ?? ''));
-      if ($resultUri !== '' && (str_starts_with($resultUri, 'http://') || str_starts_with($resultUri, 'https://'))) {
-        $resultsLink = '<a href="' . Html::escape($resultUri) . '" target="_blank" rel="noopener noreferrer">Results</a>';
+      $resultLabel = trim((string) ($execution['resultLabel'] ?? ''));
+      if ($resultLabel === '') {
+        $resultLabel = 'Results';
       }
-      elseif (!empty($execution['runId'])) {
+
+      $resultUrl = trim((string) ($execution['resultUrl'] ?? ''));
+      if ($resultUrl !== '') {
+        $resultsLink = '<a href="' . Html::escape($resultUrl) . '" target="_blank" rel="noopener noreferrer">' . Html::escape($resultLabel) . '</a>';
+      }
+
+      $resultUri = trim((string) ($execution['resultUri'] ?? ''));
+      if ($resultsLink === '-' && $resultUri !== '' && (str_starts_with($resultUri, 'http://') || str_starts_with($resultUri, 'https://'))) {
+        $resultsLink = '<a href="' . Html::escape($resultUri) . '" target="_blank" rel="noopener noreferrer">' . Html::escape($resultLabel) . '</a>';
+      }
+      elseif ($resultsLink === '-' && !empty($execution['runId'])) {
         $fallbackUrl = Url::fromRoute('ctt.r_analysis', [], [
           'query' => [
             'studyUri' => (string) $this->getStudy()->uri,
@@ -1654,6 +1689,25 @@ class ManageStudyForm extends FormBase
 
       if ($statusLabel !== '') {
         $resultsLink .= ' <span class="badge bg-light text-dark border ms-1">' . Html::escape($statusLabel) . '</span>';
+      }
+
+      $deleteRunId = trim((string) ($execution['deleteRunId'] ?? $execution['runId'] ?? ''));
+      $historyType = trim((string) ($execution['historyType'] ?? ''));
+      $daUri = trim((string) ($execution['daUri'] ?? ''));
+      if ($deleteRunId !== '' && $historyType !== '') {
+        $deleteUrl = Url::fromRoute('ctt.execution_delete', [], [
+          'query' => [
+            'studyUri' => (string) $this->getStudy()->uri,
+            'runId' => $deleteRunId,
+            'historyType' => $historyType,
+            'daUri' => $daUri,
+            'returnTo' => $processExecutionsReturnTo,
+          ],
+        ])->toString();
+        $resultsLink .= ' <a href="' . Html::escape($deleteUrl) . '"'
+          . ' class="btn btn-sm btn-outline-danger ms-2"'
+          . ' onclick="return confirm(\'Delete this execution? This action cannot be undone.\');"'
+          . '>Delete</a>';
       }
 
       $toolExecutionRows .= '<tr>'
@@ -1677,10 +1731,15 @@ class ManageStudyForm extends FormBase
       }
 
       $toolUri = trim((string) ($toolEntry['toolUri'] ?? $toolEntry['uri'] ?? ''));
+      $normalizedToolName = strtolower($toolName);
       $isGenericSimulator = in_array(strtolower($toolName), [
         'individual ctt simulator',
         'cohort ctt simulator',
       ], TRUE);
+      $simulationType = 'individual';
+      if ($normalizedToolName === 'cohort ctt simulator') {
+        $simulationType = 'cohort';
+      }
 
       $inputContent = $isGenericSimulator
         ? (string) $this->t('Task model')
@@ -1692,6 +1751,7 @@ class ManageStudyForm extends FormBase
       }
 
       $runUrl = '';
+      $testUrl = '';
       if ($isGenericSimulator) {
         $runUrl = Url::fromRoute('ctt.submission_entry', [
           'studyuri' => base64_encode((string) $this->getStudy()->uri),
@@ -1701,6 +1761,20 @@ class ManageStudyForm extends FormBase
             'autoExecute' => '1',
             'executionPanel' => 'top',
             'returnTo' => $processExecutionsReturnTo,
+            'simulationType' => $simulationType,
+          ],
+        ])->toString();
+
+        $testUrl = Url::fromRoute('ctt.submission_entry', [
+          'studyuri' => base64_encode((string) $this->getStudy()->uri),
+        ], [
+          'query' => [
+            'processUri' => $effectiveProcessUri,
+            'autoExecute' => '1',
+            'executionPanel' => 'top',
+            'returnTo' => $processExecutionsReturnTo,
+            'simulationType' => $simulationType,
+            'test' => '1',
           ],
         ])->toString();
       }
@@ -1714,8 +1788,11 @@ class ManageStudyForm extends FormBase
         ])->toString();
       }
 
-      $actions = '<a href="' . Html::escape($runUrl) . '" class="btn btn-sm btn-primary me-1" target="_blank" rel="noopener noreferrer">Run</a>'
-        . '<button type="button"'
+      $actions = '<a href="' . Html::escape($runUrl) . '" class="btn btn-sm btn-primary me-1" target="_blank" rel="noopener noreferrer">Run</a>';
+      if ($isGenericSimulator && $testUrl !== '') {
+        $actions .= '<a href="' . Html::escape($testUrl) . '" class="btn btn-sm btn-outline-primary me-1" target="_blank" rel="noopener noreferrer">Test</a>';
+      }
+      $actions .= '<button type="button"'
         . ' class="btn btn-sm btn-outline-danger ctt-tool-abort-button"'
         . ' data-study-uri="' . Html::escape((string) $this->getStudy()->uri) . '"'
         . ' data-process-uri="' . Html::escape($effectiveProcessUri) . '"'
@@ -2230,10 +2307,15 @@ class ManageStudyForm extends FormBase
     $affectedTasks = [];
     $checkedUris = [];
     $availability = [];
+    $requiredInstrumentResolution = [];
 
     foreach ($tasks as $taskItem) {
       $task = is_object($taskItem) ? get_object_vars($taskItem) : $taskItem;
       if (!is_array($task)) {
+        continue;
+      }
+
+      if (!$this->taskRequiresRequiredInstrument($task)) {
         continue;
       }
 
@@ -2247,22 +2329,33 @@ class ManageStudyForm extends FormBase
           continue;
         }
 
+        $uriToCheck = $candidateUri;
+
         if ($this->looksLikeRequiredInstrumentReferenceUri($candidateUri)) {
-          $missingUris[$candidateUri] = TRUE;
-          $affectedTasks[$taskKey] = [
-            'uri' => $taskUri,
-            'label' => $taskLabel,
-          ];
-          continue;
+          if (!array_key_exists($candidateUri, $requiredInstrumentResolution)) {
+            $requiredInstrumentResolution[$candidateUri] = $this->resolveInstrumentUriFromRequiredReference($cttClient, $candidateUri);
+          }
+
+          $resolvedInstrumentUri = trim((string) ($requiredInstrumentResolution[$candidateUri] ?? ''));
+          if ($resolvedInstrumentUri === '') {
+            $missingUris[$candidateUri] = TRUE;
+            $affectedTasks[$taskKey] = [
+              'uri' => $taskUri,
+              'label' => $taskLabel,
+            ];
+            continue;
+          }
+
+          $uriToCheck = $resolvedInstrumentUri;
         }
 
-        if (!isset($checkedUris[$candidateUri])) {
-          $checkedUris[$candidateUri] = TRUE;
+        if (!isset($checkedUris[$uriToCheck])) {
+          $checkedUris[$uriToCheck] = TRUE;
           $isAvailable = FALSE;
 
           try {
             if (method_exists($cttClient, 'getByUri')) {
-              $instrumentEntity = $cttClient->getByUri($candidateUri);
+              $instrumentEntity = $cttClient->getByUri($uriToCheck);
               $isAvailable = is_array($instrumentEntity)
                 && empty($instrumentEntity['error'])
                 && trim((string) ($instrumentEntity['uri'] ?? '')) !== '';
@@ -2272,11 +2365,11 @@ class ManageStudyForm extends FormBase
             $isAvailable = FALSE;
           }
 
-          $availability[$candidateUri] = $isAvailable;
+          $availability[$uriToCheck] = $isAvailable;
         }
 
-        if (($availability[$candidateUri] ?? FALSE) === FALSE) {
-          $missingUris[$candidateUri] = TRUE;
+        if (($availability[$uriToCheck] ?? FALSE) === FALSE) {
+          $missingUris[$uriToCheck] = TRUE;
           $affectedTasks[$taskKey] = [
             'uri' => $taskUri,
             'label' => $taskLabel,
@@ -2348,6 +2441,28 @@ class ManageStudyForm extends FormBase
     return array_keys($uris);
   }
 
+  private function taskRequiresRequiredInstrument(array $task): bool
+  {
+    $typeCandidates = [
+      (string) ($task['typeUri'] ?? ''),
+      (string) ($task['hascoTypeUri'] ?? ''),
+      (string) ($task['hascoType'] ?? ''),
+      (string) ($task['operator'] ?? ''),
+    ];
+
+    $normalized = strtolower(trim(implode(' ', array_filter(array_map('trim', $typeCandidates)))));
+    if ($normalized === '') {
+      return FALSE;
+    }
+
+    // Business rule: required instruments apply to interactive/automated task variants.
+    return strpos($normalized, 'interactiontask') !== FALSE
+      || strpos($normalized, 'applicationtask') !== FALSE
+      || strpos($normalized, 'usertask') !== FALSE
+      || strpos($normalized, 'servicetask') !== FALSE
+      || strpos($normalized, 'automatedtask') !== FALSE;
+  }
+
   private function looksLikeRequiredInstrumentReferenceUri(string $uri): bool
   {
     $normalized = strtolower(trim($uri));
@@ -2358,6 +2473,47 @@ class ManageStudyForm extends FormBase
     return strpos($normalized, '/rin/') !== FALSE
       || strpos($normalized, ':/rin/') !== FALSE
       || strpos($normalized, 'requiredinstrument') !== FALSE;
+  }
+
+  private function resolveInstrumentUriFromRequiredReference(object $cttClient, string $referenceUri): string
+  {
+    $referenceUri = trim($referenceUri);
+    if ($referenceUri === '' || !method_exists($cttClient, 'getByUri')) {
+      return '';
+    }
+
+    try {
+      $entity = $cttClient->getByUri($referenceUri);
+    }
+    catch (\Throwable $e) {
+      return '';
+    }
+
+    if (!is_array($entity) || !empty($entity['error'])) {
+      return '';
+    }
+
+    foreach (['instrumentUri', 'usesInstrument', 'hasInstrument'] as $key) {
+      if (!array_key_exists($key, $entity)) {
+        continue;
+      }
+
+      $candidate = $entity[$key];
+      if (is_array($candidate)) {
+        $nested = trim((string) ($candidate['uri'] ?? $candidate['hasURI'] ?? ''));
+        if ($nested !== '') {
+          return $nested;
+        }
+      }
+      elseif (is_string($candidate)) {
+        $normalized = trim($candidate);
+        if ($normalized !== '') {
+          return $normalized;
+        }
+      }
+    }
+
+    return '';
   }
 
   private function persistStudyWorkflowAssociation(string $studyUri, string $workflowUri): void
@@ -2664,8 +2820,8 @@ class ManageStudyForm extends FormBase
 
     $historyKey = 'ctt.r_analysis_runs.' . sha1($studyUri);
     $history = \Drupal::state()->get($historyKey, []);
-    if (!is_array($history) || empty($history)) {
-      return [];
+    if (!is_array($history)) {
+      $history = [];
     }
 
     $catalog = \Drupal::state()->get('ctt.analytical_tools.catalog.v1', []);
@@ -2712,14 +2868,135 @@ class ManageStudyForm extends FormBase
 
       $executions[] = [
         'runId' => trim((string) ($entry['runId'] ?? '')),
+        'deleteRunId' => trim((string) ($entry['runId'] ?? '')),
+        'historyType' => 'analysis',
         'toolUri' => $toolUri,
         'toolLabel' => $toolLabel !== '' ? $toolLabel : 'Unknown tool',
         'startedAt' => $startedAt,
         'endedAt' => $finishedAt,
         'status' => $status,
         'resultUri' => trim((string) ($entry['resultUri'] ?? '')),
+        'resultLabel' => trim((string) ($entry['resultLabel'] ?? '')),
+        'resultUrl' => trim((string) ($entry['resultUrl'] ?? '')),
+        'daUri' => '',
       ];
     }
+
+    // Merge CTT process execution runs (start/end + recorded dataset tracking).
+    $processHistoryKey = 'ctt.process_execution_runs.' . sha1($studyUri);
+    $processHistory = \Drupal::state()->get($processHistoryKey, []);
+    if (is_array($processHistory)) {
+      $seenCohortExecutionKeys = [];
+      foreach ($processHistory as $entry) {
+        if (!is_array($entry)) {
+          continue;
+        }
+
+        $entryProcess = trim((string) ($entry['processUri'] ?? ''));
+        if ($processUri !== '' && $entryProcess !== '' && $entryProcess !== $processUri) {
+          continue;
+        }
+
+        $startedAt = trim((string) ($entry['startedAt'] ?? ($entry['requestedAt'] ?? '')));
+        if ($startedAt === '') {
+          $startedAt = '-';
+        }
+
+        $endedAt = trim((string) ($entry['finishedAt'] ?? ''));
+        if ($endedAt === '') {
+          $endedAt = '-';
+        }
+
+        $status = strtolower(trim((string) ($entry['status'] ?? '')));
+        if ($status === '') {
+          $status = 'completed';
+        }
+
+        $resultUri = trim((string) ($entry['resultUri'] ?? ''));
+        if ($resultUri === '') {
+          $resultUri = trim((string) ($entry['dataFileUri'] ?? ''));
+        }
+        if ($resultUri === '') {
+          $resultUri = trim((string) ($entry['datasetUri'] ?? ''));
+        }
+        if ($resultUri === '') {
+          $resultUri = trim((string) ($entry['daUri'] ?? ''));
+        }
+
+        $resultLabel = trim((string) ($entry['filename'] ?? ''));
+        if ($resultLabel === '') {
+          $resultLabel = 'Results';
+        }
+
+        $resultUrl = '';
+        $daUri = trim((string) ($entry['daUri'] ?? ''));
+        if ($daUri !== '') {
+          $resultUrl = Url::fromRoute('ctt.execution_download', [], [
+            'query' => ['daUri' => $daUri],
+          ])->toString();
+        }
+
+        $simulationType = strtolower(trim((string) ($entry['simulationType'] ?? 'individual')));
+        $studentIds = [];
+        if (isset($entry['studentIds']) && is_array($entry['studentIds'])) {
+          foreach ($entry['studentIds'] as $candidateStudentId) {
+            $normalizedStudentId = trim((string) $candidateStudentId);
+            if ($normalizedStudentId !== '') {
+              $studentIds[$normalizedStudentId] = $normalizedStudentId;
+            }
+          }
+        }
+
+        if ($simulationType === 'cohort' && !empty($studentIds)) {
+          $executionKey = $daUri !== '' ? $daUri : trim((string) ($entry['runId'] ?? ''));
+          if ($executionKey !== '' && isset($seenCohortExecutionKeys[$executionKey])) {
+            continue;
+          }
+          if ($executionKey !== '') {
+            $seenCohortExecutionKeys[$executionKey] = TRUE;
+          }
+
+          $cohortCount = count($studentIds);
+          $cohortSuffix = $cohortCount > 0 ? (' [Cohort: ' . $cohortCount . ' students]') : ' [Cohort]';
+          $executions[] = [
+            'runId' => trim((string) ($entry['runId'] ?? '')),
+            'deleteRunId' => trim((string) ($entry['runId'] ?? '')),
+            'historyType' => 'process',
+            'toolUri' => trim((string) ($entry['toolUri'] ?? 'ctt://process-execution')),
+            'toolLabel' => trim((string) ($entry['toolLabel'] ?? 'CTT Process Execution')) . $cohortSuffix,
+            'startedAt' => $startedAt,
+            'endedAt' => $endedAt,
+            'status' => $status,
+            'resultUri' => $resultUri,
+            'resultLabel' => $resultLabel,
+            'resultUrl' => $resultUrl,
+            'daUri' => $daUri,
+          ];
+          continue;
+        }
+
+        $executions[] = [
+          'runId' => trim((string) ($entry['runId'] ?? '')),
+          'deleteRunId' => trim((string) ($entry['runId'] ?? '')),
+          'historyType' => 'process',
+          'toolUri' => trim((string) ($entry['toolUri'] ?? 'ctt://process-execution')),
+          'toolLabel' => trim((string) ($entry['toolLabel'] ?? 'CTT Process Execution')),
+          'startedAt' => $startedAt,
+          'endedAt' => $endedAt,
+          'status' => $status,
+          'resultUri' => $resultUri,
+          'resultLabel' => $resultLabel,
+          'resultUrl' => $resultUrl,
+          'daUri' => $daUri,
+        ];
+      }
+    }
+
+    usort($executions, static function (array $left, array $right): int {
+      $leftTs = strtotime((string) ($left['startedAt'] ?? '')) ?: 0;
+      $rightTs = strtotime((string) ($right['startedAt'] ?? '')) ?: 0;
+      return $rightTs <=> $leftTs;
+    });
 
     return $executions;
   }

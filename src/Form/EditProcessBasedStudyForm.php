@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\rep\Vocabulary\VSTOI;
+use Drupal\std\Entity\ProcessBasedStudy;
 
 /**
  * Form for editing a Process-Based Study
@@ -355,6 +356,54 @@ class EditProcessBasedStudyForm extends FormBase {
   }
 
   /**
+   * Parse generic API envelope responses.
+   */
+  private function parseApiEnvelope($raw): ?object {
+    if ($raw === NULL) {
+      return NULL;
+    }
+
+    $decoded = NULL;
+    if (is_string($raw)) {
+      $decoded = json_decode($raw);
+    }
+    elseif (is_object($raw) || is_array($raw)) {
+      $decoded = json_decode(json_encode($raw));
+    }
+
+    return is_object($decoded) ? $decoded : NULL;
+  }
+
+  /**
+   * Build a readable error message from connector/error envelope.
+   */
+  private function buildApiFailureMessage($api, $raw, string $fallback): string {
+    if (is_object($api) && method_exists($api, 'getError') && method_exists($api, 'getErrorMessage')) {
+      $errorCode = $api->getError();
+      if ($errorCode !== NULL && $errorCode !== '') {
+        $errorMessage = trim((string) $api->getErrorMessage());
+        return $errorMessage !== '' ? ('API ERROR ' . $errorCode . '. Message: ' . $errorMessage) : ('API ERROR ' . $errorCode);
+      }
+    }
+
+    $decoded = $this->parseApiEnvelope($raw);
+    if (is_object($decoded) && property_exists($decoded, 'body')) {
+      $body = $decoded->body;
+      if (is_string($body) && trim($body) !== '') {
+        return trim($body);
+      }
+      if (is_object($body) || is_array($body)) {
+        $serialized = json_encode($body);
+        if (is_string($serialized) && $serialized !== '') {
+          return $serialized;
+        }
+      }
+    }
+
+    return $fallback;
+  }
+
+  /**
    * Build a normalized key for URI/ID comparisons.
    */
   private function normalizeIdentifierKey(string $value): string {
@@ -414,9 +463,7 @@ class EditProcessBasedStudyForm extends FormBase {
     }
 
     try {
-      $endpoint = '/hascoapi/api/processbasedstudy/search/_/9999/0';
-      $apiUrl = rtrim((string) $api->getApiUrl(), '/');
-      $raw = $api->perform_http_request('GET', $apiUrl . $endpoint, $api->getHeader());
+      $raw = $api->listProcessBasedStudies(9999, 0);
       $items = $this->parseApiListBody($raw);
       foreach ($items as $item) {
         if (!is_object($item)) {
@@ -697,15 +744,6 @@ class EditProcessBasedStudyForm extends FormBase {
     }
     catch (\Throwable $e) {
       // Keep the safe fallback option if organization laboratory lookup fails.
-    }
-
-    // Fallback for known organizations when URI-based lab discovery is unavailable.
-    $normalizedOrgName = mb_strtolower(trim($organizationName));
-    if ($normalizedOrgName === 'escola superior de tecnologia e gestao jean piaget - instituto politecnico jean piaget do sul'
-      || $normalizedOrgName === 'escola superior de tecnologia e gestão jean piaget - instituto politécnico jean piaget do sul') {
-      if (!isset($options['laboratory'])) {
-        $options['laboratory'] = $this->t('Laboratory');
-      }
     }
 
     return $options;
@@ -1016,10 +1054,10 @@ class EditProcessBasedStudyForm extends FormBase {
     $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['study_title'] = [
       '#type' => 'textfield',
       '#title' => $this->t('@study Title', ['@study' => $preferredStudyLabel]),
-      '#default_value' => $this->toSafeString($this->study->studyTitle ?? ''),
-      '#description' => $this->t('Full title of the @study.', ['@study' => $preferredStudyNoun]),
+      '#default_value' => $this->toSafeString($this->study->label ?? ($this->study->studyTitle ?? '')),
+      '#description' => $this->t('Auto-generated from owner label, ProcessStem label, and start timestamp.'),
       '#maxlength' => 512,
-      '#required' => TRUE,
+      '#disabled' => TRUE,
     ];
 
     $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['specific_aims'] = [
@@ -1116,7 +1154,6 @@ class EditProcessBasedStudyForm extends FormBase {
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
     $study_id = trim((string) $form_state->getValue('study_id'));
-    $study_title = trim((string) $form_state->getValue('study_title'));
     $contact_email = trim($form_state->getValue('contact_email'));
     $preferredStudyLabel = $this->preferredStudyLabel();
 
@@ -1134,10 +1171,6 @@ class EditProcessBasedStudyForm extends FormBase {
       if (!preg_match('/^STD-/', $study_id)) {
         $form_state->setErrorByName('study_id', $this->t('@study ID must start with "STD-".', ['@study' => $preferredStudyLabel]));
       }
-    }
-
-    if ($study_title === '') {
-      $form_state->setErrorByName('study_title', $this->t('@study Title is required.', ['@study' => $preferredStudyLabel]));
     }
 
     // Validate email format if provided
@@ -1240,6 +1273,10 @@ class EditProcessBasedStudyForm extends FormBase {
       if ($institutionName === '') {
         $institutionName = $this->toSafeString($this->study->institutionName ?? ($this->study->institution ?? ''));
       }
+      $institutionUri = trim((string) ($this->study->institutionUri ?? ''));
+      if ($institutionUri === '' && isset($this->study->institution) && is_object($this->study->institution)) {
+        $institutionUri = trim((string) ($this->study->institution->uri ?? ''));
+      }
 
       $principalInvestigator = trim((string) $form_state->getValue('principal_investigator'));
       if ($principalInvestigator === '') {
@@ -1256,22 +1293,37 @@ class EditProcessBasedStudyForm extends FormBase {
         $laboratory = '';
       }
 
+      $ownerEmail = trim((string) ($this->study->hasSIRManagerEmail ?? ''));
+      if ($ownerEmail === '') {
+        $ownerEmail = trim((string) \Drupal::currentUser()->getEmail());
+      }
+
+      $startDateValue = trim((string) ($form_state->getValue('start_date') ?: ($this->study->startDate ?? '')));
+      if ($startDateValue === '') {
+        $startDateValue = gmdate('Y-m-d');
+      }
+
+      $existingLabel = trim((string) ($this->study->label ?? $this->study->studyTitle ?? ''));
+      $composedLabelData = ProcessBasedStudy::composeLabelForStudyPayload($ownerEmail, $processUri, $startDateValue, $existingLabel, $institutionName);
+      $composedLabel = (string) ($composedLabelData['label'] ?? '');
+
       $studyData = [
         'uri' => $studyUri,
         'typeUri' => HASCO::PROCESS_BASED_STUDY,
         'hascoTypeUri' => HASCO::PROCESS_BASED_STUDY,
         'processUri' => $processUri, // Cannot be changed
+        'label' => $composedLabel,
         'studyID' => $studyId,
-        'studyTitle' => trim($form_state->getValue('study_title')),
+        'studyTitle' => $composedLabel,
         'specificAims' => trim($form_state->getValue('specific_aims')),
         'significance' => trim($form_state->getValue('significance')),
         'institutionName' => $institutionName,
-        'institution' => $institutionName,
+        'institutionUri' => $institutionUri,
         'principalInvestigator' => $principalInvestigator,
         'contactEmail' => $contactEmail,
         'laboratory' => $laboratory,
         'hasLaboratory' => $laboratory,
-        'startDate' => $form_state->getValue('start_date') ?: '',
+        'startDate' => $startDateValue,
         'endDate' => $form_state->getValue('end_date') ?: '',
         'hasLearningObjectives' => trim($form_state->getValue('learning_objectives')),
         'hasCriticalActions' => trim($form_state->getValue('critical_actions')),
@@ -1284,34 +1336,54 @@ class EditProcessBasedStudyForm extends FormBase {
       $api = \Drupal::service('rep.api_connector');
 
       $updateEndpoint = '/hascoapi/api/processbasedstudy/update/' . rawurlencode($studyUri);
-      // Primary strategy: hascoapi runtime in this environment binds `json`
-      // reliably from query string parameters.
-      $updateResponse = $api->perform_http_request(
-        'POST',
-        $api->getApiUrl() . $updateEndpoint . '?json=' . rawurlencode($studyJSON),
-        $api->getHeader()
-      );
-      $updated = $api->parseObjectResponse($updateResponse, 'updateProcessBasedStudyQuery');
+      $updated = NULL;
+      $updateErrorMessage = '';
 
+      // 1) Primary strategy: raw JSON body (prevents URL-length 414 errors).
+      $updateOptions = $api->getHeader();
+      $updateOptions['headers']['Content-Type'] = 'application/json';
+      $updateOptions['body'] = $studyJSON;
+      $updateResponse = $api->perform_http_request('POST', $api->getApiUrl() . $updateEndpoint, $updateOptions);
+      $decodedUpdate = $this->parseApiEnvelope($updateResponse);
+      if (is_object($decodedUpdate) && !empty($decodedUpdate->isSuccessful)) {
+        $updated = $decodedUpdate->body ?? TRUE;
+      }
+      else {
+        $updateErrorMessage = $this->buildApiFailureMessage($api, $updateResponse, 'API rejected JSON-body update payload.');
+      }
+
+      // 2) Fallback: form-encoded json parameter.
       if ($updated === NULL) {
-        // Fallback: form-encoded json parameter.
         $updateOptions = $api->getHeader();
         $updateOptions['form_params'] = ['json' => $studyJSON];
         $updateResponse = $api->perform_http_request('POST', $api->getApiUrl() . $updateEndpoint, $updateOptions);
-        $updated = $api->parseObjectResponse($updateResponse, 'updateProcessBasedStudyForm');
+        $decodedUpdate = $this->parseApiEnvelope($updateResponse);
+        if (is_object($decodedUpdate) && !empty($decodedUpdate->isSuccessful)) {
+          $updated = $decodedUpdate->body ?? TRUE;
+        }
+        else {
+          $updateErrorMessage = $this->buildApiFailureMessage($api, $updateResponse, 'API rejected form update payload.');
+        }
+      }
+
+      // 3) Legacy fallback: query parameter (last resort; may hit HTTP 414 on long payloads).
+      if ($updated === NULL) {
+        $updateResponse = $api->perform_http_request(
+          'POST',
+          $api->getApiUrl() . $updateEndpoint . '?json=' . rawurlencode($studyJSON),
+          $api->getHeader()
+        );
+        $decodedUpdate = $this->parseApiEnvelope($updateResponse);
+        if (is_object($decodedUpdate) && !empty($decodedUpdate->isSuccessful)) {
+          $updated = $decodedUpdate->body ?? TRUE;
+        }
+        else {
+          $updateErrorMessage = $this->buildApiFailureMessage($api, $updateResponse, 'API rejected query update payload.');
+        }
       }
 
       if ($updated === NULL) {
-        // Final fallback: raw JSON body for environments with body parser support.
-        $updateOptions = $api->getHeader();
-        $updateOptions['headers']['Content-Type'] = 'application/json';
-        $updateOptions['body'] = $studyJSON;
-        $updateResponse = $api->perform_http_request('POST', $api->getApiUrl() . $updateEndpoint, $updateOptions);
-        $updated = $api->parseObjectResponse($updateResponse, 'updateProcessBasedStudyBody');
-      }
-      
-      if ($updated === NULL) {
-        throw new \RuntimeException('API rejected ProcessBasedStudy update payload.');
+        throw new \RuntimeException($updateErrorMessage !== '' ? $updateErrorMessage : 'API rejected ProcessBasedStudy update payload.');
       }
 
       // Verify update

@@ -17,6 +17,223 @@ use Drupal\Core\Render\Markup;
 class ProcessBasedStudy extends Study {
 
   /**
+   * Parse list-style API response body into an array of objects.
+   *
+   * @return array<int, mixed>
+   */
+  protected static function parseApiListBody($raw): array {
+    if ($raw === NULL) {
+      return [];
+    }
+
+    $decoded = NULL;
+    if (is_string($raw)) {
+      $decoded = json_decode($raw);
+    }
+    elseif (is_object($raw) || is_array($raw)) {
+      $decoded = json_decode(json_encode($raw));
+    }
+
+    if (!is_object($decoded) || empty($decoded->isSuccessful)) {
+      return [];
+    }
+
+    $body = $decoded->body ?? NULL;
+    if (is_string($body)) {
+      $body = json_decode($body);
+    }
+
+    if (is_array($body)) {
+      return $body;
+    }
+
+    if (is_object($body) && isset($body->elements) && is_array($body->elements)) {
+      return $body->elements;
+    }
+
+    return [];
+  }
+
+  /**
+   * Resolve KGR Person label from owner credential email.
+   */
+  public static function resolvePersonLabelByEmail(string $email): string {
+    $normalizedEmail = strtolower(trim($email));
+    if ($normalizedEmail === '') {
+      return '';
+    }
+
+    try {
+      $api = \Drupal::service('rep.api_connector');
+      $people = self::parseApiListBody($api->listByKeyword('person', $normalizedEmail, 25, 0));
+      foreach ($people as $person) {
+        if (!is_object($person)) {
+          continue;
+        }
+
+        $emailCandidates = [
+          $person->mbox ?? NULL,
+          $person->userEmail ?? NULL,
+          $person->hasSIRManagerEmail ?? NULL,
+          $person->email ?? NULL,
+        ];
+
+        foreach ($emailCandidates as $candidate) {
+          $candidateEmail = is_string($candidate) ? strtolower(trim($candidate)) : '';
+          if (strpos($candidateEmail, 'mailto:') === 0) {
+            $candidateEmail = trim(substr($candidateEmail, 7));
+          }
+          if ($candidateEmail !== '' && $candidateEmail === $normalizedEmail) {
+            $label = trim((string) ($person->label ?? $person->name ?? ''));
+            if ($label !== '') {
+              return $label;
+            }
+          }
+        }
+      }
+    }
+    catch (\Throwable $ignored) {
+      // Fallback handled below.
+    }
+
+    return $normalizedEmail;
+  }
+
+  /**
+   * Resolve ProcessStem URI and label from a process URI.
+   *
+   * @return array{processStemUri:string, processStemLabel:string}
+   */
+  public static function resolveProcessStemInfo(string $processUri): array {
+    $processUri = Utils::canonicalizePmsrUri(trim($processUri));
+    if ($processUri === '') {
+      return [
+        'processStemUri' => '',
+        'processStemLabel' => '',
+      ];
+    }
+
+    $processStemUri = '';
+    $processStemLabel = '';
+
+    try {
+      $api = \Drupal::service('rep.api_connector');
+      $process = $api->parseObjectResponse($api->getUri($processUri), 'getUri');
+      if (is_object($process)) {
+        if (isset($process->wasDerivedFrom)) {
+          if (is_object($process->wasDerivedFrom)) {
+            $processStemUri = trim((string) ($process->wasDerivedFrom->uri ?? ''));
+          }
+          elseif (is_string($process->wasDerivedFrom)) {
+            $processStemUri = trim((string) $process->wasDerivedFrom);
+          }
+        }
+
+        if ($processStemUri === '' && isset($process->processStemUri) && is_string($process->processStemUri)) {
+          $processStemUri = trim((string) $process->processStemUri);
+        }
+
+        if ($processStemUri === '' && isset($process->hasProcessStemUri) && is_string($process->hasProcessStemUri)) {
+          $processStemUri = trim((string) $process->hasProcessStemUri);
+        }
+
+        if ($processStemLabel === '') {
+          $processStemLabel = trim((string) ($process->label ?? $process->title ?? ''));
+        }
+      }
+
+      $processStemUri = Utils::canonicalizePmsrUri($processStemUri);
+      if ($processStemUri !== '') {
+        $processStem = $api->parseObjectResponse($api->getUri($processStemUri), 'getUri');
+        if (is_object($processStem)) {
+          $candidateStemLabel = trim((string) ($processStem->label ?? $processStem->title ?? ''));
+          if ($candidateStemLabel !== '') {
+            $processStemLabel = $candidateStemLabel;
+          }
+        }
+      }
+    }
+    catch (\Throwable $ignored) {
+      // Fallback handled below.
+    }
+
+    if ($processStemLabel === '') {
+      $processStemLabel = $processUri;
+    }
+
+    return [
+      'processStemUri' => $processStemUri,
+      'processStemLabel' => $processStemLabel,
+    ];
+  }
+
+  /**
+   * Compose canonical scenario label.
+   */
+  public static function composeScenarioLabel(string $personLabel, string $processStemLabel, string $institutionLabel, string $startDateYmd, string $startTimeHm): string {
+    $personLabel = trim($personLabel);
+    $processStemLabel = trim($processStemLabel);
+    $startDateYmd = trim($startDateYmd);
+    $startTimeHm = trim($startTimeHm);
+
+    if ($personLabel === '') {
+      $personLabel = 'Unknown Person';
+    }
+    if ($processStemLabel === '') {
+      $processStemLabel = 'Unknown ProcessStem';
+    }
+    if (!preg_match('/^\d{8}$/', $startDateYmd)) {
+      $startDateYmd = gmdate('Ymd');
+    }
+    if (!preg_match('/^\d{2}:\d{2}$/', $startTimeHm)) {
+      $startTimeHm = gmdate('H:i');
+    }
+
+    return $personLabel . "'s " . $processStemLabel . ' at ' . $startDateYmd . ' ' . $startTimeHm;
+  }
+
+  /**
+   * Compose scenario label and resolved context values.
+   *
+   * @return array{label:string,startDateYmd:string,startTimeHm:string,personLabel:string,processStemUri:string,processStemLabel:string}
+   */
+  public static function composeLabelForStudyPayload(string $ownerEmail, string $processUri, string $startDateIso = '', string $existingLabel = '', string $institutionName = ''): array {
+    $personLabel = self::resolvePersonLabelByEmail($ownerEmail);
+    $processStem = self::resolveProcessStemInfo($processUri);
+
+    $startDateYmd = '';
+    $normalizedStartDateIso = trim($startDateIso);
+    if ($normalizedStartDateIso !== '' && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $normalizedStartDateIso, $matches)) {
+      $startDateYmd = $matches[1] . $matches[2] . $matches[3];
+    }
+
+    if ($startDateYmd === '' && preg_match('/ at (\d{8}) \d{2}:\d{2}$/', trim($existingLabel), $matches)) {
+      $startDateYmd = $matches[1];
+    }
+    if ($startDateYmd === '') {
+      $startDateYmd = gmdate('Ymd');
+    }
+
+    $startTimeHm = '';
+    if (preg_match('/ at \d{8} (\d{2}:\d{2})$/', trim($existingLabel), $matches)) {
+      $startTimeHm = $matches[1];
+    }
+    if ($startTimeHm === '') {
+      $startTimeHm = gmdate('H:i');
+    }
+
+    return [
+      'label' => self::composeScenarioLabel($personLabel, (string) ($processStem['processStemLabel'] ?? ''), '', $startDateYmd, $startTimeHm),
+      'startDateYmd' => $startDateYmd,
+      'startTimeHm' => $startTimeHm,
+      'personLabel' => $personLabel,
+      'institutionLabel' => '',
+      'processStemUri' => (string) ($processStem['processStemUri'] ?? ''),
+      'processStemLabel' => (string) ($processStem['processStemLabel'] ?? ''),
+    ];
+  }
+
+  /**
    * Generate table header with Process column
    */
   public static function generateHeader() {
@@ -208,20 +425,23 @@ class ProcessBasedStudy extends Study {
     // Generate study URI
     $studyUri = Utils::canonicalizePmsrUri(Utils::uriGen('study'));
     
-    // Build minimal JSON payload - backend will auto-generate metadata
+    $composedLabelData = self::composeLabelForStudyPayload((string) $creator, (string) $processUri, gmdate('Y-m-d'));
+
+    // Build minimal JSON payload.
     $studyData = [
       'uri' => $studyUri,
       'typeUri' => \Drupal\rep\Vocabulary\HASCO::PROCESS_BASED_STUDY,
       'hascoTypeUri' => \Drupal\rep\Vocabulary\HASCO::PROCESS_BASED_STUDY,
       'processUri' => $processUri,
       'hasSIRManagerEmail' => $creator,
-      // Leave metadata fields empty for auto-generation
+      'label' => (string) ($composedLabelData['label'] ?? ''),
+      'studyTitle' => (string) ($composedLabelData['label'] ?? ''),
+      // Keep metadata fields explicit.
       'studyID' => '',
-      'studyTitle' => '',
       'specificAims' => '',
       'significance' => '',
       'institutionName' => '',
-      'institution' => '',
+      'institutionUri' => '',
       'principalInvestigator' => '',
       'contactEmail' => '',
       'startDate' => '',

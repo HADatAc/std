@@ -76,11 +76,15 @@ class EditStudyForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('Short Name'),
       '#default_value' => $this->getStudy()->label,
+      '#description' => $this->t('Automatically managed by the system.'),
+      '#disabled' => TRUE,
     ];
     $form['study_name'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Long Name'),
       '#default_value' => $this->getStudy()->title,
+      '#description' => $this->t('Automatically managed by the system.'),
+      '#disabled' => TRUE,
     ];
     $piDefault = '';
     if (isset($this->getStudy()->pi)) {
@@ -434,12 +438,7 @@ class EditStudyForm extends FormBase {
     $preferred_study = \Drupal::config('rep.settings')->get('preferred_study') ?? 'study';
 
     if ($button_name === 'save') {
-      if(strlen($form_state->getValue('study_short_name')) < 1) {
-        $form_state->setErrorByName('study_short_name', $this->t('Please enter a short name for the '.ucfirst($preferred_study)));
-      }
-      if(strlen($form_state->getValue('study_name')) < 1) {
-        $form_state->setErrorByName('study_name', $this->t('Please enter a name for the '.ucfirst($preferred_study)));
-      }
+      // Study naming is managed by system policy.
     }
   }
 
@@ -551,11 +550,14 @@ class EditStudyForm extends FormBase {
         }
       }
 
+      $resolvedLabel = trim((string) ($this->getStudy()->label ?? ''));
+      $resolvedTitle = trim((string) ($this->getStudy()->title ?? ''));
+
       $studyJson = '{"uri":"'. $this->getStudy()->uri .'",'.
         '"typeUri":"'.HASCO::STUDY.'",'.
         '"hascoTypeUri":"'.HASCO::STUDY.'",'.
-        '"label":"'.$form_state->getValue('study_short_name').'",'.
-        '"title":"'.$form_state->getValue('study_name').'",'.
+        '"label":"'.$resolvedLabel.'",'.
+        '"title":"'.$resolvedTitle.'",'.
         '"comment":"'.$form_state->getValue('study_description').'",'.
         '"institutionUri":"' . Utils::uriFromAutocomplete((string) $form_state->getValue('study_institution')) . '",'.
         // '"pi":"'.$form_state->getValue('study_pi').'",'.

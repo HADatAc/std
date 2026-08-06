@@ -35,6 +35,13 @@ final class StudyVariableSearchService {
    */
   private array $responseOptionLabelCache = [];
 
+  /**
+   * Cache organization ownership scopes (organization + parent organization).
+   *
+   * @var array<string, string[]>
+   */
+  private array $organizationScopeCache = [];
+
   public function __construct(
     private readonly object $apiConnector,
     private readonly FileSystemInterface $fileSystem,
@@ -59,7 +66,8 @@ final class StudyVariableSearchService {
     // Extract metadata for new filters
     $organizations = $this->extractOrganizations($studies);
     $processMetadataMap = $this->extractProcessMetadata($studies, $errors);
-    $platformMetadataMap = $this->extractPlatformMetadata($studies, $errors);
+    $platformCandidatesByOrganization = $this->extractPlatformCandidatesByOrganization($studies, $errors);
+    $platformFilters = [];
 
     $variablesBySource = [
       'simulator' => [],
@@ -170,27 +178,42 @@ final class StudyVariableSearchService {
         }
       }
 
-      // Get organization (handle both string and object)
-      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
-      if (is_object($institutionValue)) {
-        $organization = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
-      } else {
-        $organization = trim((string) ($institutionValue ?? ''));
+      $studyLabel = trim((string) ($study->label ?? $study->title ?? $study->studyTitle ?? $study->hasStudyTitle ?? $studyUri));
+
+      // Resolve organization from study metadata and platform from PlatformInstance partOf links.
+      [$organizationUri, $organization] = $this->resolveStudyOrganization($study);
+      $platform = $this->resolveStudyPlatform(
+        $studyLabel,
+        $processLabel,
+        $organizationUri,
+        $platformCandidatesByOrganization,
+      );
+      $platformLabel = (string) ($platform['label'] ?? '');
+      $platformSlug = (string) ($platform['slug'] ?? '');
+      $platformUri = (string) ($platform['uri'] ?? '');
+
+      if ($studyType === 'processbasedstudy' && $platformLabel === '') {
+        $platformLabel = 'Unmapped Platform';
+        $platformSlug = 'unmapped-platform';
+        $platformUri = '';
       }
 
-      // Get platform metadata if available
-      $platformLabel = '';
-      $platformSlug = '';
-      if (!empty($organization) && $organization !== 'None' && isset($platformMetadataMap[$organization])) {
-        $platformLabel = $platformMetadataMap[$organization]['label'] ?? '';
-        $platformSlug = $platformMetadataMap[$organization]['slug'] ?? '';
+      if ($platformLabel !== '' && $platformSlug !== '') {
+        if (!isset($platformFilters[$platformSlug])) {
+          $platformFilters[$platformSlug] = [
+            'uri' => $platformUri,
+            'label' => $platformLabel,
+            'slug' => $platformSlug,
+            'count' => 0,
+          ];
+        }
+        $platformFilters[$platformSlug]['count']++;
       }
 
       if ($processLabel !== '' && $organization !== '' && str_ends_with($processLabel, ' at Unknown Organization')) {
         $processLabel = preg_replace('/\s+at\s+Unknown\s+Organization$/i', ' at ' . $organization, $processLabel) ?? $processLabel;
       }
 
-      $studyLabel = trim((string) ($study->label ?? $study->title ?? $study->studyTitle ?? $study->hasStudyTitle ?? $studyUri));
       if ($studyLabel !== '' && $organization !== '' && str_ends_with($studyLabel, ' at Unknown Organization')) {
         $studyLabel = preg_replace('/\s+at\s+Unknown\s+Organization$/i', ' at ' . $organization, $studyLabel) ?? $studyLabel;
       }
@@ -259,10 +282,168 @@ final class StudyVariableSearchService {
       'ontology_filters' => $ontologyFilters,
       'organizations' => $organizations,
       'process_filters' => array_values($processMetadataMap),
-      'platform_filters' => array_values($platformMetadataMap),
+      'platform_filters' => array_values($this->sortPlatformFilters($platformFilters)),
       'study_cards' => $studyCards,
       'errors' => array_values(array_unique($errors)),
     ];
+  }
+
+  /**
+   * Resolve organization URI and display label from a Study-like object.
+   *
+   * @return array{0:string,1:string}
+   */
+  private function resolveStudyOrganization(object $study): array {
+    $institutionValue = $study->institution ?? $study->hasInstitution ?? NULL;
+    $organizationUri = Utils::canonicalizePmsrUri($this->extractUriString($institutionValue));
+
+    $labelCandidates = [
+      is_object($institutionValue) ? (string) ($institutionValue->label ?? '') : '',
+      (string) ($study->institutionName ?? $study->hasInstitutionName ?? ''),
+      is_string($institutionValue) ? $institutionValue : '',
+    ];
+
+    $organizationLabel = '';
+    foreach ($labelCandidates as $candidate) {
+      $candidate = trim((string) $candidate);
+      if ($candidate === '' || strcasecmp($candidate, 'None') === 0) {
+        continue;
+      }
+      if (preg_match('/^https?:\/\//i', $candidate) === 1) {
+        continue;
+      }
+      $organizationLabel = $candidate;
+      break;
+    }
+
+    if ($organizationLabel === '' && $organizationUri !== '') {
+      $organizationLabel = $organizationUri;
+    }
+
+    return [$organizationUri, $organizationLabel];
+  }
+
+  /**
+   * Resolve ownership scope URIs for a given organization.
+   *
+   * Scope includes the organization itself plus its immediate parent
+   * organization when available.
+   *
+   * @return string[]
+   */
+  private function resolveOrganizationScopeUris(string $organizationUri): array {
+    $organizationUri = Utils::canonicalizePmsrUri(trim($organizationUri));
+    if ($organizationUri === '') {
+      return [];
+    }
+
+    if (isset($this->organizationScopeCache[$organizationUri])) {
+      return $this->organizationScopeCache[$organizationUri];
+    }
+
+    $scope = [$organizationUri => TRUE];
+
+    try {
+      $raw = $this->apiConnector->getUri($organizationUri);
+      $org = $this->apiConnector->parseObjectResponse($raw, 'getUri');
+      if (is_object($org)) {
+        foreach (['parentOrganizationUri', 'hasParentOrganizationUri', 'parentOrganization', 'hasParentOrganization', 'isPartOf', 'partOf'] as $key) {
+          if (!isset($org->{$key})) {
+            continue;
+          }
+
+          $parentUri = Utils::canonicalizePmsrUri($this->extractUriString($org->{$key}));
+          if ($parentUri !== '') {
+            $scope[$parentUri] = TRUE;
+          }
+        }
+      }
+    }
+    catch (\Throwable $e) {
+      // Keep default scope with the provided organization URI.
+    }
+
+    // Authoritative hierarchy predicate in KG: schema:isPartOf (child -> parent).
+    if (method_exists($this->apiConnector, 'sparqlQuery')) {
+      try {
+        $sparql = 'SELECT DISTINCT ?parent WHERE {' .
+          ' <' . $organizationUri . '> <https://schema.org/isPartOf> ?parent .' .
+          '}';
+        $raw = $this->apiConnector->sparqlQuery($sparql);
+        $decoded = json_decode((string) $raw, TRUE);
+        $bindings = $decoded['results']['bindings'] ?? [];
+
+        if (is_array($bindings)) {
+          foreach ($bindings as $binding) {
+            if (!is_array($binding)) {
+              continue;
+            }
+
+            $parentUri = Utils::canonicalizePmsrUri(trim((string) ($binding['parent']['value'] ?? '')));
+            if ($parentUri !== '') {
+              $scope[$parentUri] = TRUE;
+            }
+          }
+        }
+      }
+      catch (\Throwable $e) {
+        // Keep scope resolved from object payload when SPARQL lookup is unavailable.
+      }
+    }
+
+    $this->organizationScopeCache[$organizationUri] = array_keys($scope);
+    return $this->organizationScopeCache[$organizationUri];
+  }
+
+  /**
+   * Select a platform for a study from organization-linked platform instances.
+   *
+   * @param array<string,array<int,array{uri:string,label:string,slug:string}>> $platformCandidatesByOrganization
+   * @return array{uri:string,label:string,slug:string}
+   */
+  private function resolveStudyPlatform(string $studyLabel, string $processLabel, string $organizationUri, array $platformCandidatesByOrganization): array {
+    $organizationUri = Utils::canonicalizePmsrUri(trim($organizationUri));
+    if ($organizationUri === '' || !isset($platformCandidatesByOrganization[$organizationUri])) {
+      return ['uri' => '', 'label' => '', 'slug' => ''];
+    }
+
+    $candidates = $platformCandidatesByOrganization[$organizationUri];
+    if (count($candidates) === 1) {
+      return $candidates[0];
+    }
+
+    $studyLower = mb_strtolower($studyLabel);
+    $processLower = mb_strtolower($processLabel);
+    $matched = [];
+
+    foreach ($candidates as $candidate) {
+      $label = trim((string) ($candidate['label'] ?? ''));
+      if ($label === '') {
+        continue;
+      }
+
+      $needle = mb_strtolower($label);
+      if ($needle !== '' && (str_contains($studyLower, $needle) || str_contains($processLower, $needle))) {
+        $matched[] = $candidate;
+      }
+    }
+
+    if (count($matched) === 1) {
+      return $matched[0];
+    }
+
+    return ['uri' => '', 'label' => '', 'slug' => ''];
+  }
+
+  /**
+   * Stable sorting for platform filters.
+   *
+   * @param array<string,array{uri:string,label:string,slug:string,count:int}> $platformFilters
+   * @return array<string,array{uri:string,label:string,slug:string,count:int}>
+   */
+  private function sortPlatformFilters(array $platformFilters): array {
+    uasort($platformFilters, fn(array $a, array $b) => strcasecmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? '')));
+    return $platformFilters;
   }
 
   private function loadElementsByType(string $elementType, array &$errors): array {
@@ -281,13 +462,10 @@ final class StudyVariableSearchService {
         $errors[] = 'Unable to load study data from HASCOAPI.';
       }
 
-      // ProcessBasedStudy list endpoint can be sparse in some deployments,
-      // while keyword search reliably returns entries.
+      // Merge explicit ProcessBasedStudy entries via dedicated endpoint.
       try {
-        $endpoint = '/hascoapi/api/processbasedstudy/search/_/9999/0';
-        $apiUrl = rtrim((string) $this->apiConnector->getApiUrl(), '/');
-        $raw = $this->apiConnector->perform_http_request('GET', $apiUrl . $endpoint, $this->apiConnector->getHeader());
-        $pbsItems = $this->apiConnector->parseObjectResponse($raw, 'processbasedstudy_search');
+        $raw = $this->apiConnector->listProcessBasedStudies(9999, 0);
+        $pbsItems = $this->apiConnector->parseObjectResponse($raw, 'processbasedstudy_elements');
         if (is_array($pbsItems)) {
           // Merge by URI, preferring explicit ProcessBasedStudy entries.
           $indexed = [];
@@ -1291,13 +1469,7 @@ final class StudyVariableSearchService {
         continue;
       }
       
-      // Handle institution field (can be string or object)
-      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
-      if (is_object($institutionValue)) {
-        $institution = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
-      } else {
-        $institution = trim((string) ($institutionValue ?? ''));
-      }
+      [, $institution] = $this->resolveStudyOrganization($study);
       
       if ($institution === '' || $institution === 'None') {
         continue;
@@ -1480,102 +1652,188 @@ final class StudyVariableSearchService {
    * @return array
    *   Map of platform reference to platform metadata.
    */
-  private function extractPlatformMetadata(array $studies, array &$errors): array {
-    $platformMap = [];
-    $platformRefs = [];
-    
+  private function extractPlatformCandidatesByOrganization(array $studies, array &$errors): array {
+    $organizationScopeMap = [];
+    $allScopeUris = [];
+
     foreach ($studies as $study) {
       if (!is_object($study)) {
         continue;
       }
-      
-      // Handle institution field (can be string or object)
-      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
-      if (is_object($institutionValue)) {
-        $platformRef = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
-      } else {
-        $platformRef = trim((string) ($institutionValue ?? ''));
-      }
-      
-      if ($platformRef === '' || $platformRef === 'None') {
+      [$organizationUri, ] = $this->resolveStudyOrganization($study);
+      if ($organizationUri === '') {
         continue;
       }
-      
-      $platformRefs[$platformRef] = true;
+
+      if (!isset($organizationScopeMap[$organizationUri])) {
+        $organizationScopeMap[$organizationUri] = $this->resolveOrganizationScopeUris($organizationUri);
+      }
+
+      foreach ($organizationScopeMap[$organizationUri] as $scopeUri) {
+        $allScopeUris[$scopeUri] = TRUE;
+      }
     }
-    
-    foreach (array_keys($platformRefs) as $platformRef) {
+
+    if (empty($allScopeUris)) {
+      return [];
+    }
+
+    $candidatesByPartOf = [];
+
+    // Preferred path: deployments link instruments to platform instances, and
+    // platform instances link to organizations via hasco:partOf.
+    if (method_exists($this->apiConnector, 'sparqlQuery')) {
       try {
-        $platforms = $this->apiConnector->parseObjectResponse(
-          $this->apiConnector->listByKeyword('platform', $platformRef, 50, 0),
-          'listByKeyword'
-        );
-        
-        if (is_array($platforms) && !empty($platforms)) {
-          foreach ($platforms as $platform) {
-            if (!is_object($platform)) {
+        $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_keys($allScopeUris)));
+        $sparql = 'SELECT DISTINCT ?org ?platform ?label WHERE {' .
+          ' ?dep <http://hadatac.org/ont/vstoi#hasPlatformInstance> ?platform .' .
+          ' ?platform <http://hadatac.org/ont/hasco/partOf> ?org .' .
+          ' VALUES ?org { ' . $values . ' } ' .
+          ' OPTIONAL { ?platform <http://www.w3.org/2000/01/rdf-schema#label> ?label . }' .
+          '}';
+        $raw = $this->apiConnector->sparqlQuery($sparql);
+        $decoded = json_decode((string) $raw, TRUE);
+        $bindings = $decoded['results']['bindings'] ?? [];
+
+        if (is_array($bindings)) {
+          foreach ($bindings as $binding) {
+            if (!is_array($binding)) {
               continue;
             }
-            
-            $platformLabel = trim((string) ($platform->label ?? $platform->rdfsLabel ?? ''));
+
+            $partOfUri = Utils::canonicalizePmsrUri(trim((string) ($binding['org']['value'] ?? '')));
+            $platformUri = Utils::canonicalizePmsrUri(trim((string) ($binding['platform']['value'] ?? '')));
+            $platformLabel = trim((string) ($binding['label']['value'] ?? ''));
+            if ($partOfUri === '' || $platformUri === '') {
+              continue;
+            }
             if ($platformLabel === '') {
-              continue;
+              $platformLabel = $platformUri;
             }
-            
-            $platformUri = trim((string) ($platform->uri ?? ''));
-            $slug = $this->slugify($platformLabel);
-            
-            if (!isset($platformMap[$platformRef])) {
-              $platformMap[$platformRef] = [
+
+            if (!isset($candidatesByPartOf[$partOfUri])) {
+              $candidatesByPartOf[$partOfUri] = [];
+            }
+
+            $exists = FALSE;
+            foreach ($candidatesByPartOf[$partOfUri] as $existing) {
+              if ((string) ($existing['uri'] ?? '') === $platformUri) {
+                $exists = TRUE;
+                break;
+              }
+            }
+
+            if (!$exists) {
+              $candidatesByPartOf[$partOfUri][] = [
                 'uri' => $platformUri,
                 'label' => $platformLabel,
-                'slug' => $slug,
-                'count' => 0,
+                'slug' => $this->slugify($platformLabel),
               ];
-              break;
             }
           }
         }
-        
-        if (!isset($platformMap[$platformRef])) {
-          $platformMap[$platformRef] = [
-            'uri' => '',
-            'label' => $platformRef,
-            'slug' => $this->slugify($platformRef),
-            'count' => 0,
+      }
+      catch (\Throwable $e) {
+        // Keep fallback path below.
+      }
+    }
+
+    if (empty($candidatesByPartOf)) {
+      // Fallback: list platform instances through hascoapi search endpoints.
+      try {
+        $instances = $this->apiConnector->parseObjectResponse(
+          $this->apiConnector->listByKeyword('platforminstance', '_', 5000, 0),
+          'listByKeyword'
+        );
+
+        if (!is_array($instances)) {
+          return [];
+        }
+
+        foreach ($instances as $instance) {
+          if (!is_object($instance)) {
+            continue;
+          }
+
+          $partOfUri = Utils::canonicalizePmsrUri($this->extractUriString($instance->partOf ?? NULL));
+          if ($partOfUri === '' || !isset($allScopeUris[$partOfUri])) {
+            continue;
+          }
+
+          $platformUri = Utils::canonicalizePmsrUri(trim((string) ($instance->uri ?? '')));
+          $platformLabel = trim((string) ($instance->label ?? $instance->rdfsLabel ?? ''));
+          if ($platformLabel === '') {
+            $platformLabel = $platformUri;
+          }
+          if ($platformLabel === '') {
+            continue;
+          }
+
+          $candidate = [
+            'uri' => $platformUri,
+            'label' => $platformLabel,
+            'slug' => $this->slugify($platformLabel !== '' ? $platformLabel : $platformUri),
           ];
+
+          if (!isset($candidatesByPartOf[$partOfUri])) {
+            $candidatesByPartOf[$partOfUri] = [];
+          }
+
+          $dedupeKey = ($platformUri !== '' ? $platformUri : $platformLabel);
+          $exists = FALSE;
+          foreach ($candidatesByPartOf[$partOfUri] as $existing) {
+            $existingKey = (($existing['uri'] ?? '') !== '' ? (string) $existing['uri'] : (string) ($existing['label'] ?? ''));
+            if ($existingKey === $dedupeKey) {
+              $exists = TRUE;
+              break;
+            }
+          }
+
+          if (!$exists) {
+            $candidatesByPartOf[$partOfUri][] = $candidate;
+          }
         }
       }
       catch (\Throwable $e) {
-        $errors[] = sprintf('Failed to load Platform metadata: %s', $platformRef);
-        $platformMap[$platformRef] = [
-          'uri' => '',
-          'label' => $platformRef,
-          'slug' => $this->slugify($platformRef),
-          'count' => 0,
-        ];
+        $errors[] = 'Failed to load PlatformInstance metadata for Scenario Search.';
+        return [];
       }
     }
-    
-    foreach ($studies as $study) {
-      if (!is_object($study)) {
-        continue;
-      }
-      
-      // Handle institution field (can be string or object)
-      $institutionValue = $study->institution ?? $study->hasInstitution ?? null;
-      if (is_object($institutionValue)) {
-        $platformRef = trim((string) ($institutionValue->label ?? $institutionValue->uri ?? ''));
-      } else {
-        $platformRef = trim((string) ($institutionValue ?? ''));
-      }
-      
-      if ($platformRef !== '' && $platformRef !== 'None' && isset($platformMap[$platformRef])) {
-        $platformMap[$platformRef]['count']++;
+
+    $candidatesByOrg = [];
+    foreach ($organizationScopeMap as $organizationUri => $scopeUris) {
+      foreach ($scopeUris as $scopeUri) {
+        if (!isset($candidatesByPartOf[$scopeUri])) {
+          continue;
+        }
+
+        if (!isset($candidatesByOrg[$organizationUri])) {
+          $candidatesByOrg[$organizationUri] = [];
+        }
+
+        foreach ($candidatesByPartOf[$scopeUri] as $candidate) {
+          $dedupeKey = (($candidate['uri'] ?? '') !== '' ? (string) $candidate['uri'] : (string) ($candidate['label'] ?? ''));
+          $exists = FALSE;
+          foreach ($candidatesByOrg[$organizationUri] as $existing) {
+            $existingKey = (($existing['uri'] ?? '') !== '' ? (string) $existing['uri'] : (string) ($existing['label'] ?? ''));
+            if ($existingKey === $dedupeKey) {
+              $exists = TRUE;
+              break;
+            }
+          }
+          if (!$exists) {
+            $candidatesByOrg[$organizationUri][] = $candidate;
+          }
+        }
       }
     }
-    
-    return $platformMap;
+
+    foreach ($candidatesByOrg as &$candidates) {
+      usort($candidates, fn(array $a, array $b) => strcasecmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? '')));
+    }
+    unset($candidates);
+
+    return $candidatesByOrg;
   }
 
   private function normalizePmsrDisplayUri(string $uri): string {

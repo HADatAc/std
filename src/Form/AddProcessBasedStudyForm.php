@@ -84,11 +84,11 @@ class AddProcessBasedStudyForm extends FormBase {
       '#maxlength' => 512,
     ];
 
-    // OPTIONAL: Study metadata fields (auto-generated if empty)
+    // OPTIONAL: Study metadata fields (system-generated label/title)
     $form['study_metadata'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Study Metadata (Optional)'),
-      '#description' => $this->t('These fields are optional. If left empty, they will be auto-generated from the Workflow metadata.'),
+      '#description' => $this->t('Scenario name is automatically composed by the system from owner, ProcessStem, and start timestamp.'),
       '#collapsible' => TRUE,
       '#collapsed' => FALSE,
     ];
@@ -103,8 +103,9 @@ class AddProcessBasedStudyForm extends FormBase {
     $form['study_metadata']['study_title'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Study Title'),
-      '#description' => $this->t('Full title of the study. Leave empty to use Workflow label.'),
+      '#description' => $this->t('Auto-generated from owner label, ProcessStem label, and start timestamp.'),
       '#maxlength' => 512,
+      '#disabled' => TRUE,
     ];
 
     $form['study_metadata']['specific_aims'] = [
@@ -262,6 +263,14 @@ class AddProcessBasedStudyForm extends FormBase {
       $useremail = \Drupal::currentUser()->getEmail();
       $newStudyUri = Utils::canonicalizePmsrUri((string) $form_state->getValue('study_uri'));
       $process_uri = Utils::canonicalizePmsrUri(trim((string) $form_state->getValue('process_uri')));
+      $institutionName = trim((string) $form_state->getValue('institution'));
+      $submittedStartDate = trim((string) ($form_state->getValue('start_date') ?? ''));
+      if ($submittedStartDate === '') {
+        $submittedStartDate = gmdate('Y-m-d');
+      }
+
+      $composedLabelData = ProcessBasedStudy::composeLabelForStudyPayload($useremail, $process_uri, $submittedStartDate, '', $institutionName);
+      $composedLabel = (string) ($composedLabelData['label'] ?? '');
 
       $studyId = trim((string) $form_state->getValue('study_id'));
       if ($studyId !== '') {
@@ -278,15 +287,16 @@ class AddProcessBasedStudyForm extends FormBase {
         'typeUri' => HASCO::PROCESS_BASED_STUDY,
         'hascoTypeUri' => HASCO::PROCESS_BASED_STUDY,
         'processUri' => $process_uri,
+        'label' => $composedLabel,
         'studyID' => $studyId,
-        'studyTitle' => trim($form_state->getValue('study_title')),
+        'studyTitle' => $composedLabel,
         'specificAims' => trim($form_state->getValue('specific_aims')),
         'significance' => trim($form_state->getValue('significance')),
-        'institutionName' => trim($form_state->getValue('institution')),
-        'institution' => trim($form_state->getValue('institution')),
+        'institutionName' => $institutionName,
+        'institutionUri' => Utils::uriFromAutocomplete((string) $form_state->getValue('institution')),
         'principalInvestigator' => trim($form_state->getValue('principal_investigator')),
         'contactEmail' => trim($form_state->getValue('contact_email')),
-        'startDate' => $form_state->getValue('start_date') ?: '',
+        'startDate' => $submittedStartDate,
         'endDate' => $form_state->getValue('end_date') ?: '',
         'hasLearningObjectives' => trim($form_state->getValue('learning_objectives')),
         'hasCriticalActions' => trim($form_state->getValue('critical_actions')),

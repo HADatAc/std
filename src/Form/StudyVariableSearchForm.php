@@ -152,14 +152,12 @@ class StudyVariableSearchForm extends FormBase {
       );
     }
 
-    if (!empty($platformFilters)) {
-      $sidebarHtml .= $this->renderFilterSection(
-        'Platforms',
-        $platformFilters,
-        'platform',
-        TRUE
-      );
-    }
+    $sidebarHtml .= $this->renderFilterSection(
+      'Platforms',
+      $platformFilters,
+      'platform',
+      TRUE
+    );
 
     $sidebarHtml .= $this->renderFilterSection(
       'Clinical Processes',
@@ -455,9 +453,10 @@ class StudyVariableSearchForm extends FormBase {
         }
         
         $platformLabel = trim((string) ($card['platform_label'] ?? ''));
-        if ($platformLabel !== '') {
-          $cardsHtml .= '<p class="mb-1"><strong>Platform:</strong> ' . Html::escape($platformLabel) . '</p>';
+        if ($platformLabel === '') {
+          $platformLabel = 'Unmapped Platform';
         }
+        $cardsHtml .= '<p class="mb-1"><strong>Platform:</strong> ' . Html::escape($platformLabel) . '</p>';
         
         $processLabel = trim((string) ($card['process_label'] ?? ''));
         if ($processLabel !== '') {
