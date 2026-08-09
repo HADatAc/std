@@ -621,23 +621,18 @@ class EditProcessBasedStudyForm extends FormBase {
           }
 
           $partOf = '';
+          $rawPartOf = '';
           if (isset($instance->partOf)) {
             if (is_string($instance->partOf)) {
-              $partOf = trim($instance->partOf);
+              $rawPartOf = trim($instance->partOf);
             }
             elseif (is_object($instance->partOf)) {
-              $partOf = trim((string) ($instance->partOf->uri ?? $instance->partOf->hasURI ?? ''));
+              $rawPartOf = trim((string) ($instance->partOf->uri ?? $instance->partOf->hasURI ?? ''));
             }
           }
 
-          if ($partOf === '') {
-            continue;
-          }
-
-          $partOf = Utils::canonicalizePmsrUri($partOf);
-          if (!isset($organizationUris[$partOf])) {
-            continue;
-          }
+          $partOf = Utils::canonicalizePmsrUri($rawPartOf);
+          $partOfMatchesScope = ($partOf !== '' && isset($organizationUris[$partOf]));
 
           $typeUri = trim((string) ($instance->type->uri ?? $instance->typeUri ?? ''));
           $typeLabel = trim((string) ($instance->type->label ?? ''));
@@ -657,7 +652,12 @@ class EditProcessBasedStudyForm extends FormBase {
           $uri = trim((string) $instance->uri);
           $label = trim((string) ($instance->label ?? ''));
           if ($uri !== '' && !isset($options[$uri])) {
-            $options[$uri] = $label !== '' ? $label : $uri;
+            $displayLabel = $label !== '' ? $label : $uri;
+            if (!$partOfMatchesScope) {
+              $displayPartOf = $rawPartOf !== '' ? $rawPartOf : 'missing';
+              $displayLabel .= ' [partOf mismatch: ' . $displayPartOf . ']';
+            }
+            $options[$uri] = $displayLabel;
           }
         }
 
