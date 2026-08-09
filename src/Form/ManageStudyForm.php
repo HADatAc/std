@@ -1655,6 +1655,30 @@ class ManageStudyForm extends FormBase
       }
     }
 
+    $scenarioNameContext = trim((string) ($this->getStudy()->label ?? $this->getStudy()->title ?? $this->getStudy()->uri ?? ''));
+    if ($scenarioNameContext === '') {
+      $scenarioNameContext = trim((string) ($this->getStudy()->uri ?? ''));
+    }
+
+    $processNameContext = trim((string) ($this->getStudy()->processLabel ?? ''));
+    if ($processNameContext === '' && !empty($associatedWorkflows) && $effectiveProcessUri !== '') {
+      foreach ($associatedWorkflows as $workflowCandidate) {
+        $candidateUri = trim((string) ($workflowCandidate->uri ?? ''));
+        if ($candidateUri !== $effectiveProcessUri) {
+          continue;
+        }
+
+        $candidateLabel = trim((string) ($workflowCandidate->label ?? $workflowCandidate->title ?? ''));
+        if ($candidateLabel !== '') {
+          $processNameContext = $candidateLabel;
+          break;
+        }
+      }
+    }
+    if ($processNameContext === '') {
+      $processNameContext = $effectiveProcessUri;
+    }
+
     $toolExecutionRows = '';
     $toolExecutions = $this->getAnalyticalToolExecutionsForStudy((string) $this->getStudy()->uri, $effectiveProcessUri);
     foreach ($toolExecutions as $execution) {
@@ -1682,6 +1706,9 @@ class ManageStudyForm extends FormBase
           'query' => [
             'studyUri' => (string) $this->getStudy()->uri,
             'processUri' => $effectiveProcessUri,
+            'scenarioName' => $scenarioNameContext,
+            'processName' => $processNameContext,
+            'returnTo' => $processExecutionsReturnTo,
           ],
         ])->toString();
         $resultsLink = '<a href="' . Html::escape($fallbackUrl) . '" target="_blank" rel="noopener noreferrer">View Run ' . Html::escape((string) $execution['runId']) . '</a>';
@@ -1783,7 +1810,10 @@ class ManageStudyForm extends FormBase
           'query' => [
             'studyUri' => (string) $this->getStudy()->uri,
             'processUri' => $effectiveProcessUri,
+            'scenarioName' => $scenarioNameContext,
+            'processName' => $processNameContext,
             'toolUri' => $toolUri,
+            'returnTo' => $processExecutionsReturnTo,
           ],
         ])->toString();
       }
