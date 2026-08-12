@@ -1055,7 +1055,7 @@ class EditProcessBasedStudyForm extends FormBase {
       '#type' => 'textfield',
       '#title' => $this->t('@study Title', ['@study' => $preferredStudyLabel]),
       '#default_value' => $this->toSafeString($this->study->label ?? ($this->study->studyTitle ?? '')),
-      '#description' => $this->t('Auto-generated from owner label, ProcessStem label, and start timestamp.'),
+      '#description' => $this->t("Auto-generated as \"<Person Full Name>'s <Process Name> at <YYYY/MM/DD> <HH:MM>\"."),
       '#maxlength' => 512,
       '#disabled' => TRUE,
     ];

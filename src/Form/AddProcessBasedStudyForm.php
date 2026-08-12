@@ -88,7 +88,7 @@ class AddProcessBasedStudyForm extends FormBase {
     $form['study_metadata'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Study Metadata (Optional)'),
-      '#description' => $this->t('Scenario name is automatically composed by the system from owner, ProcessStem, and start timestamp.'),
+      '#description' => $this->t('Scenario name is automatically composed by the system from owner, Process Name, and start timestamp.'),
       '#collapsible' => TRUE,
       '#collapsed' => FALSE,
     ];
@@ -103,7 +103,7 @@ class AddProcessBasedStudyForm extends FormBase {
     $form['study_metadata']['study_title'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Study Title'),
-      '#description' => $this->t('Auto-generated from owner label, ProcessStem label, and start timestamp.'),
+      '#description' => $this->t("Auto-generated as \"<Person Full Name>'s <Process Name> at <YYYY/MM/DD> <HH:MM>\"."),
       '#maxlength' => 512,
       '#disabled' => TRUE,
     ];

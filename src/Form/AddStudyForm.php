@@ -310,7 +310,7 @@ class AddStudyForm extends FormBase {
 
         $newStudyUri = $form_state->getValue('study_uri');
         $personLabel = ProcessBasedStudy::resolvePersonLabelByEmail((string) $useremail);
-        $autoLabel = ProcessBasedStudy::composeScenarioLabel($personLabel, 'Unlinked ProcessStem', 'Unknown Organization', gmdate('Ymd'), gmdate('H:i'));
+        $autoLabel = ProcessBasedStudy::composeScenarioLabel($personLabel, 'Unlinked Process', 'Unknown Organization', gmdate('Y/m/d'), gmdate('H:i'));
         $institutionUri = '';
         if ($form_state->getValue('study_institution') != NULL && $form_state->getValue('study_institution') != '') {
           $institutionUri = Utils::uriFromAutocomplete($form_state->getValue('study_institution'));

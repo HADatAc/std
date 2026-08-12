@@ -102,7 +102,7 @@ class ProcessBasedStudy extends Study {
   /**
    * Resolve ProcessStem URI and label from a process URI.
    *
-   * @return array{processStemUri:string, processStemLabel:string}
+   * @return array{processStemUri:string, processStemLabel:string, processLabel:string}
    */
   public static function resolveProcessStemInfo(string $processUri): array {
     $processUri = Utils::canonicalizePmsrUri(trim($processUri));
@@ -110,16 +110,20 @@ class ProcessBasedStudy extends Study {
       return [
         'processStemUri' => '',
         'processStemLabel' => '',
+        'processLabel' => '',
       ];
     }
 
     $processStemUri = '';
     $processStemLabel = '';
+    $processLabel = '';
 
     try {
       $api = \Drupal::service('rep.api_connector');
       $process = $api->parseObjectResponse($api->getUri($processUri), 'getUri');
       if (is_object($process)) {
+        $processLabel = trim((string) ($process->label ?? $process->title ?? ''));
+
         if (isset($process->wasDerivedFrom)) {
           if (is_object($process->wasDerivedFrom)) {
             $processStemUri = trim((string) ($process->wasDerivedFrom->uri ?? ''));
@@ -160,10 +164,14 @@ class ProcessBasedStudy extends Study {
     if ($processStemLabel === '') {
       $processStemLabel = $processUri;
     }
+    if ($processLabel === '') {
+      $processLabel = $processStemLabel;
+    }
 
     return [
       'processStemUri' => $processStemUri,
       'processStemLabel' => $processStemLabel,
+      'processLabel' => $processLabel,
     ];
   }
 
@@ -180,10 +188,16 @@ class ProcessBasedStudy extends Study {
       $personLabel = 'Unknown Person';
     }
     if ($processStemLabel === '') {
-      $processStemLabel = 'Unknown ProcessStem';
+      $processStemLabel = 'Unknown Process';
     }
-    if (!preg_match('/^\d{8}$/', $startDateYmd)) {
-      $startDateYmd = gmdate('Ymd');
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $startDateYmd, $matches)) {
+      $startDateYmd = $matches[1] . '/' . $matches[2] . '/' . $matches[3];
+    }
+    elseif (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $startDateYmd, $matches)) {
+      $startDateYmd = $matches[1] . '/' . $matches[2] . '/' . $matches[3];
+    }
+    if (!preg_match('/^\d{4}\/\d{2}\/\d{2}$/', $startDateYmd)) {
+      $startDateYmd = gmdate('Y/m/d');
     }
     if (!preg_match('/^\d{2}:\d{2}$/', $startTimeHm)) {
       $startTimeHm = gmdate('H:i');
@@ -201,17 +215,25 @@ class ProcessBasedStudy extends Study {
     $personLabel = self::resolvePersonLabelByEmail($ownerEmail);
     $processStem = self::resolveProcessStemInfo($processUri);
 
+    $processLabel = trim((string) ($processStem['processLabel'] ?? ''));
+    if ($processLabel === '') {
+      $processLabel = trim((string) ($processStem['processStemLabel'] ?? ''));
+    }
+
     $startDateYmd = '';
     $normalizedStartDateIso = trim($startDateIso);
     if ($normalizedStartDateIso !== '' && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $normalizedStartDateIso, $matches)) {
-      $startDateYmd = $matches[1] . $matches[2] . $matches[3];
+      $startDateYmd = $matches[1] . '/' . $matches[2] . '/' . $matches[3];
     }
 
-    if ($startDateYmd === '' && preg_match('/ at (\d{8}) \d{2}:\d{2}$/', trim($existingLabel), $matches)) {
+    if ($startDateYmd === '' && preg_match('/ at (\d{4}\/\d{2}\/\d{2}) \d{2}:\d{2}$/', trim($existingLabel), $matches)) {
       $startDateYmd = $matches[1];
     }
+    if ($startDateYmd === '' && preg_match('/ at (\d{8}) \d{2}:\d{2}$/', trim($existingLabel), $matches)) {
+      $startDateYmd = substr($matches[1], 0, 4) . '/' . substr($matches[1], 4, 2) . '/' . substr($matches[1], 6, 2);
+    }
     if ($startDateYmd === '') {
-      $startDateYmd = gmdate('Ymd');
+      $startDateYmd = gmdate('Y/m/d');
     }
 
     $startTimeHm = '';
@@ -223,13 +245,14 @@ class ProcessBasedStudy extends Study {
     }
 
     return [
-      'label' => self::composeScenarioLabel($personLabel, (string) ($processStem['processStemLabel'] ?? ''), '', $startDateYmd, $startTimeHm),
+      'label' => self::composeScenarioLabel($personLabel, $processLabel, '', $startDateYmd, $startTimeHm),
       'startDateYmd' => $startDateYmd,
       'startTimeHm' => $startTimeHm,
       'personLabel' => $personLabel,
       'institutionLabel' => '',
       'processStemUri' => (string) ($processStem['processStemUri'] ?? ''),
       'processStemLabel' => (string) ($processStem['processStemLabel'] ?? ''),
+      'processLabel' => $processLabel,
     ];
   }
 
