@@ -573,8 +573,8 @@ class EditStudyForm extends FormBase {
       if ($message != null) {
         \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." has been updated successfully."));
         
-        // Invalidate study search cache for this study
-        \Drupal\std\Service\StudyVariableSearchService::invalidateCache($this->getStudy()->uri);
+        // Invalidate and immediately warm study-search caches for this scenario.
+        \Drupal\std\Service\StudyVariableSearchService::refreshCachesForScenarioUpdate($this->getStudy()->uri);
       }
 
       $this->backUrl();

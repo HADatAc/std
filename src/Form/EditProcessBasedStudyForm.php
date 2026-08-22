@@ -69,6 +69,35 @@ class EditProcessBasedStudyForm extends FormBase {
   }
 
   /**
+   * Normalize mixed API date/datetime values into YYYY-MM-DD for date inputs.
+   */
+  private function toDateInputValue($value): string {
+    $raw = $this->toSafeString($value);
+    if ($raw === '') {
+      return '';
+    }
+
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) === 1) {
+      return $raw;
+    }
+
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})[T\s].*$/', $raw, $m) === 1) {
+      return $m[1];
+    }
+
+    if (preg_match('/^(\d{4})\/(\d{2})\/(\d{2})(?:\s.*)?$/', $raw, $m) === 1) {
+      return $m[1] . '-' . $m[2] . '-' . $m[3];
+    }
+
+    $timestamp = strtotime($raw);
+    if ($timestamp === FALSE) {
+      return '';
+    }
+
+    return date('Y-m-d', $timestamp);
+  }
+
+  /**
    * Resolve a URI candidate from mixed API values.
    */
   private function resolveUriFromValue($value): string {
@@ -1054,7 +1083,7 @@ class EditProcessBasedStudyForm extends FormBase {
     $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['study_title'] = [
       '#type' => 'textfield',
       '#title' => $this->t('@study Title', ['@study' => $preferredStudyLabel]),
-      '#default_value' => $this->toSafeString($this->study->label ?? ($this->study->studyTitle ?? '')),
+      '#default_value' => $this->toSafeString($this->study->label ?? ($this->study->studyTitle ?? ($this->study->title ?? ''))),
       '#description' => $this->t("Auto-generated as \"<Person Full Name>'s <Process Name> at <YYYY/MM/DD> <HH:MM>\"."),
       '#maxlength' => 512,
       '#disabled' => TRUE,
@@ -1079,14 +1108,14 @@ class EditProcessBasedStudyForm extends FormBase {
     $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['start_date'] = [
       '#type' => 'date',
       '#title' => $this->t('Start Date'),
-      '#default_value' => $this->toSafeString($this->study->startDate ?? ''),
+      '#default_value' => $this->toDateInputValue($this->study->startDate ?? ($this->study->hasStartDate ?? '')),
       '#description' => $this->t('@study start date (ISO 8601 format: YYYY-MM-DD).', ['@study' => $preferredStudyLabel]),
     ];
 
     $form['study_metadata']['properties_layout']['right_column']['adjustable_properties']['end_date'] = [
       '#type' => 'date',
       '#title' => $this->t('End Date'),
-      '#default_value' => $this->toSafeString($this->study->endDate ?? ''),
+      '#default_value' => $this->toDateInputValue($this->study->endDate ?? ($this->study->hasEndDate ?? '')),
       '#description' => $this->t('@study end date (ISO 8601 format: YYYY-MM-DD).', ['@study' => $preferredStudyLabel]),
     ];
 
@@ -1230,7 +1259,7 @@ class EditProcessBasedStudyForm extends FormBase {
         }
 
         \Drupal::messenger()->addMessage($this->t('Process-Based @study has been deleted successfully.', ['@study' => $this->preferredStudyLabel()]));
-        \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
+        \Drupal\std\Service\StudyVariableSearchService::refreshCachesForScenarioUpdate($studyUri);
         $this->backUrl($studyUri);
         return;
       }
@@ -1394,8 +1423,8 @@ class EditProcessBasedStudyForm extends FormBase {
 
       \Drupal::messenger()->addMessage($this->t('Process-Based @study has been updated successfully.', ['@study' => $this->preferredStudyLabel()]));
       
-      // Invalidate study search cache for this study
-      \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
+      // Invalidate and immediately warm study-search caches for this scenario.
+      \Drupal\std\Service\StudyVariableSearchService::refreshCachesForScenarioUpdate($studyUri);
       
       $this->backUrl($studyUri);
       return;

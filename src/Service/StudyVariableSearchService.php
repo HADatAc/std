@@ -14,6 +14,11 @@ use Drupal\std\Support\StudyFileTypeResolver;
  */
 final class StudyVariableSearchService {
 
+  private const CONTEXT_CACHE_SCHEMA = 1;
+  private const CONTEXT_CACHE_TAG = 'std_study_search_context';
+  private const CONTEXT_CACHE_KEY_PREFIX = 'std_study_context:';
+  private const SCENARIO_CACHE_KEY_PREFIX = 'std_study_scenario:';
+
   private const SOURCE_KEYS = [
     'simulator',
     'instrument',
@@ -48,9 +53,15 @@ final class StudyVariableSearchService {
   ) {}
 
   public function buildContext(string $userEmail, bool $isAdmin, bool $isAuthenticated): array {
+    $cacheBin = \Drupal::service('cache.std_study_search');
+    $contextCacheKey = $this->buildContextCacheKey($userEmail, $isAdmin, $isAuthenticated);
+    // Always rebuild search context so newly ingested scenarios appear
+    // immediately without requiring manual cache invalidation.
+
     $errors = [];
     $ontologyDefinitions = $this->getOntologyDefinitions();
     $ontologyKeys = array_keys($ontologyDefinitions);
+    $contextCacheTags = [self::CONTEXT_CACHE_TAG, 'std_study_soc_vars'];
 
     $workflowPool = $this->normalizeItems($this->loadElementsByType('workflow', $errors));
     // Load all Study entities (plus ProcessBasedStudy via dedicated endpoint).
@@ -87,6 +98,7 @@ final class StudyVariableSearchService {
       if ($studyUri === '') {
         continue;
       }
+      $contextCacheTags[] = 'std_study:' . md5($studyUri);
 
       $semanticVariableFields = $this->extractSemanticVariableFields($studyUri, $semanticVariablePool);
       $codebookFields = !empty($semanticVariableFields)
@@ -242,7 +254,9 @@ final class StudyVariableSearchService {
         'principal_investigator' => is_object($piValue = $study->principalInvestigator ?? $study->hasPrincipalInvestigator ?? null) 
           ? trim((string) ($piValue->label ?? $piValue->uri ?? '')) 
           : trim((string) ($piValue ?? '')),
-        'start_date' => trim((string) ($study->startDate ?? $study->hasStartDate ?? '')),
+        // Canonical start date source is Study/ProcessBasedStudy startDate.
+        // Do not fall back to deprecated Process.hasStartDate.
+        'start_date' => trim((string) ($study->startDate ?? '')),
         'upload_size' => trim((string) ($study->uploadSize ?? $study->hasUploadSize ?? '')),
         'manage_url' => $this->buildManageStudyUrlWithTracking($studyUri),
         'edit_url' => $studyType === 'processbasedstudy'
@@ -276,7 +290,7 @@ final class StudyVariableSearchService {
       $ontologyTitles[$ontologyKey] = (string) ($ontologyDefinition['title'] ?? strtoupper($ontologyKey));
     }
 
-    return [
+    $context = [
       'variables_by_source' => $variablesBySource,
       'ontology_definitions' => $ontologyTitles,
       'ontology_filters' => $ontologyFilters,
@@ -286,6 +300,86 @@ final class StudyVariableSearchService {
       'study_cards' => $studyCards,
       'errors' => array_values(array_unique($errors)),
     ];
+
+    $this->persistScenarioCardsCache($studyCards);
+    $cacheBin->set(
+      $contextCacheKey,
+      [
+        '_schema' => self::CONTEXT_CACHE_SCHEMA,
+        'context' => $context,
+      ],
+      \Drupal\Core\Cache\CacheBackendInterface::CACHE_PERMANENT,
+      array_values(array_unique($contextCacheTags))
+    );
+
+    return $context;
+  }
+
+  /**
+   * Read one cached scenario card by study URI.
+   */
+  public function getCachedScenarioCard(string $studyUri): ?array {
+    $normalizedStudyUri = $this->normalizePmsrDisplayUri(trim($studyUri));
+    if ($normalizedStudyUri === '') {
+      return NULL;
+    }
+
+    $cacheBin = \Drupal::service('cache.std_study_search');
+    $cacheKey = self::SCENARIO_CACHE_KEY_PREFIX . md5($normalizedStudyUri);
+    $item = $cacheBin->get($cacheKey);
+    if (!$item || !is_array($item->data)) {
+      return NULL;
+    }
+
+    $schema = (int) ($item->data['_schema'] ?? 0);
+    $card = $item->data['card'] ?? NULL;
+    if ($schema !== self::CONTEXT_CACHE_SCHEMA || !is_array($card)) {
+      return NULL;
+    }
+
+    return $card;
+  }
+
+  /**
+   * Persist per-scenario cached payloads.
+   *
+   * @param array<int,array<string,mixed>> $studyCards
+   */
+  private function persistScenarioCardsCache(array $studyCards): void {
+    $cacheBin = \Drupal::service('cache.std_study_search');
+    foreach ($studyCards as $card) {
+      if (!is_array($card)) {
+        continue;
+      }
+
+      $studyUri = isset($card['uri']) ? $this->normalizePmsrDisplayUri(trim((string) $card['uri'])) : '';
+      if ($studyUri === '') {
+        continue;
+      }
+
+      $cacheBin->set(
+        self::SCENARIO_CACHE_KEY_PREFIX . md5($studyUri),
+        [
+          '_schema' => self::CONTEXT_CACHE_SCHEMA,
+          'card' => $card,
+        ],
+        \Drupal\Core\Cache\CacheBackendInterface::CACHE_PERMANENT,
+        [self::CONTEXT_CACHE_TAG, 'std_study:' . md5($studyUri)]
+      );
+    }
+  }
+
+  /**
+   * Build a stable context cache key for visibility scope.
+   */
+  private function buildContextCacheKey(string $userEmail, bool $isAdmin, bool $isAuthenticated): string {
+    $scope = [
+      'user' => strtolower(trim($userEmail)),
+      'admin' => $isAdmin ? 1 : 0,
+      'auth' => $isAuthenticated ? 1 : 0,
+    ];
+
+    return self::CONTEXT_CACHE_KEY_PREFIX . md5(json_encode($scope));
   }
 
   /**
@@ -1423,7 +1517,40 @@ final class StudyVariableSearchService {
       $cacheBin->invalidateTags(['std_study:' . md5($studyUri)]);
     } else {
       // Invalidate all study caches (use sparingly - only when global changes occur)
-      $cacheBin->invalidateTags(['std_study_soc_vars']);
+      $cacheBin->invalidateTags(['std_study_soc_vars', self::CONTEXT_CACHE_TAG]);
+    }
+  }
+
+  /**
+   * Invalidate and warm search caches immediately after scenario updates.
+   */
+  public static function refreshCachesForScenarioUpdate(string $studyUri): void {
+    $normalizedStudyUri = Utils::canonicalizePmsrUri(trim($studyUri));
+    if ($normalizedStudyUri === '') {
+      self::invalidateCache();
+      return;
+    }
+
+    self::invalidateCache($normalizedStudyUri);
+
+    if (!\Drupal::hasService('std.study_variable_search')) {
+      return;
+    }
+
+    $service = \Drupal::service('std.study_variable_search');
+    if (!$service instanceof self) {
+      return;
+    }
+
+    try {
+      // Warm global/public visibility cache and admin visibility cache.
+      $service->buildContext('', FALSE, FALSE);
+      $service->buildContext('', TRUE, TRUE);
+    }
+    catch (\Throwable $e) {
+      \Drupal::logger('std')->warning('Failed to warm study search cache after scenario update: @message', [
+        '@message' => $e->getMessage(),
+      ]);
     }
   }
 

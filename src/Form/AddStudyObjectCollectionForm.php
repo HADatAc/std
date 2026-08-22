@@ -241,8 +241,8 @@ class AddStudyObjectCollectionForm extends FormBase {
       if ($message != null) {
         \Drupal::messenger()->addMessage(t(ucfirst($preferred_study)." Object Collection has been added successfully."));
         
-        // Invalidate study search cache for this study since SOCs changed
-        \Drupal\std\Service\StudyVariableSearchService::invalidateCache($studyUri);
+        // Invalidate and immediately warm study-search caches for this scenario.
+        \Drupal\std\Service\StudyVariableSearchService::refreshCachesForScenarioUpdate($studyUri);
       } else {
         \Drupal::messenger()->addError(t(ucfirst($preferred_study)." Object Collection failed to be added."));
       }
