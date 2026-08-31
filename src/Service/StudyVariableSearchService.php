@@ -18,6 +18,7 @@ final class StudyVariableSearchService {
   private const CONTEXT_CACHE_TAG = 'std_study_search_context';
   private const CONTEXT_CACHE_KEY_PREFIX = 'std_study_context:';
   private const SCENARIO_CACHE_KEY_PREFIX = 'std_study_scenario:';
+  private const SOC_VARIABLE_CACHE_SCHEMA = 2;
 
   private const SOURCE_KEYS = [
     'simulator',
@@ -98,6 +99,7 @@ final class StudyVariableSearchService {
       if ($studyUri === '') {
         continue;
       }
+      $processUri = $this->normalizePmsrDisplayUri(trim((string) ($study->processUri ?? '')));
       $contextCacheTags[] = 'std_study:' . md5($studyUri);
 
       $semanticVariableFields = $this->extractSemanticVariableFields($studyUri, $semanticVariablePool);
@@ -111,6 +113,12 @@ final class StudyVariableSearchService {
         $workflowVariablesBySource,
         $socVariablesBySource,
       );
+      $sourceVariablesByStudy = $this->mergeSourceVariableBuckets(
+        $sourceVariablesByStudy,
+        $this->extractProcessVariablesBySource($processUri, $errors),
+      );
+      $sourceVariablesByStudy = $this->mergeSimulatorIntoInstrument($sourceVariablesByStudy);
+      $processInstanceCounts = $this->extractProcessInstanceCounts($processUri, $errors);
 
       $studyTags = [];
       $studyTagsBySource = [
@@ -151,7 +159,6 @@ final class StudyVariableSearchService {
       $completenessScore = round(($hasData + $hasWorkflow + $hasImages) / 3, 4);
 
       // Determine study type and extract ProcessBasedStudy metadata
-      $processUri = $this->normalizePmsrDisplayUri(trim((string) ($study->processUri ?? '')));
       $studyType = !empty($processUri) && $processUri !== 'None' ? 'processbasedstudy' : 'study';
 
       // Get process metadata if available (including ProcessStem for filtering)
@@ -263,8 +270,12 @@ final class StudyVariableSearchService {
           ? Url::fromRoute('std.edit_processbasedstudy', ['studyuri' => base64_encode($studyUri)])->toString()
           : Url::fromRoute('std.edit_study', ['studyuri' => base64_encode($studyUri)])->toString(),
         'codebook_count' => count($studyTagsBySource['questionnaire']),
-        'component_count' => count($studyTagsBySource['component']),
-        'simulator_count' => count($studyTagsBySource['simulator']),
+        'component_count' => $processInstanceCounts['component_instances'] > 0
+          ? $processInstanceCounts['component_instances']
+          : count($studyTagsBySource['component']),
+        'simulator_count' => $processInstanceCounts['instrument_instances'] > 0
+          ? $processInstanceCounts['instrument_instances']
+          : count($studyTagsBySource['simulator']),
         'instrument_count' => count($studyTagsBySource['instrument']),
         'tags' => array_values($studyTags),
         'source_tags' => [
@@ -273,6 +284,7 @@ final class StudyVariableSearchService {
           'questionnaire' => array_values($studyTagsBySource['questionnaire']),
           'component' => array_values($studyTagsBySource['component']),
         ],
+        'simulator_instances' => array_values(is_array($sourceVariablesByStudy['simulator'] ?? NULL) ? $sourceVariablesByStudy['simulator'] : []),
         'ontology_tags' => $this->normalizeOntologyTagMap($studyOntologyTags, $ontologyKeys),
         'has_data' => $hasData,
         'has_workflow' => $hasWorkflow,
@@ -388,12 +400,52 @@ final class StudyVariableSearchService {
    * @return array{0:string,1:string}
    */
   private function resolveStudyOrganization(object $study): array {
-    $institutionValue = $study->institution ?? $study->hasInstitution ?? NULL;
+    $institutionCandidates = [
+      $study->institution ?? NULL,
+      $study->hasInstitution ?? NULL,
+      $study->institutionUri ?? NULL,
+      $study->hasInstitutionUri ?? NULL,
+      $study->organization ?? NULL,
+      $study->organizationUri ?? NULL,
+      $study->hasOrganizationUri ?? NULL,
+    ];
+
+    $institutionValue = NULL;
+    foreach ($institutionCandidates as $candidate) {
+      $candidateUri = Utils::canonicalizePmsrUri($this->extractUriString($candidate));
+      if ($candidateUri !== '') {
+        $institutionValue = $candidate;
+        break;
+      }
+
+      if (is_object($candidate)) {
+        $institutionValue = $candidate;
+        break;
+      }
+
+      if (is_string($candidate) && trim($candidate) !== '') {
+        $institutionValue = $candidate;
+        break;
+      }
+    }
+
     $organizationUri = Utils::canonicalizePmsrUri($this->extractUriString($institutionValue));
+    if ($organizationUri === '') {
+      foreach (['institutionUri', 'hasInstitutionUri', 'organizationUri', 'hasOrganizationUri'] as $field) {
+        if (!isset($study->{$field}) || !is_string($study->{$field})) {
+          continue;
+        }
+        $organizationUri = Utils::canonicalizePmsrUri(trim((string) $study->{$field}));
+        if ($organizationUri !== '') {
+          break;
+        }
+      }
+    }
 
     $labelCandidates = [
       is_object($institutionValue) ? (string) ($institutionValue->label ?? '') : '',
       (string) ($study->institutionName ?? $study->hasInstitutionName ?? ''),
+      (string) ($study->organizationName ?? ''),
       is_string($institutionValue) ? $institutionValue : '',
     ];
 
@@ -408,6 +460,10 @@ final class StudyVariableSearchService {
       }
       $organizationLabel = $candidate;
       break;
+    }
+
+    if ($organizationUri === 'https://pmsr.net/ont/ORG/ESS') {
+      $organizationLabel = 'UCP';
     }
 
     if ($organizationLabel === '' && $organizationUri !== '') {
@@ -955,9 +1011,13 @@ final class StudyVariableSearchService {
     $cacheKey = 'std_study_soc_vars:' . md5($studyUri);
     $cacheBin = \Drupal::service('cache.std_study_search');
     $cache = $cacheBin->get($cacheKey);
-    
-    if ($cache && !empty($cache->data)) {
-      return $cache->data;
+
+    if ($cache && is_array($cache->data)) {
+      $schema = (int) ($cache->data['_schema'] ?? 0);
+      $payload = $cache->data['payload'] ?? NULL;
+      if ($schema === self::SOC_VARIABLE_CACHE_SCHEMA && is_array($payload)) {
+        return $payload;
+      }
     }
     
     // Cache miss - extract SOC variables (expensive: 1 + N API calls)
@@ -965,7 +1025,15 @@ final class StudyVariableSearchService {
     
     // Cache permanently with study-specific tag for selective invalidation
     // This cache persists across 'drush cr' for better performance
-    $cacheBin->set($cacheKey, $result, \Drupal\Core\Cache\CacheBackendInterface::CACHE_PERMANENT, ['std_study_soc_vars', 'std_study:' . md5($studyUri)]);
+    $cacheBin->set(
+      $cacheKey,
+      [
+        '_schema' => self::SOC_VARIABLE_CACHE_SCHEMA,
+        'payload' => $result,
+      ],
+      \Drupal\Core\Cache\CacheBackendInterface::CACHE_PERMANENT,
+      ['std_study_soc_vars', 'std_study:' . md5($studyUri)]
+    );
     
     return $result;
   }
@@ -1015,6 +1083,9 @@ final class StudyVariableSearchService {
             (string) ($object->typeUri ?? ''),
             (string) ($object->hascoTypeLabel ?? ''),
             (string) ($object->hascoTypeUri ?? ''),
+            (string) ($object->uri ?? ''),
+            (string) ($object->originalId ?? ''),
+            (string) ($object->originalID ?? ''),
             (string) (($object->isMemberOf->hasSOCReference ?? '') ?: ($object->isMemberOf->socreference ?? '')),
             (string) ($object->isMemberOf->hasGroundingLabel ?? ''),
             (string) (($object->isMemberOf->virtualColumn->hasSOCReference ?? '') ?: ($object->isMemberOf->virtualColumn->socreference ?? '')),
@@ -1077,6 +1148,39 @@ final class StudyVariableSearchService {
     return $merged;
   }
 
+  /**
+   * Keep a single instrument bucket in Scenario Search UI by folding
+    * simulator values into instrument values.
+    *
+    * Simulator bucket is intentionally preserved for card-level instance display.
+   */
+  private function mergeSimulatorIntoInstrument(array $bucket): array {
+    $out = [
+      'simulator' => [],
+      'instrument' => [],
+      'questionnaire' => [],
+      'component' => [],
+    ];
+
+    foreach (self::SOURCE_KEYS as $source) {
+      $out[$source] = is_array($bucket[$source] ?? NULL) ? array_values($bucket[$source]) : [];
+    }
+
+    $instrumentMap = [];
+    foreach (array_merge($out['instrument'], $out['simulator']) as $value) {
+      $label = trim((string) $value);
+      if ($label === '') {
+        continue;
+      }
+      $instrumentMap[$label] = $label;
+    }
+
+    ksort($instrumentMap, SORT_NATURAL | SORT_FLAG_CASE);
+    $out['instrument'] = array_values($instrumentMap);
+
+    return $out;
+  }
+
   private function inferSourceFromHints(array $hints): string {
     foreach ($hints as $hint) {
       $text = strtolower(trim((string) $hint));
@@ -1084,15 +1188,36 @@ final class StudyVariableSearchService {
         continue;
       }
 
-      if (str_contains($text, 'simulator')) {
+      if (
+        str_contains($text, 'simulator')
+        || str_contains($text, 'physicalmedicalsimulator')
+        || str_contains($text, 'simulador')
+        || preg_match('/\b(sim|simu)\b/i', $text) === 1
+      ) {
         return 'simulator';
       }
 
-      if (str_contains($text, 'instrument') || str_contains($text, 'device')) {
+      if (
+        str_contains($text, 'instrument')
+        || str_contains($text, 'device')
+        || str_contains($text, 'equipment')
+        || str_contains($text, 'medicaldevice')
+        || preg_match('/\b(ins|instr)\b/i', $text) === 1
+      ) {
         return 'instrument';
       }
 
-      if (str_contains($text, 'component') || str_contains($text, 'actuator') || str_contains($text, 'detector')) {
+      if (
+        str_contains($text, 'component')
+        || str_contains($text, 'componentinstance')
+        || str_contains($text, 'actuator')
+        || str_contains($text, 'detector')
+        || str_contains($text, 'sensor')
+        || str_contains($text, 'componente')
+        || str_contains($text, 'atuador')
+        || str_contains($text, 'detetor')
+        || preg_match('/\b(comp|cmp)\b/i', $text) === 1
+      ) {
         return 'component';
       }
 
@@ -1972,6 +2097,649 @@ final class StudyVariableSearchService {
     // Defensive normalization for fragment-like WKF URI drift variants.
     $value = str_ireplace(['/WKF#/', '/WKF#'], '/', $value);
     return $value;
+  }
+
+  /**
+   * Process-based fallback for Scenario Search variable extraction.
+   *
+   * For recently ingested ProcessBasedStudy records, SOC/workflow links may be
+   * incomplete. In that case we still derive instrument/component variables
+   * from the linked Process payload and related instrument components.
+   */
+  private function extractProcessVariablesBySource(?string $processUri, array &$errors): array {
+    $bySource = [
+      'simulator' => [],
+      'instrument' => [],
+      'questionnaire' => [],
+      'component' => [],
+    ];
+
+    $processUri = $this->normalizePmsrDisplayUri(trim((string) $processUri));
+    if ($processUri === '' || $processUri === 'None' || !method_exists($this->apiConnector, 'getUri')) {
+      return $bySource;
+    }
+
+    try {
+      $componentInstanceUris = $this->extractComponentInstanceUrisFromProcessTasks($processUri, $errors);
+      foreach ($componentInstanceUris as $componentInstanceUri) {
+        $componentObj = $this->safeLoadEntityByUri($componentInstanceUri);
+        $componentLabel = $this->extractEntityLabel($componentObj);
+        if ($componentLabel !== '') {
+          $bySource['component'][$componentLabel] = $componentLabel;
+        }
+      }
+
+      $instrumentInstanceUrisFromComponents = $this->resolveInstrumentInstanceUrisByComponentInstances($componentInstanceUris);
+      foreach ($instrumentInstanceUrisFromComponents as $instrumentInstanceUri) {
+        $instrumentInstanceObj = $this->safeLoadEntityByUri($instrumentInstanceUri);
+        $instrumentInstanceLabel = $this->extractEntityLabel($instrumentInstanceObj);
+        if ($instrumentInstanceLabel !== '') {
+          $bySource['simulator'][$instrumentInstanceLabel] = $instrumentInstanceLabel;
+        }
+
+        $instrumentModelUri = '';
+        if (is_object($instrumentInstanceObj)) {
+          $instrumentModelUri = trim((string) ($instrumentInstanceObj->typeUri ?? $instrumentInstanceObj->hasInstrument ?? ''));
+        }
+
+        if ($instrumentModelUri === '') {
+          continue;
+        }
+
+        $instrumentModelObj = $this->safeLoadEntityByUri($instrumentModelUri);
+        $instrumentModelLabel = $this->extractEntityLabel($instrumentModelObj);
+        if ($instrumentModelLabel !== '') {
+          $bySource['instrument'][$instrumentModelLabel] = $instrumentModelLabel;
+        }
+      }
+
+      $instrumentUrisFromComponents = $this->resolveInstrumentUrisByComponentInstances($componentInstanceUris);
+      foreach ($instrumentUrisFromComponents as $instrumentUri) {
+        $instrumentObj = $this->safeLoadEntityByUri($instrumentUri);
+        $instrumentLabel = $this->extractEntityLabel($instrumentObj);
+        if ($instrumentLabel !== '') {
+          $bySource['instrument'][$instrumentLabel] = $instrumentLabel;
+        }
+      }
+
+      $processRaw = $this->apiConnector->getUri($processUri);
+      $processObj = $this->apiConnector->parseObjectResponse($processRaw, 'getUri');
+      if (!is_object($processObj)) {
+        foreach ($bySource as $source => $values) {
+          ksort($values, SORT_NATURAL | SORT_FLAG_CASE);
+          $bySource[$source] = array_values($values);
+        }
+        return $bySource;
+      }
+
+      $uriHints = [];
+      $this->collectProcessAssetUris($processObj, $uriHints, 0, 'process');
+
+      $instrumentUris = [];
+      foreach ($uriHints as $uri => $hint) {
+        if (!$this->isHttpUri($uri)) {
+          continue;
+        }
+
+        $entity = $this->safeLoadEntityByUri($uri);
+        $label = $this->extractEntityLabel($entity);
+        $source = $this->inferSourceFromHints([
+          (string) $hint,
+          (string) ($entity->hascoTypeUri ?? ''),
+          (string) ($entity->hascoType ?? ''),
+          (string) ($entity->{'rdf:type'} ?? ''),
+          (string) ($entity->typeUri ?? ''),
+          (string) ($entity->label ?? ''),
+          $uri,
+        ]);
+
+        if ($source !== '' && $label !== '') {
+          $bySource[$source][$label] = $label;
+        }
+
+        if ($source === 'instrument' || $source === 'simulator') {
+          $instrumentUris[$uri] = $uri;
+        }
+      }
+
+      foreach (array_values($instrumentUris) as $instrumentUri) {
+        foreach ($this->loadComponentUrisByInstrument($instrumentUri) as $componentUri) {
+          if (!$this->isHttpUri($componentUri)) {
+            continue;
+          }
+
+          $componentObj = $this->safeLoadEntityByUri($componentUri);
+          $componentLabel = $this->extractEntityLabel($componentObj);
+          if ($componentLabel !== '') {
+            $bySource['component'][$componentLabel] = $componentLabel;
+          }
+        }
+      }
+    }
+    catch (\Throwable $e) {
+      $errors[] = sprintf('Unable to derive process assets for process %s.', $processUri);
+    }
+
+    foreach ($bySource as $source => $values) {
+      ksort($values, SORT_NATURAL | SORT_FLAG_CASE);
+      $bySource[$source] = array_values($values);
+    }
+
+    return $bySource;
+  }
+
+  /**
+   * Return instance-level counts for process task assets.
+   *
+   * @return array{component_instances:int,instrument_instances:int}
+   */
+  private function extractProcessInstanceCounts(?string $processUri, array &$errors): array {
+    $componentInstanceUris = $this->extractComponentInstanceUrisFromProcessTasks($processUri, $errors);
+    $instrumentInstanceUris = $this->resolveInstrumentInstanceUrisByComponentInstances($componentInstanceUris);
+
+    return [
+      'component_instances' => count($componentInstanceUris),
+      'instrument_instances' => count($instrumentInstanceUris),
+    ];
+  }
+
+  /**
+   * Extract component-instance URIs from process task graph payload.
+   *
+   * @return string[]
+   */
+  private function extractComponentInstanceUrisFromProcessTasks(?string $processUri, array &$errors): array {
+    $processUri = $this->normalizePmsrDisplayUri(trim((string) $processUri));
+    if ($processUri === '' || !method_exists($this->apiConnector, 'processTasks')) {
+      return [];
+    }
+
+    try {
+      $raw = (string) $this->apiConnector->processTasks($processUri);
+      $decoded = json_decode($raw, TRUE);
+      if (!is_array($decoded) || empty($decoded['isSuccessful'])) {
+        return [];
+      }
+
+      $body = $decoded['body'] ?? [];
+      if (is_string($body)) {
+        $bodyDecoded = json_decode($body, TRUE);
+        if (is_array($bodyDecoded)) {
+          $body = $bodyDecoded;
+        }
+      }
+
+      if (!is_array($body)) {
+        return [];
+      }
+
+      $tasks = is_array($body['tasks'] ?? NULL) ? $body['tasks'] : [];
+      $uriMap = [];
+      foreach ($tasks as $task) {
+        if (!is_array($task)) {
+          continue;
+        }
+
+        $uses = is_array($task['usesComponentInstanceUris'] ?? NULL)
+          ? $task['usesComponentInstanceUris']
+          : [];
+        foreach ($uses as $value) {
+          $uri = trim((string) $value);
+          if ($uri !== '' && $this->isHttpUri($uri)) {
+            $uriMap[$uri] = $uri;
+          }
+        }
+      }
+
+      return array_values($uriMap);
+    }
+    catch (\Throwable $e) {
+      $errors[] = sprintf('Unable to load process tasks for %s.', $processUri);
+      return [];
+    }
+  }
+
+  /**
+   * Resolve instrument/model URIs connected to component instances.
+   *
+   * @param string[] $componentInstanceUris
+   * @return string[]
+   */
+  private function resolveInstrumentUrisByComponentInstances(array $componentInstanceUris): array {
+    if (empty($componentInstanceUris) || !method_exists($this->apiConnector, 'sparqlQuery')) {
+      return [];
+    }
+
+    $normalized = [];
+    foreach ($componentInstanceUris as $uri) {
+      $value = trim((string) $uri);
+      if ($value !== '' && $this->isHttpUri($value)) {
+        $normalized[$value] = $value;
+      }
+    }
+
+    if (empty($normalized)) {
+      return [];
+    }
+
+    $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_values($normalized)));
+    $sparql = 'SELECT DISTINCT ?ii ?instrument WHERE {'
+      . ' VALUES ?cpi { ' . $values . ' } '
+      . ' ?cd (<http://hadatac.org/ont/hasco/hasComponentInstance>|<http://hadatac.org/ont/vstoi#hasComponentInstance>) ?cpi . '
+      . ' ?cd (<http://hadatac.org/ont/hasco/hascoDeployment>|<http://hadatac.org/ont/hasco/hasDeployment>) ?dpl . '
+      . ' ?dpl (<http://hadatac.org/ont/vstoi#hasInstrumentInstance>|<http://hadatac.org/ont/hasco/hasInstrumentInstance>) ?ii . '
+      . ' OPTIONAL { ?ii (<http://hadatac.org/ont/vstoi#hasInstrument>|<http://hadatac.org/ont/hasco/hasInstrument>) ?instrument . } '
+      . '}';
+
+    try {
+      $raw = $this->apiConnector->sparqlQuery($sparql);
+      $decoded = json_decode((string) $raw, TRUE);
+      $bindings = $decoded['results']['bindings'] ?? [];
+      if (!is_array($bindings)) {
+        return [];
+      }
+
+      $instrumentUriMap = [];
+      foreach ($bindings as $binding) {
+        if (!is_array($binding)) {
+          continue;
+        }
+
+        $instrumentUri = trim((string) ($binding['instrument']['value'] ?? ''));
+        if ($instrumentUri === '') {
+          $instrumentUri = trim((string) ($binding['ii']['value'] ?? ''));
+        }
+
+        if ($instrumentUri !== '' && $this->isHttpUri($instrumentUri)) {
+          $instrumentUriMap[$instrumentUri] = $instrumentUri;
+        }
+      }
+
+      return array_values($instrumentUriMap);
+    }
+    catch (\Throwable $e) {
+      return [];
+    }
+  }
+
+  /**
+   * Resolve instrument-instance URIs connected to component instances.
+   *
+   * @param string[] $componentInstanceUris
+   * @return string[]
+   */
+  private function resolveInstrumentInstanceUrisByComponentInstances(array $componentInstanceUris): array {
+    if (empty($componentInstanceUris) || !method_exists($this->apiConnector, 'sparqlQuery')) {
+      return [];
+    }
+
+    $normalized = [];
+    foreach ($componentInstanceUris as $uri) {
+      $value = trim((string) $uri);
+      if ($value !== '' && $this->isHttpUri($value)) {
+        $normalized[$value] = $value;
+      }
+    }
+
+    if (empty($normalized)) {
+      return [];
+    }
+
+    $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_values($normalized)));
+    $sparql = 'SELECT DISTINCT ?ii WHERE {'
+      . ' VALUES ?cpi { ' . $values . ' } '
+      . ' { '
+      . '   ?cd (<http://hadatac.org/ont/hasco/hasComponentInstance>|<http://hadatac.org/ont/vstoi#hasComponentInstance>) ?cpi . '
+      . '   ?cd (<http://hadatac.org/ont/hasco/hascoDeployment>|<http://hadatac.org/ont/hasco/hasDeployment>) ?dpl . '
+      . '   ?dpl (<http://hadatac.org/ont/vstoi#hasInstrumentInstance>|<http://hadatac.org/ont/hasco/hasInstrumentInstance>) ?ii . '
+      . ' } UNION { '
+      . '   ?dpl (<http://hadatac.org/ont/vstoi#hasComponentInstance>|<http://hadatac.org/ont/hasco/hasComponentInstance>) ?cpi . '
+      . '   ?dpl (<http://hadatac.org/ont/vstoi#hasInstrumentInstance>|<http://hadatac.org/ont/hasco/hasInstrumentInstance>) ?ii . '
+      . ' } '
+      . '}';
+
+    try {
+      $raw = $this->apiConnector->sparqlQuery($sparql);
+      $decoded = json_decode((string) $raw, TRUE);
+      $bindings = $decoded['results']['bindings'] ?? [];
+      if (!is_array($bindings)) {
+        return [];
+      }
+
+      $iiMap = [];
+      foreach ($bindings as $binding) {
+        if (!is_array($binding)) {
+          continue;
+        }
+        $iiUri = trim((string) ($binding['ii']['value'] ?? ''));
+        if ($iiUri !== '' && $this->isHttpUri($iiUri)) {
+          $iiMap[$iiUri] = $iiUri;
+        }
+      }
+
+      if (!empty($iiMap)) {
+        return array_values($iiMap);
+      }
+    }
+    catch (\Throwable $e) {
+      // Keep fallback resolution path below.
+    }
+
+    // Fallback: recover instrument instances from component-instance objects
+    // and deterministic URI pattern used by CPI local IDs.
+    $fallbackMap = [];
+    foreach ($componentInstanceUris as $componentInstanceUri) {
+      $cpiUri = trim((string) $componentInstanceUri);
+      if ($cpiUri === '' || !$this->isHttpUri($cpiUri)) {
+        continue;
+      }
+
+      foreach ($this->extractInstrumentInstancesFromComponentInstance($cpiUri) as $iiUri) {
+        if ($iiUri !== '' && $this->isHttpUri($iiUri)) {
+          $fallbackMap[$iiUri] = $iiUri;
+        }
+      }
+    }
+
+    return array_values($fallbackMap);
+  }
+
+  /**
+   * Infer related instrument-instance URIs from component-instance payload.
+   *
+   * @return string[]
+   */
+  private function extractInstrumentInstancesFromComponentInstance(string $componentInstanceUri): array {
+    $out = [];
+
+    $component = $this->safeLoadEntityByUri($componentInstanceUri);
+    if (is_object($component)) {
+      $deploymentUris = [];
+      foreach (['hascoDeployment', 'hasDeployment', 'deploymentUri', 'hasDeploymentUri', 'isPartOf'] as $field) {
+        if (!isset($component->{$field})) {
+          continue;
+        }
+        foreach ($this->extractUriValues($component->{$field}) as $uri) {
+          $deploymentUris[$uri] = $uri;
+        }
+      }
+
+      foreach (array_values($deploymentUris) as $deploymentUri) {
+        $deployment = $this->safeLoadEntityByUri($deploymentUri);
+        if (!is_object($deployment)) {
+          continue;
+        }
+
+        foreach (['hasInstrumentInstance', 'instrumentInstance', 'instrumentInstanceUri', 'hasInstrument'] as $field) {
+          if (!isset($deployment->{$field})) {
+            continue;
+          }
+          foreach ($this->extractUriValues($deployment->{$field}) as $uri) {
+            $out[$uri] = $uri;
+          }
+        }
+      }
+    }
+
+    // URI pattern fallback: .../CPI-INIxxxx-COMxxxx[-N] -> .../INIxxxx
+    // and generic local names containing INI token.
+    $local = basename($componentInstanceUri);
+    if (preg_match('/^CPI-(INI[^-]+)-/i', $local, $m) === 1 && !empty($m[1])) {
+      $iiLocal = trim((string) $m[1]);
+      $base = preg_replace('#/[^/]+$#', '', $componentInstanceUri) ?? '';
+      if ($iiLocal !== '' && $base !== '') {
+        $out[$base . '/' . $iiLocal] = $base . '/' . $iiLocal;
+      }
+    }
+    if (preg_match('/(?:^|[-_\/])(INI[0-9A-Za-z]+)(?:[-_\/]|$)/i', $local, $m2) === 1 && !empty($m2[1])) {
+      $iiLocal = trim((string) $m2[1]);
+      $base = preg_replace('#/[^/]+$#', '', $componentInstanceUri) ?? '';
+      if ($iiLocal !== '' && $base !== '') {
+        $out[$base . '/' . $iiLocal] = $base . '/' . $iiLocal;
+      }
+    }
+
+    return array_values($out);
+  }
+
+  /**
+   * Normalize URI values from mixed scalar/object/array payloads.
+   *
+   * @return string[]
+   */
+  private function extractUriValues($value): array {
+    $out = [];
+
+    if (is_string($value)) {
+      $candidate = trim($value);
+      if ($candidate !== '' && $this->isHttpUri($candidate)) {
+        $out[$candidate] = $candidate;
+      }
+      return array_values($out);
+    }
+
+    if (is_array($value)) {
+      foreach ($value as $inner) {
+        foreach ($this->extractUriValues($inner) as $uri) {
+          $out[$uri] = $uri;
+        }
+      }
+      return array_values($out);
+    }
+
+    if (is_object($value)) {
+      foreach (['uri', 'hasUri', 'value', 'id'] as $field) {
+        if (isset($value->{$field}) && is_string($value->{$field})) {
+          $candidate = trim((string) $value->{$field});
+          if ($candidate !== '' && $this->isHttpUri($candidate)) {
+            $out[$candidate] = $candidate;
+          }
+        }
+      }
+
+      foreach (get_object_vars($value) as $inner) {
+        foreach ($this->extractUriValues($inner) as $uri) {
+          $out[$uri] = $uri;
+        }
+      }
+    }
+
+    return array_values($out);
+  }
+
+  /**
+   * Recursively collect URI candidates from Process payload fields likely
+   * related to instruments/simulators/components.
+   *
+   * @param array<string,string> $out
+   */
+  private function collectProcessAssetUris($value, array &$out, int $depth, string $hint): void {
+    if ($depth > 8) {
+      return;
+    }
+
+    $hintText = strtolower(trim($hint));
+
+    if (is_string($value)) {
+      $candidate = trim($value);
+      if ($candidate !== '' && $this->isHttpUri($candidate)) {
+        if (
+          str_contains($hintText, 'instrument')
+          || str_contains($hintText, 'simulator')
+          || str_contains($hintText, 'component')
+          || str_contains($hintText, 'device')
+          || str_contains($hintText, 'actuator')
+          || str_contains($hintText, 'detector')
+        ) {
+          $out[$candidate] = $hintText;
+        }
+      }
+      return;
+    }
+
+    if (is_array($value)) {
+      foreach ($value as $inner) {
+        $this->collectProcessAssetUris($inner, $out, $depth + 1, $hintText);
+      }
+      return;
+    }
+
+    if (!is_object($value)) {
+      return;
+    }
+
+    if (isset($value->uri) && is_string($value->uri)) {
+      $uri = trim((string) $value->uri);
+      $entityHint = strtolower(trim((string) (($value->hascoTypeUri ?? '') . ' ' . ($value->label ?? '') . ' ' . $hintText)));
+      if ($uri !== '' && $this->isHttpUri($uri)) {
+        if (
+          str_contains($entityHint, 'instrument')
+          || str_contains($entityHint, 'simulator')
+          || str_contains($entityHint, 'component')
+          || str_contains($entityHint, 'device')
+          || str_contains($entityHint, 'actuator')
+          || str_contains($entityHint, 'detector')
+        ) {
+          $out[$uri] = $entityHint;
+        }
+      }
+    }
+
+    foreach (get_object_vars($value) as $field => $innerValue) {
+      $nextHint = strtolower(trim((string) $field));
+      $this->collectProcessAssetUris($innerValue, $out, $depth + 1, $nextHint);
+    }
+  }
+
+  /**
+   * Load entity object by URI without throwing on transient retrieval errors.
+   */
+  private function safeLoadEntityByUri(string $uri): ?object {
+    $uri = trim($uri);
+    if ($uri === '' || !method_exists($this->apiConnector, 'getUri')) {
+      return NULL;
+    }
+
+    try {
+      $raw = $this->apiConnector->getUri($uri);
+      $obj = $this->apiConnector->parseObjectResponse($raw, 'getUri');
+      return is_object($obj) ? $obj : NULL;
+    }
+    catch (\Throwable $e) {
+      return NULL;
+    }
+  }
+
+  /**
+   * Extract the best display label from an entity payload.
+   */
+  private function extractEntityLabel(?object $entity): string {
+    if (!is_object($entity)) {
+      return '';
+    }
+
+    foreach (['label', 'rdfsLabel', 'name', 'title', 'originalIdLabel'] as $field) {
+      if (!isset($entity->{$field}) || !is_string($entity->{$field})) {
+        continue;
+      }
+      $value = trim((string) $entity->{$field});
+      if ($value !== '') {
+        return $value;
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Read component URIs connected to an instrument via available HASCOAPI endpoints.
+   *
+   * @return string[]
+   */
+  private function loadComponentUrisByInstrument(string $instrumentUri): array {
+    $instrumentUri = trim($instrumentUri);
+    if ($instrumentUri === '') {
+      return [];
+    }
+
+    $uriMap = [];
+
+    if (method_exists($this->apiConnector, 'componentListFromInstrument')) {
+      foreach ($this->extractUriListFromApiResponse((string) $this->apiConnector->componentListFromInstrument($instrumentUri)) as $uri) {
+        $uriMap[$uri] = $uri;
+      }
+    }
+
+    if (empty($uriMap) && method_exists($this->apiConnector, 'containersListFromInstrument')) {
+      foreach ($this->extractUriListFromApiResponse((string) $this->apiConnector->containersListFromInstrument($instrumentUri)) as $uri) {
+        $uriMap[$uri] = $uri;
+      }
+    }
+
+    return array_values($uriMap);
+  }
+
+  /**
+   * Decode HASCOAPI wrapper responses and return URI-like string lists.
+   *
+   * @return string[]
+   */
+  private function extractUriListFromApiResponse(string $raw): array {
+    $raw = trim($raw);
+    if ($raw === '') {
+      return [];
+    }
+
+    $decoded = json_decode($raw, TRUE);
+    if (!is_array($decoded)) {
+      return [];
+    }
+
+    $body = $decoded['body'] ?? [];
+    if (is_string($body)) {
+      $bodyDecoded = json_decode($body, TRUE);
+      if (is_array($bodyDecoded)) {
+        $body = $bodyDecoded;
+      }
+    }
+
+    if (!is_array($body)) {
+      return [];
+    }
+
+    $out = [];
+    foreach ($body as $item) {
+      if (is_string($item)) {
+        $uri = trim($item);
+        if ($uri !== '' && $this->isHttpUri($uri)) {
+          $out[$uri] = $uri;
+        }
+        continue;
+      }
+
+      if (is_array($item) && isset($item['uri']) && is_string($item['uri'])) {
+        $uri = trim((string) $item['uri']);
+        if ($uri !== '' && $this->isHttpUri($uri)) {
+          $out[$uri] = $uri;
+        }
+      }
+
+      if (is_object($item) && isset($item->uri) && is_string($item->uri)) {
+        $uri = trim((string) $item->uri);
+        if ($uri !== '' && $this->isHttpUri($uri)) {
+          $out[$uri] = $uri;
+        }
+      }
+    }
+
+    return array_values($out);
+  }
+
+  /**
+   * Cheap URI guard for crawler-style traversal.
+   */
+  private function isHttpUri(string $value): bool {
+    return preg_match('/^https?:\/\//i', trim($value)) === 1;
   }
 
 }

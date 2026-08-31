@@ -1260,7 +1260,11 @@ class EditProcessBasedStudyForm extends FormBase {
 
         \Drupal::messenger()->addMessage($this->t('Process-Based @study has been deleted successfully.', ['@study' => $this->preferredStudyLabel()]));
         \Drupal\std\Service\StudyVariableSearchService::refreshCachesForScenarioUpdate($studyUri);
-        $this->backUrl($studyUri);
+        $form_state->setRedirect('std.select_study', [
+          'elementtype' => 'study',
+          'page' => 1,
+          'pagesize' => 9,
+        ]);
         return;
       }
       catch (\Exception $e) {

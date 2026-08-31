@@ -128,19 +128,42 @@ class ManageStudyForm extends FormBase
     if ($studyuri == NULL || $studyuri == "") {
      \Drupal::messenger()->addMessage(t("A URI is required to manage a ".$preferred_study."."));
      $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
+      return [];
     }
 
-    $uri_decode = base64_decode($studyuri);
-    $this->setStudyUri($uri_decode);
+    $decodedStudyUri = base64_decode((string) $studyuri, TRUE);
+    $uri_decode = is_string($decodedStudyUri) && trim($decodedStudyUri) !== ''
+      ? trim($decodedStudyUri)
+      : trim((string) rawurldecode((string) $studyuri));
+    $this->setStudyUri(Utils::canonicalizePmsrUri($uri_decode));
+    if ($this->getStudyUri() === '') {
+      \Drupal::messenger()->addError(t("Invalid URI for ".ucfirst($preferred_study)."."));
+      $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
+      return [];
+    }
+
     $api = \Drupal::service('rep.api_connector');
-    $study = $api->parseObjectResponse($api->getUri($uri_decode), 'getUri');
+    $study = $api->parseObjectResponse($api->getUri($this->getStudyUri()), 'getUri');
 
     if ($study == NULL) {
       \Drupal::messenger()->addMessage(t("Failed to retrieve ".ucfirst($preferred_study)."."));
       self::backUrl();
+      return [];
     } else {
       $this->setStudy($study);
     }
+
+    $effectiveStudyUri = Utils::canonicalizePmsrUri((string) ($this->getStudy()->uri ?? ''));
+    if ($effectiveStudyUri === '') {
+      $effectiveStudyUri = $this->getStudyUri();
+    }
+    if ($effectiveStudyUri === '') {
+      \Drupal::messenger()->addError(t('Unable to determine a valid scenario URI to load stream data.'));
+      $form_state->setRedirectUrl(Utils::selectBackUrl('study'));
+      return [];
+    }
+    $this->setStudyUri($effectiveStudyUri);
+    $this->getStudy()->uri = $effectiveStudyUri;
 
     $isProcessBasedStudyType = isset($this->getStudy()->hascoTypeUri)
       && $this->getStudy()->hascoTypeUri === 'http://hadatac.org/ont/hasco/ProcessBasedStudy';
@@ -352,6 +375,25 @@ class ManageStudyForm extends FormBase
       $piUri = trim((string) $this->getStudy()->pi->uri);
     }
 
+    $canonicalPiUri = $piUri !== '' ? Utils::canonicalizePmsrUri($piUri) : '';
+    if ($canonicalPiUri === 'https://pmsr.net/ont/PER/PI-001') {
+      $piName = 'Curator at Universidade Católica Portuguesa';
+    }
+    elseif ($piUri !== '' && (trim((string) $piName) === '' || trim((string) $piName) === trim((string) $piUri))) {
+      try {
+        $piObj = $api->parseObjectResponse($api->getUri($piUri), 'getUri');
+        if (is_object($piObj)) {
+          $resolvedPiName = trim((string) ($piObj->label ?? ($piObj->name ?? '')));
+          if ($resolvedPiName !== '') {
+            $piName = $resolvedPiName;
+          }
+        }
+      }
+      catch (\Throwable $e) {
+        // Keep best-effort fallback behavior.
+      }
+    }
+
     $institutionName = ' ';
     $institutionUri = '';
     if (isset($this->getStudy()->institution) && $this->getStudy()->institution != NULL) {
@@ -375,7 +417,12 @@ class ManageStudyForm extends FormBase
       }
     }
 
-    if ((trim($institutionName) === '' || $institutionName === ' ') && $institutionUri !== '') {
+    $canonicalInstitutionUri = $institutionUri !== '' ? Utils::canonicalizePmsrUri($institutionUri) : '';
+    if ($canonicalInstitutionUri === 'https://pmsr.net/ont/ORG/ESS') {
+      $institutionName = 'UCP';
+    }
+
+    if ((trim($institutionName) === '' || $institutionName === ' ' || trim((string) $institutionName) === trim((string) $institutionUri)) && $institutionUri !== '') {
       $normalizedInstitutionUri = strtolower(trim($institutionUri));
       $isResolvableInstitutionUri = preg_match('/^https?:\/\//i', $institutionUri) === 1
         && !in_array($normalizedInstitutionUri, ['unknown', 'none', 'null', 'n/a'], TRUE);

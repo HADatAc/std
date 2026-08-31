@@ -15,13 +15,6 @@ use Drupal\std\Support\StudySearchRanking;
  */
 class StudyVariableSearchForm extends FormBase {
 
-  private const SOURCE_TITLES = [
-    'simulator' => 'Simulators',
-    'instrument' => 'Medical Instruments',
-    'questionnaire' => 'Variables',
-    'component' => 'Components / Actuators',
-  ];
-
   /**
    * {@inheritdoc}
    */
@@ -34,6 +27,13 @@ class StudyVariableSearchForm extends FormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $preferredStudy = trim((string) (\Drupal::config('rep.settings')->get('preferred_study') ?: 'Study'));
+    $preferredInstrument = trim((string) (\Drupal::config('rep.settings')->get('preferred_instrument') ?: 'instrument'));
+    $preferredComponent = trim((string) (\Drupal::config('rep.settings')->get('preferred_component') ?: 'component'));
+    $sourceTitles = [
+      'instrument' => ucfirst($preferredInstrument) . 's',
+      'questionnaire' => 'Variables',
+      'component' => ucfirst($preferredComponent) . 's',
+    ];
     $studyLabels = $this->buildStudyLabels($preferredStudy);
 
     $session = \Drupal::request()->getSession();
@@ -168,7 +168,7 @@ class StudyVariableSearchForm extends FormBase {
     );
 
     // Render existing variable filter sections
-    foreach (self::SOURCE_TITLES as $sourceKey => $sourceTitle) {
+    foreach ($sourceTitles as $sourceKey => $sourceTitle) {
       $sidebarHtml .= $this->renderSourceSection(
         $sourceTitle,
         is_array($variablesBySource[$sourceKey] ?? NULL) ? $variablesBySource[$sourceKey] : [],
@@ -192,7 +192,13 @@ class StudyVariableSearchForm extends FormBase {
       );
     }
 
-    $cardsHtml = $this->renderStudyCards($studyCards, $ontologyDefinitions, $studyLabels);
+    $cardsHtml = $this->renderStudyCards(
+      $studyCards,
+      $ontologyDefinitions,
+      $studyLabels,
+      $preferredInstrument,
+      $preferredComponent,
+    );
     $errorBanner = $this->renderErrorBanner($errors);
 
     $form['search_page'] = [
@@ -385,7 +391,7 @@ class StudyVariableSearchForm extends FormBase {
     return $html;
   }
 
-  private function renderStudyCards(array $studyCards, array $ontologyDefinitions, array $studyLabels): string {
+  private function renderStudyCards(array $studyCards, array $ontologyDefinitions, array $studyLabels, string $preferredInstrument, string $preferredComponent): string {
     $cardsHtml = '';
     foreach ($studyCards as $card) {
       if (!is_array($card)) {
@@ -465,6 +471,12 @@ class StudyVariableSearchForm extends FormBase {
         
         $pi = trim((string) ($card['principal_investigator'] ?? ''));
         if ($pi !== '') {
+          $canonicalPi = \Drupal\rep\Utils::canonicalizePmsrUri($pi);
+          if ($canonicalPi === 'https://pmsr.net/ont/PER/PI-001') {
+            $pi = 'Curator at Universidade Catolica Portuguesa';
+          }
+        }
+        if ($pi !== '') {
           $cardsHtml .= '<p class="mb-1"><strong>PI:</strong> ' . Html::escape($pi) . '</p>';
         }
         
@@ -481,13 +493,21 @@ class StudyVariableSearchForm extends FormBase {
         $cardsHtml .= '</div>';
       }
 
+      $componentLabel = ucfirst(trim($preferredComponent) !== '' ? $preferredComponent : 'component') . 's';
+      $simulatorTotal = (int) ($card['simulator_count'] ?? 0);
+
       $cardsHtml .= '<div class="std-study-meta">'
         . '<span class="badge bg-light text-dark">Variables: ' . (int) ($card['codebook_count'] ?? 0) . '</span>'
-        . '<span class="badge bg-light text-dark">Components: ' . (int) ($card['component_count'] ?? 0) . '</span>'
-        . '<span class="badge bg-light text-dark">Simulators: ' . (int) ($card['simulator_count'] ?? 0) . '</span>'
-        . '<span class="badge bg-light text-dark">Instruments: ' . (int) ($card['instrument_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">' . Html::escape($componentLabel) . ': ' . (int) ($card['component_count'] ?? 0) . '</span>'
+        . '<span class="badge bg-light text-dark">Simulators: ' . $simulatorTotal . '</span>'
         . '<span class="badge bg-light text-dark">Completeness: ' . (int) round(((float) ($card['completeness_score'] ?? 0.0)) * 100) . '%</span>'
         . '</div>';
+
+      $simulatorInstances = is_array($card['simulator_instances'] ?? NULL) ? $card['simulator_instances'] : [];
+      $simulatorInstances = array_values(array_filter(array_map(static fn($value) => trim((string) $value), $simulatorInstances), static fn($value) => $value !== ''));
+      if (!empty($simulatorInstances)) {
+        $cardsHtml .= '<p class="mb-1 mt-2"><strong>Simulators:</strong> ' . Html::escape(implode('; ', $simulatorInstances)) . '</p>';
+      }
 
       $cardsHtml .= '<div class="std-study-capabilities mt-2">';
       if ((int) ($card['has_data'] ?? 0) === 1) {

@@ -643,7 +643,50 @@ class STDSelectStudyForm extends FormBase
       $label = $element->label ?? '';
       $title = $element->title !== NULL ? $element->title : $label;
 
-      $pi = is_object($element->pi) ? $element->pi->name : $element->pi ?? '';
+      $pi = '';
+      $piUri = '';
+      if (isset($element->pi) && is_object($element->pi)) {
+        $pi = trim((string) ($element->pi->name ?? ($element->pi->label ?? '')));
+        $piUri = trim((string) ($element->pi->uri ?? ($element->piUri ?? '')));
+      }
+      elseif (isset($element->pi) && is_string($element->pi)) {
+        $candidatePi = trim((string) $element->pi);
+        if (preg_match('/^https?:\/\//i', $candidatePi) === 1 || stripos($candidatePi, 'pmsr:') === 0) {
+          $piUri = $candidatePi;
+        }
+        else {
+          $pi = $candidatePi;
+        }
+      }
+      if ($piUri === '' && isset($element->piUri) && is_string($element->piUri)) {
+        $piUri = trim((string) $element->piUri);
+      }
+
+      if ($pi === '' && $piUri !== '') {
+        $canonicalPiUri = Utils::canonicalizePmsrUri($piUri);
+        if ($canonicalPiUri === 'https://pmsr.net/ont/PER/PI-001') {
+          $pi = 'Curator at Universidade Católica Portuguesa';
+        }
+        else {
+          try {
+            $api = \Drupal::service('rep.api_connector');
+            $person = $api->parseObjectResponse($api->getUri($piUri), 'getUri');
+            if (is_object($person)) {
+              $pi = trim((string) ($person->label ?? ($person->name ?? '')));
+              if ($pi === '') {
+                $pi = trim((string) (($person->givenName ?? '') . ' ' . ($person->familyName ?? '')));
+              }
+            }
+          }
+          catch (\Throwable $e) {
+            $pi = '';
+          }
+
+          if ($pi === '') {
+            $pi = $piUri;
+          }
+        }
+      }
 
       $ins = '';
       $insUri = '';
@@ -659,6 +702,12 @@ class STDSelectStudyForm extends FormBase
       if ($insUri === '' && isset($element->institutionUri) && is_string($element->institutionUri)) {
         $insUri = trim((string) $element->institutionUri);
       }
+
+      $canonicalInsUri = $insUri !== '' ? Utils::canonicalizePmsrUri($insUri) : '';
+      if ($canonicalInsUri === 'https://pmsr.net/ont/ORG/ESS') {
+        $ins = 'UCP';
+      }
+
       if ($ins === '' && $insUri !== '') {
         $normalizedInsUri = strtolower(trim($insUri));
         $isResolvableInsUri = preg_match('/^https?:\/\//i', $insUri) === 1
