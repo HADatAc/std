@@ -118,7 +118,29 @@ final class StudyVariableSearchService {
         $this->extractProcessVariablesBySource($processUri, $errors),
       );
       $sourceVariablesByStudy = $this->mergeSimulatorIntoInstrument($sourceVariablesByStudy);
-      $processInstanceCounts = $this->extractProcessInstanceCounts($processUri, $errors);
+      $processFacetAssets = $this->deriveProcessFacetAssets($processUri, $errors);
+
+      // Keep Scenario Search facet semantics anchored in the same process-task
+      // deployment chain used by Components/Simulators counts.
+      $sourceVariablesByStudy['component'] = array_values(
+        is_array($processFacetAssets['component_labels'] ?? NULL)
+          ? $processFacetAssets['component_labels']
+          : []
+      );
+      $simulatorModelLabels = array_values(
+        is_array($processFacetAssets['simulator_labels'] ?? NULL)
+          ? $processFacetAssets['simulator_labels']
+          : []
+      );
+      // Simulators facet is rendered from the "instrument" source bucket.
+      // Keep both keys aligned to model-level simulator labels.
+      $sourceVariablesByStudy['instrument'] = $simulatorModelLabels;
+      $sourceVariablesByStudy['simulator'] = $simulatorModelLabels;
+
+      $processInstanceCounts = [
+        'component_instances' => count($processFacetAssets['component_instance_uris'] ?? []),
+        'instrument_instances' => count($processFacetAssets['instrument_instance_uris'] ?? []),
+      ];
 
       $studyTags = [];
       $studyTagsBySource = [
@@ -197,16 +219,40 @@ final class StudyVariableSearchService {
         }
       }
 
+      // Feed the UBERON facet from simulator instances linked to this study
+      // process, as requested for Scenario Search filtering semantics.
+      if (isset($ontologyDefinitions['uberon'])) {
+        $anatomyTerms = is_array($processFacetAssets['anatomy_terms'] ?? NULL)
+          ? $processFacetAssets['anatomy_terms']
+          : [];
+
+        foreach ($anatomyTerms as $anatomySlug => $anatomyTerm) {
+          $ontologyFilters['uberon'][$anatomySlug] = [
+            'slug' => $anatomySlug,
+            'uri' => (string) ($anatomyTerm['uri'] ?? ''),
+            'label' => (string) ($anatomyTerm['label'] ?? $anatomySlug),
+          ];
+          $studyOntologyTags['uberon'][$anatomySlug] = $anatomySlug;
+        }
+      }
+
       $studyLabel = trim((string) ($study->label ?? $study->title ?? $study->studyTitle ?? $study->hasStudyTitle ?? $studyUri));
 
       // Resolve organization from study metadata and platform from PlatformInstance partOf links.
       [$organizationUri, $organization] = $this->resolveStudyOrganization($study);
-      $platform = $this->resolveStudyPlatform(
-        $studyLabel,
-        $processLabel,
-        $organizationUri,
-        $platformCandidatesByOrganization,
+      $platformCandidatesFromTasks = array_values(
+        is_array($processFacetAssets['platforms'] ?? NULL)
+          ? $processFacetAssets['platforms']
+          : []
       );
+      $platform = !empty($platformCandidatesFromTasks)
+        ? $this->resolveStudyPlatformFromCandidates($studyLabel, $processLabel, $platformCandidatesFromTasks)
+        : $this->resolveStudyPlatform(
+          $studyLabel,
+          $processLabel,
+          $organizationUri,
+          $platformCandidatesByOrganization,
+        );
       $platformLabel = (string) ($platform['label'] ?? '');
       $platformSlug = (string) ($platform['slug'] ?? '');
       $platformUri = (string) ($platform['uri'] ?? '');
@@ -580,6 +626,45 @@ final class StudyVariableSearchService {
 
     if (count($matched) === 1) {
       return $matched[0];
+    }
+
+    return ['uri' => '', 'label' => '', 'slug' => ''];
+  }
+
+  /**
+   * Select a platform for a study from task/deployment-derived candidates.
+   *
+   * @param array<int,array{uri:string,label:string,slug:string}> $candidates
+   * @return array{uri:string,label:string,slug:string}
+   */
+  private function resolveStudyPlatformFromCandidates(string $studyLabel, string $processLabel, array $candidates): array {
+    if (count($candidates) === 1) {
+      return $candidates[0];
+    }
+
+    $studyLower = mb_strtolower($studyLabel);
+    $processLower = mb_strtolower($processLabel);
+    $matched = [];
+
+    foreach ($candidates as $candidate) {
+      $label = trim((string) ($candidate['label'] ?? ''));
+      if ($label === '') {
+        continue;
+      }
+
+      $needle = mb_strtolower($label);
+      if ($needle !== '' && (str_contains($studyLower, $needle) || str_contains($processLower, $needle))) {
+        $matched[] = $candidate;
+      }
+    }
+
+    if (count($matched) === 1) {
+      return $matched[0];
+    }
+
+    if (!empty($candidates)) {
+      usort($candidates, fn(array $a, array $b) => strcasecmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? '')));
+      return $candidates[0];
     }
 
     return ['uri' => '', 'label' => '', 'slug' => ''];
@@ -1329,6 +1414,12 @@ final class StudyVariableSearchService {
 
     $ontologyTerms = $this->extractOntologyTermsFromLabel($cleanLabel, $ontologyDefinitions);
     foreach ($ontologyDefinitions as $ontology => $ontologyDefinition) {
+      // UBERON in Scenario Search must come from simulator-instance anatomy
+      // mappings, not free-text token parsing from variable labels.
+      if ($ontology === 'uberon') {
+        continue;
+      }
+
       foreach (($ontologyTerms[$ontology] ?? []) as $term) {
         $variablesBySource[$source][$slug]['ontology'][$ontology][$term['slug']] = $term['slug'];
         $ontologyFilters[$ontology][$term['slug']] = $term;
@@ -2244,6 +2335,514 @@ final class StudyVariableSearchService {
   }
 
   /**
+   * Derive facet assets through a strict chain:
+   * tasks -> component instances -> deployments -> platform/instrument instances.
+   *
+   * @return array{
+   *   component_instance_uris:string[],
+   *   instrument_instance_uris:string[],
+   *   component_labels:array<string,string>,
+   *   simulator_labels:array<string,string>,
+   *   platforms:array<string,array{uri:string,label:string,slug:string}>,
+   *   anatomy_terms:array<string,array{slug:string,uri:string,label:string}>
+   * }
+   */
+  private function deriveProcessFacetAssets(?string $processUri, array &$errors): array {
+    $assets = [
+      'component_instance_uris' => [],
+      'instrument_instance_uris' => [],
+      'component_labels' => [],
+      'simulator_labels' => [],
+      'platforms' => [],
+      'anatomy_terms' => [],
+    ];
+
+    $componentInstanceUris = $this->extractComponentInstanceUrisFromProcessTasks($processUri, $errors);
+    if (empty($componentInstanceUris)) {
+      return $assets;
+    }
+
+    $assets['component_instance_uris'] = $componentInstanceUris;
+
+    foreach ($componentInstanceUris as $componentInstanceUri) {
+      $componentObj = $this->safeLoadEntityByUri($componentInstanceUri);
+      $componentLabel = $this->extractEntityLabel($componentObj);
+      if ($componentLabel !== '') {
+        $assets['component_labels'][$componentLabel] = $componentLabel;
+      }
+    }
+
+    $platformInstanceUris = $this->resolvePlatformInstanceUrisByComponentInstances($componentInstanceUris);
+    foreach ($platformInstanceUris as $platformInstanceUri) {
+      $platformObj = $this->safeLoadEntityByUri($platformInstanceUri);
+      $platformLabel = $this->extractEntityLabel($platformObj);
+      if ($platformLabel === '') {
+        $platformLabel = $platformInstanceUri;
+      }
+
+      $platformSlug = $this->slugify($platformLabel !== '' ? $platformLabel : $platformInstanceUri);
+      if ($platformSlug === '') {
+        continue;
+      }
+
+      $assets['platforms'][$platformSlug] = [
+        'uri' => $platformInstanceUri,
+        'label' => $platformLabel,
+        'slug' => $platformSlug,
+      ];
+    }
+
+    $instrumentInstanceUris = $this->resolveInstrumentInstanceUrisByComponentInstances($componentInstanceUris);
+    $assets['instrument_instance_uris'] = $instrumentInstanceUris;
+
+    foreach ($instrumentInstanceUris as $instrumentInstanceUri) {
+      $instrumentInstanceObj = $this->safeLoadEntityByUri($instrumentInstanceUri);
+      if (is_object($instrumentInstanceObj)) {
+        foreach ($this->extractSimulatorModelUrisFromInstance($instrumentInstanceObj) as $instrumentUri) {
+          $instrumentObj = $this->safeLoadEntityByUri($instrumentUri);
+          $instrumentLabel = $this->extractEntityLabel($instrumentObj);
+          if ($instrumentLabel !== '') {
+            $assets['simulator_labels'][$instrumentLabel] = $instrumentLabel;
+          }
+        }
+      }
+
+      foreach ($this->extractAnatomyUrisFromSimulatorInstance($instrumentInstanceUri) as $anatomyUri) {
+        $slug = $this->slugify($anatomyUri);
+        if ($slug === '') {
+          continue;
+        }
+
+        if (!isset($assets['anatomy_terms'][$slug])) {
+          $assets['anatomy_terms'][$slug] = [
+            'slug' => $slug,
+            'uri' => $anatomyUri,
+            'label' => $this->resolveAnatomyLabel($anatomyUri),
+          ];
+        }
+      }
+    }
+
+    return $assets;
+  }
+
+  /**
+   * Extract distinct UBERON anatomy terms from process simulator instances.
+   *
+   * @return array<string,array{slug:string,uri:string,label:string}>
+   */
+  private function extractProcessSimulatorInstanceAnatomyTerms(?string $processUri, array &$errors): array {
+    $assets = $this->deriveProcessFacetAssets($processUri, $errors);
+    $terms = is_array($assets['anatomy_terms'] ?? NULL) ? $assets['anatomy_terms'] : [];
+    uasort($terms, fn(array $a, array $b) => strcasecmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? '')));
+    return $terms;
+  }
+
+  /**
+   * Resolve platform-instance URIs connected to component instances via deployments.
+   *
+   * @param string[] $componentInstanceUris
+   * @return string[]
+   */
+  private function resolvePlatformInstanceUrisByComponentInstances(array $componentInstanceUris): array {
+    if (empty($componentInstanceUris) || !method_exists($this->apiConnector, 'sparqlQuery')) {
+      return [];
+    }
+
+    $normalized = [];
+    foreach ($componentInstanceUris as $uri) {
+      $value = trim((string) $uri);
+      if ($value !== '' && $this->isHttpUri($value)) {
+        $normalized[$value] = $value;
+      }
+    }
+
+    if (empty($normalized)) {
+      return [];
+    }
+
+    $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_values($normalized)));
+    $sparql = 'SELECT DISTINCT ?platform WHERE {'
+      . ' VALUES ?cpi { ' . $values . ' } '
+      . ' { '
+      . '   ?cd (<http://hadatac.org/ont/hasco/hasComponentInstance>|<http://hadatac.org/ont/vstoi#hasComponentInstance>) ?cpi . '
+      . '   ?cd (<http://hadatac.org/ont/hasco/hascoDeployment>|<http://hadatac.org/ont/hasco/hasDeployment>) ?dpl . '
+      . '   ?dpl (<http://hadatac.org/ont/vstoi#hasPlatformInstance>|<http://hadatac.org/ont/hasco/hasPlatformInstance>) ?platform . '
+      . ' } UNION { '
+      . '   ?dpl (<http://hadatac.org/ont/vstoi#hasComponentInstance>|<http://hadatac.org/ont/hasco/hasComponentInstance>) ?cpi . '
+      . '   ?dpl (<http://hadatac.org/ont/vstoi#hasPlatformInstance>|<http://hadatac.org/ont/hasco/hasPlatformInstance>) ?platform . '
+      . ' } '
+      . '}';
+
+    try {
+      $raw = $this->apiConnector->sparqlQuery($sparql);
+      $decoded = json_decode((string) $raw, TRUE);
+      $bindings = $decoded['results']['bindings'] ?? [];
+      if (!is_array($bindings)) {
+        return [];
+      }
+
+      $uriMap = [];
+      foreach ($bindings as $binding) {
+        if (!is_array($binding)) {
+          continue;
+        }
+
+        $platformUri = trim((string) ($binding['platform']['value'] ?? ''));
+        if ($platformUri !== '' && $this->isHttpUri($platformUri)) {
+          $uriMap[$platformUri] = $platformUri;
+        }
+      }
+
+      return array_values($uriMap);
+    }
+    catch (\Throwable $e) {
+      return [];
+    }
+  }
+
+  /**
+   * Collect anatomy URIs from simulator/instrument entities referenced by a process.
+   *
+   * This supplements CPI->II traversal for scenarios where process graphs expose
+   * simulator links outside usesComponentInstanceUris.
+   *
+   * @return string[]
+   */
+  private function extractProcessReferencedAnatomyUris(?string $processUri, array &$errors): array {
+    $processUri = $this->normalizePmsrDisplayUri(trim((string) $processUri));
+    if ($processUri === '' || $processUri === 'None') {
+      return [];
+    }
+
+    $processObj = $this->safeLoadEntityByUri($processUri);
+    if (!is_object($processObj)) {
+      return [];
+    }
+
+    $hints = [];
+    $this->collectProcessAssetUris($processObj, $hints, 0, 'process');
+
+    $uriMap = [];
+    foreach (array_keys($hints) as $assetUri) {
+      $entity = $this->safeLoadEntityByUri($assetUri);
+      if (!is_object($entity)) {
+        continue;
+      }
+
+      foreach ($this->extractAnatomyUrisFromEntity($entity) as $anatomyUri) {
+        $uriMap[$anatomyUri] = $anatomyUri;
+      }
+
+      foreach ($this->extractSimulatorModelUrisFromInstance($entity) as $modelUri) {
+        $model = $this->safeLoadEntityByUri($modelUri);
+        if (!is_object($model)) {
+          continue;
+        }
+        foreach ($this->extractAnatomyUrisFromEntity($model) as $anatomyUri) {
+          $uriMap[$anatomyUri] = $anatomyUri;
+        }
+      }
+
+      if (empty($uriMap) && $this->isHttpUri($assetUri)) {
+        foreach ($this->querySimulatorInstanceAnatomyUris([$assetUri]) as $anatomyUri) {
+          $uriMap[$anatomyUri] = $anatomyUri;
+        }
+      }
+    }
+
+    return array_values($uriMap);
+  }
+
+  /**
+   * Resolve UBERON anatomy URIs for a simulator instance.
+   *
+   * Source order:
+   * 1) Direct anatomy on instance payload.
+  * 2) Anatomy on linked simulator model (hasInstrument/typeUri/rdf:type).
+  * 3) Anatomy on immediate subclasses of linked simulator model.
+  * 4) Batched SPARQL fallback that mirrors by-anatomy backend semantics.
+   *
+   * @return string[]
+   */
+  private function extractAnatomyUrisFromSimulatorInstance(string $instrumentInstanceUri): array {
+    $uri = trim($instrumentInstanceUri);
+    if ($uri === '' || !$this->isHttpUri($uri)) {
+      return [];
+    }
+
+    $uriMap = [];
+
+    $instance = $this->safeLoadEntityByUri($uri);
+    if (is_object($instance)) {
+      $modelUris = [];
+
+      foreach ($this->extractAnatomyUrisFromEntity($instance) as $anatomyUri) {
+        $uriMap[$anatomyUri] = $anatomyUri;
+      }
+
+      foreach ($this->extractSimulatorModelUrisFromInstance($instance) as $modelUri) {
+        $modelUris[$modelUri] = $modelUri;
+        $model = $this->safeLoadEntityByUri($modelUri);
+        if (!is_object($model)) {
+          continue;
+        }
+        foreach ($this->extractAnatomyUrisFromEntity($model) as $anatomyUri) {
+          $uriMap[$anatomyUri] = $anatomyUri;
+        }
+      }
+
+      if (!empty($modelUris)) {
+        foreach ($this->queryModelAndImmediateSubclassAnatomyUris(array_values($modelUris)) as $anatomyUri) {
+          $uriMap[$anatomyUri] = $anatomyUri;
+        }
+      }
+    }
+
+    if (empty($uriMap)) {
+      foreach ($this->querySimulatorInstanceAnatomyUris([$uri]) as $anatomyUri) {
+        $uriMap[$anatomyUri] = $anatomyUri;
+      }
+    }
+
+    return array_values($uriMap);
+  }
+
+  /**
+   * Extract candidate simulator model URIs from InstrumentInstance payload.
+   *
+   * @return string[]
+   */
+  private function extractSimulatorModelUrisFromInstance(object $instance): array {
+    $uriMap = [];
+
+    foreach (['hasInstrument', 'instrument', 'instrumentUri', 'typeUri'] as $field) {
+      if (!isset($instance->{$field})) {
+        continue;
+      }
+
+      foreach ($this->extractUriValues($instance->{$field}) as $candidateUri) {
+        if ($this->isCandidateSimulatorModelUri($candidateUri)) {
+          $uriMap[$candidateUri] = $candidateUri;
+        }
+      }
+    }
+
+    if (isset($instance->{'rdf:type'})) {
+      foreach ($this->extractUriValues($instance->{'rdf:type'}) as $candidateUri) {
+        if ($this->isCandidateSimulatorModelUri($candidateUri) && str_starts_with(strtoupper($this->extractUriLocalName($candidateUri)), 'INS')) {
+          $uriMap[$candidateUri] = $candidateUri;
+        }
+      }
+    }
+
+    return array_values($uriMap);
+  }
+
+  /**
+   * Query anatomy mappings for simulator instances using model-based relations.
+   *
+   * @param string[] $instrumentInstanceUris
+   * @return string[]
+   */
+  private function querySimulatorInstanceAnatomyUris(array $instrumentInstanceUris): array {
+    if (empty($instrumentInstanceUris) || !method_exists($this->apiConnector, 'sparqlQuery')) {
+      return [];
+    }
+
+    $normalized = [];
+    foreach ($instrumentInstanceUris as $instrumentInstanceUri) {
+      $uri = trim((string) $instrumentInstanceUri);
+      if ($uri !== '' && $this->isHttpUri($uri)) {
+        $normalized[$uri] = $uri;
+      }
+    }
+
+    if (empty($normalized)) {
+      return [];
+    }
+
+    $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_values($normalized)));
+    $sparql = 'SELECT DISTINCT ?anatomy WHERE {'
+      . ' VALUES ?ii { ' . $values . ' } '
+      . ' { '
+      . '   ?ii (<http://hadatac.org/ont/vstoi#hasInstrument>|<http://hadatac.org/ont/hasco/hasInstrument>) ?model . '
+      . '   { ?model <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . } UNION { ?child <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?model . ?child <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . } '
+      . ' } UNION { '
+      . '   ?ii a ?model . '
+      . '   FILTER(?model != <http://hadatac.org/ont/vstoi#InstrumentInstance> && ?model != <http://www.w3.org/2002/07/owl#NamedIndividual>) '
+      . '   { ?model <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . } UNION { ?child <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?model . ?child <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . } '
+      . ' } UNION { '
+      . '   ?ii <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . '
+      . ' } '
+      . '}';
+
+    try {
+      $raw = $this->apiConnector->sparqlQuery($sparql);
+      $decoded = json_decode((string) $raw, TRUE);
+      $bindings = $decoded['results']['bindings'] ?? [];
+      if (!is_array($bindings)) {
+        return [];
+      }
+
+      $uriMap = [];
+      foreach ($bindings as $binding) {
+        if (!is_array($binding)) {
+          continue;
+        }
+
+        $anatomyValue = trim((string) ($binding['anatomy']['value'] ?? ''));
+        if ($anatomyValue === '') {
+          continue;
+        }
+
+        foreach ($this->extractUberonUrisFromAnatomyValue($anatomyValue) as $anatomyUri) {
+          $uriMap[$anatomyUri] = $anatomyUri;
+        }
+      }
+
+      return array_values($uriMap);
+    }
+    catch (\Throwable $e) {
+      return [];
+    }
+  }
+
+  /**
+   * Query anatomy terms from model URIs and one-hop subclasses.
+   *
+   * @param string[] $modelUris
+   * @return string[]
+   */
+  private function queryModelAndImmediateSubclassAnatomyUris(array $modelUris): array {
+    if (empty($modelUris) || !method_exists($this->apiConnector, 'sparqlQuery')) {
+      return [];
+    }
+
+    $normalized = [];
+    foreach ($modelUris as $modelUri) {
+      $uri = trim((string) $modelUri);
+      if ($this->isCandidateSimulatorModelUri($uri)) {
+        $normalized[$uri] = $uri;
+      }
+    }
+
+    if (empty($normalized)) {
+      return [];
+    }
+
+    $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_values($normalized)));
+    $sparql = 'SELECT DISTINCT ?anatomy WHERE {'
+      . ' VALUES ?model { ' . $values . ' } '
+      . ' { ?model <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . } '
+      . ' UNION '
+      . ' { ?child <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?model . ?child <http://hadatac.org/ont/vstoi#hasAnatomy> ?anatomy . } '
+      . '}';
+
+    try {
+      $raw = $this->apiConnector->sparqlQuery($sparql);
+      $decoded = json_decode((string) $raw, TRUE);
+      $bindings = $decoded['results']['bindings'] ?? [];
+      if (!is_array($bindings)) {
+        return [];
+      }
+
+      $uriMap = [];
+      foreach ($bindings as $binding) {
+        if (!is_array($binding)) {
+          continue;
+        }
+
+        $anatomyValue = trim((string) ($binding['anatomy']['value'] ?? ''));
+        if ($anatomyValue === '') {
+          continue;
+        }
+
+        foreach ($this->extractUberonUrisFromAnatomyValue($anatomyValue) as $anatomyUri) {
+          $uriMap[$anatomyUri] = $anatomyUri;
+        }
+      }
+
+      return array_values($uriMap);
+    }
+    catch (\Throwable $e) {
+      return [];
+    }
+  }
+
+  /**
+   * Normalize one anatomy token/value into one or more UBERON URIs.
+   *
+   * @return string[]
+   */
+  private function extractUberonUrisFromAnatomyValue(string $value): array {
+    $out = [];
+    $parts = preg_split('/[;,\n\r\s]+/', trim($value)) ?: [];
+
+    foreach ($parts as $part) {
+      $candidate = trim((string) $part);
+      if ($candidate === '' || !$this->isHttpUri($candidate) || stripos($candidate, 'uberon') === FALSE) {
+        continue;
+      }
+      $out[$candidate] = $candidate;
+    }
+
+    return array_values($out);
+  }
+
+  /**
+   * Extract UBERON URIs from mixed anatomy fields on an entity payload.
+   *
+   * @return string[]
+   */
+  private function extractAnatomyUrisFromEntity(object $entity): array {
+    $uriMap = [];
+
+    foreach (['hasAnatomyUris', 'anatomyUris'] as $field) {
+      if (!isset($entity->{$field})) {
+        continue;
+      }
+
+      foreach ($this->extractUriValues($entity->{$field}) as $uri) {
+        if (stripos($uri, 'uberon') !== FALSE) {
+          $uriMap[$uri] = $uri;
+        }
+      }
+    }
+
+    foreach (['hasAnatomy', 'anatomy'] as $field) {
+      if (!isset($entity->{$field}) || !is_string($entity->{$field})) {
+        continue;
+      }
+
+      $parts = preg_split('/[;,\n\r\s]+/', (string) $entity->{$field}) ?: [];
+      foreach ($parts as $part) {
+        $uri = trim((string) $part);
+        if ($uri === '' || !$this->isHttpUri($uri) || stripos($uri, 'uberon') === FALSE) {
+          continue;
+        }
+        $uriMap[$uri] = $uri;
+      }
+    }
+
+    return array_values($uriMap);
+  }
+
+  /**
+   * Resolve anatomy label from URI, falling back to URI when unresolved.
+   */
+  private function resolveAnatomyLabel(string $uri): string {
+    $uri = trim($uri);
+    if ($uri === '') {
+      return '';
+    }
+
+    $entity = $this->safeLoadEntityByUri($uri);
+    $label = $this->extractEntityLabel($entity);
+    return $label !== '' ? $label : $uri;
+  }
+
+  /**
    * Extract component-instance URIs from process task graph payload.
    *
    * @return string[]
@@ -2323,12 +2922,17 @@ final class StudyVariableSearchService {
     }
 
     $values = implode(' ', array_map(fn(string $uri): string => '<' . $uri . '>', array_values($normalized)));
-    $sparql = 'SELECT DISTINCT ?ii ?instrument WHERE {'
+    $sparql = 'SELECT DISTINCT ?instrument WHERE {'
       . ' VALUES ?cpi { ' . $values . ' } '
       . ' ?cd (<http://hadatac.org/ont/hasco/hasComponentInstance>|<http://hadatac.org/ont/vstoi#hasComponentInstance>) ?cpi . '
       . ' ?cd (<http://hadatac.org/ont/hasco/hascoDeployment>|<http://hadatac.org/ont/hasco/hasDeployment>) ?dpl . '
       . ' ?dpl (<http://hadatac.org/ont/vstoi#hasInstrumentInstance>|<http://hadatac.org/ont/hasco/hasInstrumentInstance>) ?ii . '
-      . ' OPTIONAL { ?ii (<http://hadatac.org/ont/vstoi#hasInstrument>|<http://hadatac.org/ont/hasco/hasInstrument>) ?instrument . } '
+      . ' { '
+      . '   ?ii (<http://hadatac.org/ont/vstoi#hasInstrument>|<http://hadatac.org/ont/hasco/hasInstrument>) ?instrument . '
+      . ' } UNION { '
+      . '   ?ii rdf:type ?instrument . '
+      . '   FILTER(?instrument != <http://hadatac.org/ont/vstoi#InstrumentInstance> && ?instrument != <http://www.w3.org/2002/07/owl#NamedIndividual>) '
+      . ' } '
       . '}';
 
     try {
@@ -2346,11 +2950,8 @@ final class StudyVariableSearchService {
         }
 
         $instrumentUri = trim((string) ($binding['instrument']['value'] ?? ''));
-        if ($instrumentUri === '') {
-          $instrumentUri = trim((string) ($binding['ii']['value'] ?? ''));
-        }
 
-        if ($instrumentUri !== '' && $this->isHttpUri($instrumentUri)) {
+        if ($this->isCandidateSimulatorModelUri($instrumentUri)) {
           $instrumentUriMap[$instrumentUri] = $instrumentUri;
         }
       }
@@ -2422,26 +3023,10 @@ final class StudyVariableSearchService {
       }
     }
     catch (\Throwable $e) {
-      // Keep fallback resolution path below.
+      return [];
     }
 
-    // Fallback: recover instrument instances from component-instance objects
-    // and deterministic URI pattern used by CPI local IDs.
-    $fallbackMap = [];
-    foreach ($componentInstanceUris as $componentInstanceUri) {
-      $cpiUri = trim((string) $componentInstanceUri);
-      if ($cpiUri === '' || !$this->isHttpUri($cpiUri)) {
-        continue;
-      }
-
-      foreach ($this->extractInstrumentInstancesFromComponentInstance($cpiUri) as $iiUri) {
-        if ($iiUri !== '' && $this->isHttpUri($iiUri)) {
-          $fallbackMap[$iiUri] = $iiUri;
-        }
-      }
-    }
-
-    return array_values($fallbackMap);
+    return [];
   }
 
   /**
@@ -2545,6 +3130,60 @@ final class StudyVariableSearchService {
     }
 
     return array_values($out);
+  }
+
+  /**
+   * Determine if a URI can represent a concrete simulator model entity.
+   */
+  private function isCandidateSimulatorModelUri(string $uri): bool {
+    if (!$this->isHttpUri($uri)) {
+      return FALSE;
+    }
+
+    if (strpos($uri, '#') !== FALSE) {
+      return FALSE;
+    }
+
+    if (stripos($uri, 'hadatac.org/ont/') !== FALSE) {
+      return FALSE;
+    }
+
+    $local = strtoupper($this->extractUriLocalName($uri));
+    if ($local === '') {
+      return FALSE;
+    }
+
+    if (str_starts_with($local, 'INI')) {
+      return FALSE;
+    }
+
+    if ($local === 'INSTRUMENTINSTANCE' || $local === 'NAMEDINDIVIDUAL') {
+      return FALSE;
+    }
+
+    return TRUE;
+  }
+
+  /**
+   * Extract local identifier token from URI path or fragment.
+   */
+  private function extractUriLocalName(string $uri): string {
+    $normalized = trim($uri);
+    if ($normalized === '') {
+      return '';
+    }
+
+    $hashPos = strrpos($normalized, '#');
+    if ($hashPos !== FALSE && $hashPos < strlen($normalized) - 1) {
+      return trim((string) substr($normalized, $hashPos + 1));
+    }
+
+    $path = parse_url($normalized, PHP_URL_PATH);
+    if (is_string($path) && $path !== '') {
+      return trim((string) basename($path));
+    }
+
+    return trim((string) basename($normalized));
   }
 
   /**

@@ -89,6 +89,33 @@
   font-weight: 600;
 }
 
+.std-ontology-browse-btn,
+.std-open-anatomy-modal {
+  margin-left: auto;
+}
+
+.std-ontology-browse-btn,
+.std-open-anatomy-modal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.std-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+}
+
+.std-btn-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 .std-search-section-body {
   padding: 10px;
 }
@@ -284,8 +311,71 @@
   border-color: #565e64;
 }
 
+.std-anatomy-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 1200;
+}
+
+.std-anatomy-modal.is-open {
+  display: flex;
+}
+
+.std-anatomy-modal__dialog {
+  width: min(1200px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  display: flex;
+  flex-direction: column;
+}
+
+.std-anatomy-modal__header {
+  padding: 10px 14px;
+  border-bottom: 1px solid #ececec;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.std-anatomy-modal__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.std-anatomy-modal__content {
+  padding: 12px;
+  overflow: auto;
+}
+
+#sir-anatomy-sidebar-block {
+  height: auto;
+  max-height: none;
+  width: 100%;
+  max-width: none;
+  overflow: visible;
+}
+
 @media (max-width: 991px) {
   .std-search-sidebar {
     max-height: none;
+  }
+
+  .std-anatomy-modal {
+    padding: 10px;
+  }
+
+  .std-anatomy-modal__dialog {
+    width: 100%;
+    max-height: 96vh;
   }
 }

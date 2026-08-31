@@ -6,6 +6,7 @@ use Drupal\Component\Utility\Html;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Markup;
+use Drupal\Core\Url;
 use Drupal\rep\ManageOwnerFilter;
 use Drupal\std\Service\StudyVariableSearchService;
 use Drupal\std\Support\StudySearchRanking;
@@ -48,6 +49,27 @@ class StudyVariableSearchForm extends FormBase {
 
     $form['#attached']['library'][] = 'std/study_variable_search';
     $form['#attached']['library'][] = 'rep/rep_modal';
+
+    $hasAnatomyPanel = FALSE;
+    try {
+      $form['#attached']['library'][] = 'sir/sir_anatomy';
+      $form['#attached']['drupalSettings']['sirAnatomy'] = [
+        'listUrl' => Url::fromRoute('sir.anatomy_mappings')->toString(),
+        'resolveUrl' => Url::fromRoute('sir.anatomy_resolve')->toString(),
+        'saveUrl' => Url::fromRoute('sir.anatomy_mapping_save')->toString(),
+        'instrumentByAnatomyUrlTemplate' => Url::fromRoute('sir.anatomy_instruments', ['uberon' => '__uberon__'])->toString(),
+        'organizationUri' => '',
+        'deleteUrlTemplate' => Url::fromUri('base:/sir/anatomy/mapping/__id__')->toString(),
+        'configMode' => FALSE,
+        'isAdmin' => FALSE,
+        'configToggleUrl' => '',
+        'configToggleLabel' => '',
+      ];
+      $hasAnatomyPanel = TRUE;
+    }
+    catch (\Throwable $e) {
+      $hasAnatomyPanel = FALSE;
+    }
     $form['#attached']['drupalSettings']['stdStudySearch'] = [
       'weights' => StudySearchRanking::defaultWeights(),
       'totalStudies' => 0, // Will be updated after loading studies
@@ -55,6 +77,7 @@ class StudyVariableSearchForm extends FormBase {
       'usageCount' => $usageCount,
       'maxInitialStudies' => $maxInitialStudies,
       'studyLabels' => $studyLabels,
+      'hasAnatomyPanel' => $hasAnatomyPanel,
     ];
 
     /** @var \Drupal\std\Service\StudyVariableSearchService $searchService */
@@ -234,6 +257,22 @@ class StudyVariableSearchForm extends FormBase {
           . '</div>'
           . '</div>'
           . '</div>'
+          . ($hasAnatomyPanel
+            ? '<div id="std-anatomy-modal" class="std-anatomy-modal" aria-hidden="true">'
+              . '<div class="std-anatomy-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="std-anatomy-modal-title">'
+              . '<div class="std-anatomy-modal__header">'
+              . '<h5 id="std-anatomy-modal-title" class="std-anatomy-modal__title">Search Simulators by Anatomy</h5>'
+              . '<button type="button" class="btn btn-sm btn-outline-secondary" id="std-anatomy-modal-close">Close</button>'
+              . '</div>'
+              . '<div class="std-anatomy-modal__content">'
+              . '<div id="sir-anatomy-sidebar-block" class="sir-anatomy-sidebar-block">'
+              . '<h2>Search Simulators by Anatomy</h2>'
+              . '<div id="sir-anatomy-panel-host"></div>'
+              . '</div>'
+              . '</div>'
+              . '</div>'
+              . '</div>'
+            : '')
           . '</section>'
       ),
     ];
@@ -360,8 +399,20 @@ class StudyVariableSearchForm extends FormBase {
       . 'data-elementtype="' . Html::escape($ontology) . '" '
       . 'data-dialog-type="modal" '
       . 'title="Browse ' . Html::escape($title) . '">'
-      . '<i class="bi bi-folder2-open"></i> Browse'
+      . '<span class="std-btn-icon std-btn-icon--folder" aria-hidden="true">'
+      . '<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M3 6h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6zm2 4v8h14v-8H5z"/></svg>'
+      . '</span><span>Browse</span>'
       . '</button>';
+
+    if ($ontology === 'uberon') {
+      $html .= '<button type="button" class="btn btn-sm btn-outline-primary std-open-anatomy-modal ms-2" '
+        . 'title="Search Simulators by Anatomy" '
+        . 'aria-label="Search Simulators by Anatomy">'
+        . '<span class="std-btn-icon std-btn-icon--anatomy" aria-hidden="true">'
+        . '<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 2a4 4 0 0 1 4 4c0 1.6-1.1 3-2.6 3.6l.6 3.2h2a2 2 0 0 1 2 2V20h-2v-5h-2.3l-.7-3.8h-2l-.7 3.8H8V20H6v-5a2 2 0 0 1 2-2h2l.6-3.2A4 4 0 0 1 8 6a4 4 0 0 1 4-4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>'
+        . '</span>'
+        . '</button>';
+    }
     
     $html .= '</summary>';
 

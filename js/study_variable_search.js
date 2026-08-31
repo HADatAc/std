@@ -196,6 +196,63 @@
     };
   };
 
+  const updateOntologyFacetOptions = function (root, matchedCards, hasAnyFilter) {
+    const sections = Array.from(root.querySelectorAll('.std-search-ontology-section'));
+    if (!sections.length) {
+      return;
+    }
+
+    const availableByOntology = {};
+    matchedCards.forEach((card) => {
+      sections.forEach((section) => {
+        const ontology = normalizeOntologyKey(section.getAttribute('data-ontology') || '');
+        if (!ontology) {
+          return;
+        }
+
+        const datasetKey = getOntologyDatasetKey(ontology);
+        const tags = splitTags(datasetKey ? card.dataset[datasetKey] : '');
+        if (!availableByOntology[ontology]) {
+          availableByOntology[ontology] = new Set();
+        }
+        tags.forEach((tag) => availableByOntology[ontology].add(tag));
+      });
+    });
+
+    sections.forEach((section) => {
+      const ontology = normalizeOntologyKey(section.getAttribute('data-ontology') || '');
+      const allowed = availableByOntology[ontology] || new Set();
+      const checkboxes = Array.from(section.querySelectorAll('.std-ontology-checkbox'));
+
+      let visibleCount = 0;
+      let totalCount = 0;
+
+      checkboxes.forEach((checkbox) => {
+        const row = checkbox.closest('.std-search-checkbox');
+        if (!row) {
+          return;
+        }
+
+        totalCount += 1;
+        const keepVisible = !hasAnyFilter || allowed.has(checkbox.value) || checkbox.checked;
+        row.style.display = keepVisible ? '' : 'none';
+        if (keepVisible) {
+          visibleCount += 1;
+        }
+      });
+
+      const titleNode = section.querySelector('.std-search-section-title');
+      if (titleNode) {
+        const storedBaseTitle = titleNode.getAttribute('data-base-title');
+        const baseTitle = storedBaseTitle || (titleNode.textContent || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+        if (!storedBaseTitle) {
+          titleNode.setAttribute('data-base-title', baseTitle);
+        }
+        titleNode.textContent = `${baseTitle} (${hasAnyFilter ? visibleCount : totalCount})`;
+      }
+    });
+  };
+
   const applyFilters = function (root) {
     const studyLabels = getStudyLabels();
     const selectedVariableChecks = Array.from(root.querySelectorAll('.study-variable-checkbox:checked'));
@@ -394,6 +451,8 @@
       }
     }
 
+    updateOntologyFacetOptions(root, matchedCards, hasAnyFilter);
+
     updateSelectedPreview(root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks);
   };
 
@@ -413,6 +472,92 @@
         const radios = root.querySelectorAll('input[name="std-search-logic"]');
         const clearButton = root.querySelector('#std-search-clear');
         const preview = root.querySelector('#std-selected-preview');
+        const anatomyModal = root.querySelector('#std-anatomy-modal');
+        const anatomyOpenButtons = root.querySelectorAll('.std-open-anatomy-modal');
+        const anatomyCloseButton = root.querySelector('#std-anatomy-modal-close');
+
+        const closeAnatomyModal = function () {
+          if (!anatomyModal) {
+            return;
+          }
+          anatomyModal.classList.remove('is-open');
+          anatomyModal.setAttribute('aria-hidden', 'true');
+        };
+
+        if (anatomyModal) {
+          const openAnatomyModal = function () {
+            anatomyModal.classList.add('is-open');
+            anatomyModal.setAttribute('aria-hidden', 'false');
+          };
+
+          anatomyOpenButtons.forEach((button) => {
+            button.addEventListener('click', function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+              openAnatomyModal();
+            });
+          });
+
+          root.addEventListener('click', function (event) {
+            const trigger = event.target.closest('.std-open-anatomy-modal');
+            if (!trigger) {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            openAnatomyModal();
+          });
+
+          if (anatomyCloseButton) {
+            anatomyCloseButton.addEventListener('click', function () {
+              closeAnatomyModal();
+            });
+          }
+
+          anatomyModal.addEventListener('click', function (event) {
+            if (event.target === anatomyModal) {
+              closeAnatomyModal();
+            }
+          });
+
+          document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && anatomyModal.classList.contains('is-open')) {
+              closeAnatomyModal();
+            }
+          });
+
+          // Receive anatomy selections from SIR panel, map to UBERON facet,
+          // close modal, and apply Scenario Search filters.
+          document.addEventListener('sir:anatomy-selected', function (event) {
+            const detail = event && event.detail ? event.detail : {};
+            const uberonUri = String(detail.uberonUri || '').trim();
+            const label = String(detail.label || '').trim();
+            if (!uberonUri) {
+              return;
+            }
+
+            const targetCheckbox = Array.from(root.querySelectorAll('.std-ontology-checkbox[data-ontology="uberon"]'))
+              .find((checkbox) => String(checkbox.dataset.uri || '').trim() === uberonUri);
+
+            if (targetCheckbox) {
+              targetCheckbox.checked = true;
+            }
+            else {
+              const hiddenField = root.querySelector('#std-ontology-uberon-selection');
+              const ontologySection = hiddenField && hiddenField.nextElementSibling
+                ? hiddenField.nextElementSibling.querySelector('.std-search-section-body')
+                : null;
+              if (hiddenField && ontologySection) {
+                hiddenField.value = `${label || uberonUri} [${uberonUri}]`;
+                hiddenField.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }
+
+            closeAnatomyModal();
+            applyFilters(root);
+          });
+        }
 
         checkboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
