@@ -103,7 +103,9 @@ class ManageStudyForm extends FormBase
     
     // Determine back button label and URL based on where user came from
     // Use non-destructive peek to avoid deleting the tracking record
-    $uid = \Drupal::currentUser()->id();
+    $currentUser = \Drupal::currentUser();
+    $uid = $currentUser->id();
+    $isAuthenticatedUser = !$currentUser->isAnonymous();
     $refererUrl = Utils::trackingPeekPreviousUrl($uid, 'std.manage_study_elements');
     $backButtonLabel = 'Back to Manage Studies'; // Default
     if ($refererUrl && strpos($refererUrl, '/std/search/studies') !== false) {
@@ -123,7 +125,7 @@ class ManageStudyForm extends FormBase
     ];
 
     // Owner of the record
-    $useremail = \Drupal::currentUser()->getEmail();
+    $useremail = $currentUser->getEmail();
 
     if ($studyuri == NULL || $studyuri == "") {
      \Drupal::messenger()->addMessage(t("A URI is required to manage a ".$preferred_study."."));
@@ -178,7 +180,9 @@ class ManageStudyForm extends FormBase
       strtolower(trim((string) ($this->getStudy()->contactEmail ?? ''))),
       $piMbox,
     ];
-    $isOwner = in_array(strtolower(trim((string) $useremail)), $ownerCandidates, TRUE) && trim((string) $useremail) !== '';
+    $isAdminUser = \Drupal\rep\ManageOwnerFilter::isAdmin() || \Drupal::currentUser()->hasPermission('administer study search');
+    // Owner (PI) or admin gets Edit Mode in Manage Scenario Elements; everyone else gets read-only Execution/View Mode.
+    $isOwner = $isAdminUser || (in_array(strtolower(trim((string) $useremail)), $ownerCandidates, TRUE) && trim((string) $useremail) !== '');
     $canAccessCttEditor = \Drupal::currentUser()->hasPermission('access ctt editor');
     $canSubmitCttWorkflow = \Drupal::currentUser()->hasPermission('submit ctt workflow');
 
@@ -609,7 +613,7 @@ class ManageStudyForm extends FormBase
       '),
     ];
 
-    if ($isProcessBasedStudyType || $isOwner) {
+    if ($isAuthenticatedUser || $isProcessBasedStudyType || $isOwner) {
       $form['row1_actions'] = [
         '#type' => 'container',
         '#attributes' => ['class' => ['d-flex', 'gap-2', 'mb-3', 'flex-wrap']],
@@ -627,7 +631,7 @@ class ManageStudyForm extends FormBase
         '#attributes' => ['class' => ['std-top-actions-panel__title']],
       ];
 
-      if ($isProcessBasedStudyType) {
+      if ($isAuthenticatedUser) {
         $form['row1_actions']['panel']['generate_pdf'] = [
           '#type' => 'submit',
           '#value' => $this->t('Generate PDF'),
@@ -638,7 +642,9 @@ class ManageStudyForm extends FormBase
             'id' => 'std-generate-pdf-button',
           ],
         ];
+      }
 
+      if ($isProcessBasedStudyType) {
         $form['row1_actions']['wkf_generation_scope'] = [
           '#type' => 'hidden',
           '#default_value' => 'full',
@@ -2239,7 +2245,7 @@ class ManageStudyForm extends FormBase
 
     $created = 0;
     for ($i = 1; $i <= $requestedCount; $i++) {
-      $studentUri = $studentSocUri . $i;
+      $studentUri = rtrim($studentSocUri, '/') . '/' . $i;
       if (isset($existingUris[$studentUri])) {
         continue;
       }
@@ -2895,6 +2901,9 @@ class ManageStudyForm extends FormBase
       return [];
     }
 
+    // Reconcile stale process runs that never reached explicit completion.
+    $this->reconcileStaleProcessExecutionRuns($studyUri);
+
     $historyKey = 'ctt.r_analysis_runs.' . sha1($studyUri);
     $history = \Drupal::state()->get($historyKey, []);
     if (!is_array($history)) {
@@ -3076,6 +3085,64 @@ class ManageStudyForm extends FormBase
     });
 
     return $executions;
+  }
+
+  /**
+   * Auto-close stale process execution runs left in running/queued state.
+   */
+  private function reconcileStaleProcessExecutionRuns(string $studyUri): void
+  {
+    $studyUri = trim($studyUri);
+    if ($studyUri === '') {
+      return;
+    }
+
+    $historyKey = 'ctt.process_execution_runs.' . sha1($studyUri);
+    $history = \Drupal::state()->get($historyKey, []);
+    if (!is_array($history) || empty($history)) {
+      return;
+    }
+
+    $nowTs = time();
+    $staleAfterSeconds = 15 * 60;
+    $changed = FALSE;
+
+    foreach ($history as $index => $entry) {
+      if (!is_array($entry)) {
+        continue;
+      }
+
+      $status = strtolower(trim((string) ($entry['status'] ?? '')));
+      if (!in_array($status, ['running', 'queued'], TRUE)) {
+        continue;
+      }
+
+      $finishedAt = trim((string) ($entry['finishedAt'] ?? ''));
+      if ($finishedAt !== '') {
+        continue;
+      }
+
+      $startedAt = trim((string) ($entry['startedAt'] ?? ($entry['requestedAt'] ?? '')));
+      $startedTs = $startedAt !== '' ? strtotime($startedAt) : FALSE;
+      if ($startedTs === FALSE || $startedTs <= 0) {
+        continue;
+      }
+
+      if (($nowTs - (int) $startedTs) < $staleAfterSeconds) {
+        continue;
+      }
+
+      $history[$index]['status'] = 'interrupted';
+      $history[$index]['finishedAt'] = gmdate('c');
+      if (trim((string) ($history[$index]['note'] ?? '')) === '') {
+        $history[$index]['note'] = 'Automatically closed because execution state became stale.';
+      }
+      $changed = TRUE;
+    }
+
+    if ($changed) {
+      \Drupal::state()->set($historyKey, array_values($history));
+    }
   }
 
   /**

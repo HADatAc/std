@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * Install/update hooks for the std module.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * Any authenticated PMSR user must be able to reach Study Search, even if
+ * they are not the Principal Investigator of any scenario. Visibility of
+ * individual scenarios is still governed by StudyVariableSearchService's
+ * ownership/status filtering.
+ */
+function std_install() {
+  user_role_grant_permissions('authenticated', ['access study search']);
+}
+
+/**
+ * Grant 'access study search' permission to authenticated users so any
+ * logged-in PMSR user can reach Study Search, not just scenario owners/PIs.
+ */
+function std_update_9001() {
+  user_role_grant_permissions('authenticated', ['access study search']);
+}

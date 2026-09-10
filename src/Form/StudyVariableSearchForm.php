@@ -73,6 +73,7 @@ class StudyVariableSearchForm extends FormBase {
     $form['#attached']['drupalSettings']['stdStudySearch'] = [
       'weights' => StudySearchRanking::defaultWeights(),
       'totalStudies' => 0, // Will be updated after loading studies
+      'pageSize' => 12,
       'isInitialUsage' => $isInitialUsage,
       'usageCount' => $usageCount,
       'maxInitialStudies' => $maxInitialStudies,
@@ -233,8 +234,8 @@ class StudyVariableSearchForm extends FormBase {
           . '<p class="text-muted mb-3">Use the hierarchical variable browser or other filters (Organizations, Platforms, etc.) to select and rank related ' . Html::escape($studyLabels['plural_lower']) . ' by relevance.</p>'
           . '<div class="std-filter-topbar">'
           . '<div class="std-logic-toggle" role="radiogroup" aria-label="Filter logic">'
-          . '<label><input type="radio" name="std-search-logic" value="and"> AND</label>'
-          . '<label><input type="radio" name="std-search-logic" value="or" checked> OR</label>'
+          . '<label><input type="radio" name="std-search-logic" value="and" checked> AND</label>'
+          . '<label><input type="radio" name="std-search-logic" value="or"> OR</label>'
           . '</div>'
           . '<button type="button" class="btn btn-sm btn-outline-secondary" id="std-search-clear">Clear selection</button>'
           . '</div>'
@@ -255,6 +256,11 @@ class StudyVariableSearchForm extends FormBase {
           . '<div id="std-study-cards" class="std-study-grid">'
           . $cardsHtml
           . '</div>'
+          . '<nav id="std-study-pagination" class="std-study-pagination" aria-label="Scenario Search pagination">'
+          . '<button type="button" class="btn btn-sm btn-outline-secondary" id="std-page-prev" disabled>Previous</button>'
+          . '<span id="std-page-indicator" class="std-page-indicator">Page 1 of 1</span>'
+          . '<button type="button" class="btn btn-sm btn-outline-secondary" id="std-page-next" disabled>Next</button>'
+          . '</nav>'
           . '</div>'
           . '</div>'
           . ($hasAnatomyPanel
@@ -576,9 +582,11 @@ class StudyVariableSearchForm extends FormBase {
       $cardsHtml .= '</div>';
 
       $cardsHtml .= '<div class="std-study-actions mt-3">'
-        . '<a class="btn btn-sm btn-primary" href="' . Html::escape((string) ($card['manage_url'] ?? '#')) . '">Manage ' . Html::escape($studyLabels['singular']) . '</a>'
-        . ' <a class="btn btn-sm btn-secondary" href="' . Html::escape((string) ($card['edit_url'] ?? '#')) . '">Edit</a>'
-        . '</div>';
+        . '<a class="btn btn-sm btn-primary" href="' . Html::escape((string) ($card['manage_url'] ?? '#')) . '">Manage ' . Html::escape($studyLabels['singular']) . '</a>';
+      if (!empty($card['can_edit'])) {
+        $cardsHtml .= ' <a class="btn btn-sm btn-secondary" href="' . Html::escape((string) ($card['edit_url'] ?? '#')) . '">Edit</a>';
+      }
+      $cardsHtml .= '</div>';
       $cardsHtml .= '</article>';
     }
 

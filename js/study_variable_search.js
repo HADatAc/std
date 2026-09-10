@@ -47,6 +47,17 @@
     };
   };
 
+  const getPaginationConfig = function () {
+    const settings = (typeof drupalSettings !== 'undefined' && drupalSettings.stdStudySearch)
+      ? drupalSettings.stdStudySearch
+      : {};
+
+    const pageSize = Number.parseInt(settings.pageSize, 10);
+    return {
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 12,
+    };
+  };
+
   const getStudyLabels = function () {
     const settings = (typeof drupalSettings !== 'undefined' && drupalSettings.stdStudySearch)
       ? drupalSettings.stdStudySearch
@@ -99,7 +110,7 @@
     return 'ontology' + camel.charAt(0).toUpperCase() + camel.slice(1) + 'Tags';
   };
 
-  const updateSelectedPreview = function (root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks) {
+  const updateSelectedPreview = function (root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks, logic) {
     const preview = root.querySelector('#std-selected-preview');
     if (!preview) {
       return;
@@ -161,7 +172,8 @@
       })
       .join('');
 
-    preview.innerHTML = `<div class="std-selected-title">Selected filters</div><div class="std-selected-list">${chips}</div>`;
+    const mode = logic === 'or' ? 'OR' : 'AND';
+    preview.innerHTML = `<div class="std-selected-title">Selected filters (${mode})</div><div class="std-selected-list">${chips}</div>`;
     preview.style.display = '';
   };
 
@@ -290,7 +302,7 @@
     const hasAnyFilter = hasVariableFilter || hasOntologyFilter || hasOrganizationFilter || hasPlatformFilter || hasProcessFilter;
 
     const logicInput = root.querySelector('input[name="std-search-logic"]:checked');
-    const logic = logicInput ? logicInput.value : 'or';
+    const logic = logicInput ? logicInput.value : 'and';
     const emptyState = root.querySelector('#std-study-empty-state');
     const rankingIndicator = root.querySelector('#std-ranking-indicator');
     const cardsContainer = root.querySelector('#std-study-cards');
@@ -303,22 +315,16 @@
     cards.forEach((card) => {
       const tags = splitTags(card.dataset.tags);
 
-      // Default behavior: show all studies when no filters are selected.
-      let visible = true;
+      const groupMatches = [];
 
-      // Apply variable filter (only if variables are selected)
-      if (visible && hasVariableFilter) {
-        if (logic === 'and') {
-          visible = selected.every((tag) => tags.includes(tag));
-        }
-        else {
-          visible = selected.some((tag) => tags.includes(tag));
-        }
+      if (hasVariableFilter) {
+        groupMatches.push(logic === 'and'
+          ? selected.every((tag) => tags.includes(tag))
+          : selected.some((tag) => tags.includes(tag)));
       }
 
-      // Apply ontology filters (only if ontology terms are selected)
-      if (visible && hasOntologyFilter) {
-        let matchesOntology = false;
+      if (hasOntologyFilter) {
+        const ontologyMatches = [];
         Object.keys(selectedOntologyByType).forEach((ontology) => {
           const selectedTerms = selectedOntologyByType[ontology];
           if (!Array.isArray(selectedTerms) || selectedTerms.length === 0) {
@@ -327,30 +333,38 @@
 
           const datasetKey = getOntologyDatasetKey(ontology);
           const cardOntologyTags = splitTags(datasetKey ? card.dataset[datasetKey] : '');
-          if (selectedTerms.some((term) => cardOntologyTags.includes(term))) {
-            matchesOntology = true;
-          }
+          ontologyMatches.push(logic === 'and'
+            ? selectedTerms.every((term) => cardOntologyTags.includes(term))
+            : selectedTerms.some((term) => cardOntologyTags.includes(term)));
         });
-        visible = visible && matchesOntology;
+        groupMatches.push(logic === 'and'
+          ? ontologyMatches.every(Boolean)
+          : ontologyMatches.some(Boolean));
       }
 
-      // Apply organization filter
-      if (visible && hasOrganizationFilter) {
+      if (hasOrganizationFilter) {
         const cardOrganization = card.dataset.organizationSlug || '';
-        visible = selectedOrganizations.includes(cardOrganization);
+        groupMatches.push(logic === 'and'
+          ? selectedOrganizations.every((organization) => organization === cardOrganization)
+          : selectedOrganizations.some((organization) => organization === cardOrganization));
       }
 
-      // Apply platform filter
-      if (visible && hasPlatformFilter) {
+      if (hasPlatformFilter) {
         const cardPlatform = card.dataset.platformSlug || '';
-        visible = selectedPlatforms.includes(cardPlatform);
+        groupMatches.push(logic === 'and'
+          ? selectedPlatforms.every((platform) => platform === cardPlatform)
+          : selectedPlatforms.some((platform) => platform === cardPlatform));
       }
 
-      // Apply process filter (hierarchical via ProcessStem)
-      if (visible && hasProcessFilter) {
+      if (hasProcessFilter) {
         const cardProcessStem = card.dataset.processStemSlug || '';
-        visible = selectedProcesses.includes(cardProcessStem);
+        groupMatches.push(logic === 'and'
+          ? selectedProcesses.every((process) => process === cardProcessStem)
+          : selectedProcesses.some((process) => process === cardProcessStem));
       }
+
+      const visible = groupMatches.length === 0
+        || (logic === 'and' ? groupMatches.every(Boolean) : groupMatches.some(Boolean));
 
       if (visible) {
         const ranking = computeRanking(card, selected, selectedSources, weights);
@@ -384,32 +398,50 @@
       });
     }
 
-    const isInitialUsage = root.dataset.stdInitialUsage === '1';
-    const maxInitialStudies = Number.parseInt(root.dataset.stdInitialMax || '20', 10) || 20;
+    const pagination = getPaginationConfig();
+    const pageSize = pagination.pageSize;
     const totalMatched = matchedCards.length;
-    let revealLimit = Number.parseInt(root.dataset.stdRevealLimit || String(maxInitialStudies), 10) || maxInitialStudies;
-
-    if (!isInitialUsage) {
-      revealLimit = Number.MAX_SAFE_INTEGER;
+    const totalPages = Math.max(1, Math.ceil(totalMatched / pageSize));
+    let currentPage = Number.parseInt(root.dataset.stdCurrentPage || '1', 10);
+    if (!Number.isFinite(currentPage) || currentPage < 1) {
+      currentPage = 1;
     }
-
-    if (isInitialUsage && revealLimit < maxInitialStudies) {
-      revealLimit = maxInitialStudies;
+    if (currentPage > totalPages) {
+      currentPage = totalPages;
     }
+    root.dataset.stdCurrentPage = String(currentPage);
+
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
 
     cards.forEach((card) => {
       card.style.display = 'none';
     });
 
     matchedCards.forEach((card, index) => {
-      const show = index < revealLimit;
+      const show = index >= startIndex && index < endIndex;
       card.style.display = show ? '' : 'none';
       if (show) {
         visibleCount += 1;
       }
     });
 
-    root.dataset.stdRevealLimit = String(revealLimit);
+    const pager = root.querySelector('#std-study-pagination');
+    const prevButton = root.querySelector('#std-page-prev');
+    const nextButton = root.querySelector('#std-page-next');
+    const pageIndicator = root.querySelector('#std-page-indicator');
+    if (pager) {
+      pager.style.display = totalMatched > 0 ? 'flex' : 'none';
+    }
+    if (prevButton) {
+      prevButton.disabled = currentPage <= 1 || totalMatched === 0;
+    }
+    if (nextButton) {
+      nextButton.disabled = currentPage >= totalPages || totalMatched === 0;
+    }
+    if (pageIndicator) {
+      pageIndicator.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
 
     const counter = root.querySelector('#std-visible-results');
     if (counter) {
@@ -421,8 +453,8 @@
         if (visibleCount === 0) {
           emptyState.textContent = `No ${studyLabels.pluralLower} are available in the current context.`;
         }
-        else if (isInitialUsage && totalMatched > visibleCount) {
-          emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} ${studyLabels.pluralLower}. Scroll down to load more.`;
+        else if (totalMatched > visibleCount) {
+          emptyState.textContent = `Showing ${visibleCount} of ${totalMatched} ${studyLabels.pluralLower}. Use pagination to view more.`;
         }
         else {
           emptyState.textContent = `Showing all ${studyLabels.pluralLower}. Select filters to narrow results.`;
@@ -433,8 +465,8 @@
         emptyState.textContent = `No ${studyLabels.pluralLower} match the selected filters.`;
         emptyState.style.display = '';
       }
-      else if (isInitialUsage && totalMatched > visibleCount) {
-        emptyState.textContent = `Showing first ${visibleCount} of ${totalMatched} matching ${studyLabels.pluralLower}. Scroll down to load more.`;
+      else if (totalMatched > visibleCount) {
+        emptyState.textContent = `Showing ${visibleCount} of ${totalMatched} matching ${studyLabels.pluralLower}. Use pagination to view more.`;
         emptyState.style.display = '';
       }
       else {
@@ -453,16 +485,18 @@
 
     updateOntologyFacetOptions(root, matchedCards, hasAnyFilter);
 
-    updateSelectedPreview(root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks);
+    updateSelectedPreview(root, selectedVariableChecks, selectedOntologyChecks, selectedOrganizationChecks, selectedPlatformChecks, selectedProcessChecks, logic);
   };
 
   Drupal.behaviors.stdStudyVariableSearch = {
     attach: function (context) {
       once('std-study-variable-search', '#std-study-variable-search', context).forEach(function (root) {
         const usageConfig = getInitialUsageConfig();
+        const paginationConfig = getPaginationConfig();
         root.dataset.stdInitialUsage = usageConfig.isInitialUsage ? '1' : '0';
         root.dataset.stdInitialMax = String(usageConfig.maxInitialStudies);
-        root.dataset.stdRevealLimit = String(usageConfig.maxInitialStudies);
+        root.dataset.stdCurrentPage = '1';
+        root.dataset.stdPageSize = String(paginationConfig.pageSize);
 
         const checkboxes = root.querySelectorAll('.study-variable-checkbox');
         const ontologyCheckboxes = root.querySelectorAll('.std-ontology-checkbox');
@@ -475,6 +509,8 @@
         const anatomyModal = root.querySelector('#std-anatomy-modal');
         const anatomyOpenButtons = root.querySelectorAll('.std-open-anatomy-modal');
         const anatomyCloseButton = root.querySelector('#std-anatomy-modal-close');
+        const prevButton = root.querySelector('#std-page-prev');
+        const nextButton = root.querySelector('#std-page-next');
 
         const closeAnatomyModal = function () {
           if (!anatomyModal) {
@@ -561,36 +597,42 @@
 
         checkboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         });
 
         ontologyCheckboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         });
 
         organizationCheckboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         });
 
         platformCheckboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         });
 
         processCheckboxes.forEach((checkbox) => {
           checkbox.addEventListener('change', function () {
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         });
 
         radios.forEach((radio) => {
           radio.addEventListener('change', function () {
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         });
@@ -612,32 +654,29 @@
             processCheckboxes.forEach((checkbox) => {
               checkbox.checked = false;
             });
-            const orRadio = root.querySelector('input[name="std-search-logic"][value="or"]');
-            if (orRadio) {
-              orRadio.checked = true;
+            const andRadio = root.querySelector('input[name="std-search-logic"][value="and"]');
+            if (andRadio) {
+              andRadio.checked = true;
             }
-            if (root.dataset.stdInitialUsage === '1') {
-              root.dataset.stdRevealLimit = root.dataset.stdInitialMax || '20';
-            }
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         }
 
-        if (root.dataset.stdInitialUsage === '1') {
-          const onScroll = function () {
-            const viewportBottom = window.innerHeight + window.scrollY;
-            const docHeight = document.documentElement.scrollHeight;
-            if (viewportBottom < docHeight - 200) {
-              return;
-            }
-
-            const step = Number.parseInt(root.dataset.stdInitialMax || '20', 10) || 20;
-            const currentLimit = Number.parseInt(root.dataset.stdRevealLimit || String(step), 10) || step;
-            root.dataset.stdRevealLimit = String(currentLimit + step);
+        if (prevButton) {
+          prevButton.addEventListener('click', function () {
+            const current = Number.parseInt(root.dataset.stdCurrentPage || '1', 10) || 1;
+            root.dataset.stdCurrentPage = String(Math.max(1, current - 1));
             applyFilters(root);
-          };
+          });
+        }
 
-          window.addEventListener('scroll', onScroll, { passive: true });
+        if (nextButton) {
+          nextButton.addEventListener('click', function () {
+            const current = Number.parseInt(root.dataset.stdCurrentPage || '1', 10) || 1;
+            root.dataset.stdCurrentPage = String(current + 1);
+            applyFilters(root);
+          });
         }
 
         if (preview) {
@@ -690,6 +729,7 @@
               });
             }
 
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
           });
         }
@@ -735,6 +775,7 @@
           const exists = sectionBody.querySelector(`input[value="${slug}"]`);
           if (exists) {
             exists.checked = true;
+            root.dataset.stdCurrentPage = '1';
             applyFilters(root);
             return;
           }
@@ -769,11 +810,13 @@
           const newCheckbox = labelElement.querySelector('.std-ontology-checkbox');
           if (newCheckbox) {
             newCheckbox.addEventListener('change', () => {
+              root.dataset.stdCurrentPage = '1';
               applyFilters(root);
             });
           }
           
           // Trigger filter update
+          root.dataset.stdCurrentPage = '1';
           applyFilters(root);
         }
 

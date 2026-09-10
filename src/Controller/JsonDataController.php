@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Drupal\rep\Entity\MetadataTemplate as DataFile;
 use Drupal\rep\Entity\Stream;
+use Drupal\rep\ManageOwnerFilter;
 use Drupal\std\Support\StudyFileTypeResolver;
 use Drupal\Component\Utility\Html;
 use Drupal\Core\Url;
@@ -581,6 +582,10 @@ class JsonDataController extends ControllerBase
     {
         try {
 
+            if (!$this->canCurrentUserUploadStudyContents((string) $studyuri)) {
+                return new JsonResponse(['error' => 'Access denied.'], 403);
+            }
+
             $streamUri = null;
             $forceUnassociated = filter_var((string) $request->query->get('forceUnassociated', '0'), FILTER_VALIDATE_BOOLEAN);
             $uri = basename(base64_decode($studyuri));
@@ -647,6 +652,32 @@ class JsonDataController extends ControllerBase
             \Drupal::logger('std')->error('Exception occurred: @message', ['@message' => $e->getMessage()]);
             return new JsonResponse(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Match Manage Scenario Edit Mode ownership semantics for uploads.
+     */
+    private function canCurrentUserUploadStudyContents(string $encodedStudyUri): bool
+    {
+        $account = \Drupal::currentUser();
+        if (!$account || $account->isAnonymous()) {
+            return FALSE;
+        }
+
+        $decodedStudyUri = base64_decode(rawurldecode($encodedStudyUri), TRUE);
+        if (!is_string($decodedStudyUri) || trim($decodedStudyUri) === '') {
+            return FALSE;
+        }
+
+        $api = \Drupal::service('rep.api_connector');
+        $study = $this->parseApiBodyQuiet($api->getUri(trim($decodedStudyUri)));
+        if (!is_object($study)) {
+            return FALSE;
+        }
+
+        $userEmail = (string) $account->getEmail();
+        $isAdminUser = ManageOwnerFilter::isAdmin() || $account->hasPermission('administer study search');
+        return ManageOwnerFilter::isStudyOwnerOrAdmin($study, $userEmail, $isAdminUser);
     }
 
     /**
@@ -796,6 +827,10 @@ class JsonDataController extends ControllerBase
     public function checkFileName($studyuri, $fileNameWithoutExtension)
     {
         try {
+            if (!$this->canCurrentUserUploadStudyContents((string) $studyuri)) {
+                return new JsonResponse(['error' => 'Access denied.'], 403);
+            }
+
             // Decodifica a URI do estudo
             $decodedStudyUri = basename(base64_decode($studyuri));
 

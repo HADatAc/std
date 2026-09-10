@@ -7,10 +7,12 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
+use Drupal\rep\ManageOwnerFilter;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\file\Entity\File;
 use Drupal\Core\Render\Markup;
 use Drupal\Component\Utility\Html;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class EditStudyForm extends FormBase {
 
@@ -70,6 +72,12 @@ class EditStudyForm extends FormBase {
       return;
     } else {
       $this->setStudy($study);
+    }
+
+    $currentUser = \Drupal::currentUser();
+    $isAdminUser = ManageOwnerFilter::isAdmin() || $currentUser->hasPermission('administer study search');
+    if (!ManageOwnerFilter::isStudyOwnerOrAdmin($this->getStudy(), (string) $currentUser->getEmail(), $isAdminUser)) {
+      throw new AccessDeniedHttpException('Only the Principal Investigator who owns this ' . $preferred_study . ' or an admin may edit it.');
     }
 
     $form['study_short_name'] = [

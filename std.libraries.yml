@@ -68,7 +68,7 @@ std_icons:
       css/std_icons.css: {}
 
 study_variable_search:
-  version: 1.2.2
+  version: 1.2.3
   css:
     theme:
       css/study_variable_search.css: {}
@@ -81,7 +81,7 @@ study_variable_search:
     - core/drupalSettings
 
 manage_study_fix:
-  version: 1.0
+  version: 1.1
   css:
     theme:
       css/manage_study_fix.css: {}

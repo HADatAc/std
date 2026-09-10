@@ -444,7 +444,7 @@ std.file_upload:
     _controller: '\Drupal\std\Controller\JsonDataController::upload'
     _title: 'File Upload'
   requirements:
-    _permission: 'upload files'
+    _user_is_logged_in: 'TRUE'
 
 std.check_file_name:
   path: '/std/check-file-name/{studyuri}/{fileNameWithoutExtension}'

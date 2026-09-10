@@ -6,6 +6,7 @@ namespace Drupal\std\Service;
 
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Url;
+use Drupal\rep\ManageOwnerFilter;
 use Drupal\rep\Utils;
 use Drupal\std\Support\StudyFileTypeResolver;
 
@@ -47,6 +48,13 @@ final class StudyVariableSearchService {
    * @var array<string, string[]>
    */
   private array $organizationScopeCache = [];
+
+  /**
+   * Cache person display labels resolved per person URI.
+   *
+   * @var array<string, string>
+   */
+  private array $personLabelCache = [];
 
   public function __construct(
     private readonly object $apiConnector,
@@ -304,9 +312,7 @@ final class StudyVariableSearchService {
         'process_stem_uri' => $processStemUri,
         'process_stem_label' => $processStemLabel,
         'process_stem_slug' => $processStemSlug,
-        'principal_investigator' => is_object($piValue = $study->principalInvestigator ?? $study->hasPrincipalInvestigator ?? null) 
-          ? trim((string) ($piValue->label ?? $piValue->uri ?? '')) 
-          : trim((string) ($piValue ?? '')),
+        'principal_investigator' => $this->resolvePrincipalInvestigatorDisplayLabel($study),
         // Canonical start date source is Study/ProcessBasedStudy startDate.
         // Do not fall back to deprecated Process.hasStartDate.
         'start_date' => trim((string) ($study->startDate ?? '')),
@@ -315,6 +321,8 @@ final class StudyVariableSearchService {
         'edit_url' => $studyType === 'processbasedstudy'
           ? Url::fromRoute('std.edit_processbasedstudy', ['studyuri' => base64_encode($studyUri)])->toString()
           : Url::fromRoute('std.edit_study', ['studyuri' => base64_encode($studyUri)])->toString(),
+        // Edit is restricted to the Study's owning PI or an admin; Manage Scenario stays open to all.
+        'can_edit' => ManageOwnerFilter::isStudyOwnerOrAdmin($study, $userEmail, $isAdmin),
         'codebook_count' => count($studyTagsBySource['questionnaire']),
         'component_count' => $processInstanceCounts['component_instances'] > 0
           ? $processInstanceCounts['component_instances']
@@ -517,6 +525,52 @@ final class StudyVariableSearchService {
     }
 
     return [$organizationUri, $organizationLabel];
+  }
+
+  /**
+   * Resolve PI display label from Study-like metadata.
+   */
+  private function resolvePrincipalInvestigatorDisplayLabel(object $study): string {
+    $piValue = $study->principalInvestigator ?? $study->hasPrincipalInvestigator ?? $study->pi ?? NULL;
+
+    if (is_object($piValue)) {
+      foreach (['name', 'label', 'title'] as $field) {
+        if (isset($piValue->{$field}) && is_string($piValue->{$field}) && trim($piValue->{$field}) !== '') {
+          return trim($piValue->{$field});
+        }
+      }
+    }
+
+    $piUri = Utils::canonicalizePmsrUri($this->extractUriString($piValue));
+    if ($piUri === '') {
+      foreach (['piUri', 'hasPiUri', 'principalInvestigatorUri', 'hasPrincipalInvestigatorUri'] as $field) {
+        if (!isset($study->{$field}) || !is_string($study->{$field})) {
+          continue;
+        }
+        $piUri = Utils::canonicalizePmsrUri(trim((string) $study->{$field}));
+        if ($piUri !== '') {
+          break;
+        }
+      }
+    }
+
+    if ($piUri !== '') {
+      if (!array_key_exists($piUri, $this->personLabelCache)) {
+        $this->personLabelCache[$piUri] = $this->extractEntityLabel($this->safeLoadEntityByUri($piUri));
+      }
+      if ($this->personLabelCache[$piUri] !== '') {
+        return $this->personLabelCache[$piUri];
+      }
+    }
+
+    if (is_string($piValue)) {
+      $value = trim($piValue);
+      if ($value !== '' && preg_match('/^https?:\/\//i', $value) !== 1) {
+        return $value;
+      }
+    }
+
+    return $piUri;
   }
 
   /**
@@ -762,7 +816,10 @@ final class StudyVariableSearchService {
         return TRUE;
       }
 
-      return $status === 'current';
+      // Studies/elements without a status are legacy/unmanaged records (never
+      // set a Draft/UnderReview lifecycle) and must stay publicly visible;
+      // only explicit non-current statuses (Draft, UnderReview) are hidden.
+      return $status === '' || $status === 'current';
     }));
   }
 

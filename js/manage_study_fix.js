@@ -53,84 +53,84 @@
         body.style.setProperty('visibility', 'visible', 'important');
       }
     });
-      function attachToolAbortHandlers(context) {
-        var settings = drupalSettings.stdManageStudy || {};
-        var abortEndpoint = String(settings.abortEndpoint || '').trim();
-        if (!abortEndpoint || typeof window.fetch !== 'function') {
+  }
+
+  function attachToolAbortHandlers(context) {
+    var settings = drupalSettings.stdManageStudy || {};
+    var abortEndpoint = String(settings.abortEndpoint || '').trim();
+    if (!abortEndpoint || typeof window.fetch !== 'function') {
+      return;
+    }
+
+    var csrfToken = String(settings.csrfToken || '').trim();
+
+    once('std-tool-abort', '.ctt-tool-abort-button', context).forEach(function (button) {
+      button.addEventListener('click', function () {
+        var studyUri = String(button.getAttribute('data-study-uri') || '').trim();
+        var processUri = String(button.getAttribute('data-process-uri') || '').trim();
+        var toolUri = String(button.getAttribute('data-tool-uri') || '').trim();
+
+        if (!studyUri || !processUri || !toolUri) {
+          window.alert('Missing execution context for abort request.');
           return;
         }
 
-        var csrfToken = String(settings.csrfToken || '').trim();
+        button.disabled = true;
+        var originalText = String(button.textContent || 'Abort');
+        button.textContent = 'Aborting...';
 
-        once('std-tool-abort', '.ctt-tool-abort-button', context).forEach(function (button) {
-          button.addEventListener('click', function () {
-            var studyUri = String(button.getAttribute('data-study-uri') || '').trim();
-            var processUri = String(button.getAttribute('data-process-uri') || '').trim();
-            var toolUri = String(button.getAttribute('data-tool-uri') || '').trim();
+        var headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        };
+        if (csrfToken !== '') {
+          headers['X-CSRF-Token'] = csrfToken;
+        }
 
-            if (!studyUri || !processUri || !toolUri) {
-              window.alert('Missing execution context for abort request.');
-              return;
-            }
-
-            button.disabled = true;
-            var originalText = String(button.textContent || 'Abort');
-            button.textContent = 'Aborting...';
-
-            var headers = {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            };
-            if (csrfToken !== '') {
-              headers['X-CSRF-Token'] = csrfToken;
-            }
-
-            window.fetch(abortEndpoint, {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: headers,
-              body: JSON.stringify({
-                studyUri: studyUri,
-                processUri: processUri,
-                toolUri: toolUri
-              })
-            }).then(function (response) {
-              return response.json().catch(function () {
-                return null;
-              });
-            }).then(function (payload) {
-              if (!payload || payload.isSuccessful !== true) {
-                var message = 'Unable to abort execution.';
-                if (payload && Array.isArray(payload.issues) && payload.issues.length > 0) {
-                  message = String(payload.issues[0].message || message);
-                }
-                window.alert(message);
-                button.disabled = false;
-                button.textContent = originalText;
-                return;
-              }
-
-              button.textContent = 'Aborted';
-              button.classList.remove('btn-outline-danger');
-              button.classList.add('btn-secondary');
-
-              // Refresh to update Tool Executions status/end timestamp.
-              window.location.reload();
-            }).catch(function () {
-              window.alert('Abort request failed due to a network or server error.');
-              button.disabled = false;
-              button.textContent = originalText;
-            });
+        window.fetch(abortEndpoint, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: headers,
+          body: JSON.stringify({
+            studyUri: studyUri,
+            processUri: processUri,
+            toolUri: toolUri
+          })
+        }).then(function (response) {
+          return response.json().catch(function () {
+            return null;
           });
+        }).then(function (payload) {
+          if (!payload || payload.isSuccessful !== true) {
+            var message = 'Unable to abort execution.';
+            if (payload && Array.isArray(payload.issues) && payload.issues.length > 0) {
+              message = String(payload.issues[0].message || message);
+            }
+            window.alert(message);
+            button.disabled = false;
+            button.textContent = originalText;
+            return;
+          }
+
+          button.textContent = 'Aborted';
+          button.classList.remove('btn-outline-danger');
+          button.classList.add('btn-secondary');
+
+          // Refresh to update Tool Executions status/end timestamp.
+          window.location.reload();
+        }).catch(function () {
+          window.alert('Abort request failed due to a network or server error.');
+          button.disabled = false;
+          button.textContent = originalText;
         });
-      }
+      });
+    });
   }
 
   function expandWorkflowPanelsForCapture(form) {
     var selectors = ['#collapseDescription', '#collapseAreas', '#collapseDropCard', '#collapseWorkflow'];
     selectors.forEach(function (selector) {
       var panel = form.querySelector(selector);
-            attachToolAbortHandlers(form);
       if (!panel) {
         return;
       }
@@ -670,6 +670,7 @@
 
       once('std-manage-study-fix', '.manage-study-form', context).forEach(function (form) {
         enforceVisibleCollapse(form);
+        attachToolAbortHandlers(form);
         appendModeBadge(form);
 
         once('std-generate-pdf-capture', '#std-generate-pdf-button', form).forEach(function (button) {

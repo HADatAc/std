@@ -212,6 +212,21 @@
   gap: 12px;
 }
 
+.std-study-pagination {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.std-page-indicator {
+  min-width: 110px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
 .std-study-card {
   border: 1px solid #d9d9d9;
   border-radius: 12px;
@@ -368,6 +383,10 @@
 @media (max-width: 991px) {
   .std-search-sidebar {
     max-height: none;
+  }
+
+  .std-study-pagination {
+    justify-content: center;
   }
 
   .std-anatomy-modal {

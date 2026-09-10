@@ -8,9 +8,11 @@ use Drupal\Core\Url;
 use Drupal\Component\Utility\Html;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\rep\Utils;
+use Drupal\rep\ManageOwnerFilter;
 use Drupal\rep\Vocabulary\HASCO;
 use Drupal\rep\Vocabulary\VSTOI;
 use Drupal\std\Entity\ProcessBasedStudy;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
  * Form for editing a Process-Based Study
@@ -884,6 +886,12 @@ class EditProcessBasedStudyForm extends FormBase {
     $resolvedStudyUri = Utils::canonicalizePmsrUri(trim((string) ($this->study->uri ?? '')));
     if ($resolvedStudyUri !== '') {
       $this->studyUri = $resolvedStudyUri;
+    }
+
+    $currentUser = \Drupal::currentUser();
+    $isAdminUser = ManageOwnerFilter::isAdmin() || $currentUser->hasPermission('administer study search');
+    if (!ManageOwnerFilter::isStudyOwnerOrAdmin($this->study, (string) $currentUser->getEmail(), $isAdminUser)) {
+      throw new AccessDeniedHttpException('Only the Principal Investigator who owns this ' . $preferredStudyNoun . ' or an admin may edit it.');
     }
 
     // Normalize process URI values that may arrive as structured objects.
